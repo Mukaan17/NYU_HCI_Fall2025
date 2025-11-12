@@ -1,0 +1,16 @@
+# Environment & keys
+.env
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Node
+node_modules/
+
+# Cache
+*.sqlite
+*.cache

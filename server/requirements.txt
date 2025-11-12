@@ -1,0 +1,8 @@
+Flask==3.0.0
+python-dotenv==1.0.1
+requests==2.32.3
+google-api-python-client==2.149.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+requests-cache==1.2.0
+openai==1.51.2

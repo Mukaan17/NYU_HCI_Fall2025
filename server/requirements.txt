@@ -6,3 +6,5 @@ google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.1
 requests-cache==1.2.0
 openai==1.51.2
+beautifulsoup4
+lxml

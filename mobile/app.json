@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Moment App",
+    "slug": "moment-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0b132b"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.momentapp.moment",
+      "scheme": "moment-app"
+    },
+    "android": {
+      "package": "com.momentapp.moment"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Moment App to use your location to find awesome spots near you."
+        }
+      ],
+      "expo-notifications"
+    ]
+  }
+}
+

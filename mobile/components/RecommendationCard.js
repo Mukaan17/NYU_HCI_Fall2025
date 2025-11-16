@@ -19,8 +19,8 @@ export default function RecommendationCard({
   image,
   walkTime,
   popularity,
-  onPress = () => {},
-  style = {},
+  onPress,
+  style,
 }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);

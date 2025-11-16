@@ -1,36 +1,52 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../constants/theme';
+import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, borderRadius, shadows } from '../constants/theme';
 
-export default function PrimaryButton({
-  title,
-  onPress = () => {},
-  style = {},
-  disabled = false,
-}) {
+export default function PrimaryButton({ title, onPress, style, disabled }) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={[styles.button, style, disabled && { opacity: 0.5 }]}
       disabled={disabled}
       activeOpacity={0.8}
+      style={[styles.container, style]}
     >
-      <Text style={styles.label}>{title}</Text>
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        <View style={styles.content}>
+          <Text style={styles.text}>{title}</Text>
+        </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    backgroundColor: colors.gradientStart,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing['2xl'],
-    borderRadius: borderRadius.md,
+  container: {
+    borderRadius: borderRadius.full,
+    ...shadows.primary,
+  },
+  gradient: {
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+    borderRadius: borderRadius.full,
+    minHeight: 56,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  label: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
+  content: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  text: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.medium,
     color: colors.textPrimary,
+    textAlign: 'center',
   },
 });
+

@@ -20,7 +20,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 const AnimatedView = Animated.createAnimatedComponent(View);
 const AnimatedText = Animated.createAnimatedComponent(Text);
 
-export default function NavBar({ activeTab, onTabPress, style = {} }) {
+export default function NavBar({ activeTab, onTabPress, style }) {
   const tabs = [
     { id: 'dashboard', label: 'Home' },
     { id: 'chat', label: 'Chat' },

@@ -1,4 +1,5 @@
-import React from 'react';
+// components/Notification.tsx
+import React from "react";
 import {
   View,
   Text,
@@ -6,19 +7,35 @@ import {
   Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius } from '../constants/theme';
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, typography, spacing, borderRadius } from "../constants/theme";
 
-export default function Notification({ visible, onDismiss, onViewEvent, notification }) {
+type NotificationData = {
+  message?: string;
+};
+
+type NotificationProps = {
+  visible: boolean;
+  onDismiss?: () => void;
+  onViewEvent?: () => void;
+  notification?: NotificationData;
+};
+
+const Notification: React.FC<NotificationProps> = ({
+  visible,
+  onDismiss,
+  onViewEvent,
+  notification,
+}) => {
   if (!visible) return null;
 
   const handleDismiss = () => {
-    if (onDismiss) onDismiss();
+    onDismiss?.();
   };
 
   const handleViewEvent = () => {
-    if (onViewEvent) onViewEvent();
+    onViewEvent?.();
   };
 
   return (
@@ -52,10 +69,13 @@ export default function Notification({ visible, onDismiss, onViewEvent, notifica
                     </View>
                     <View style={styles.notificationTitle}>
                       <Text style={styles.bellIcon}>🔔</Text>
-                      <Text style={styles.notificationText}>You're free till 8 PM!</Text>
+                      <Text style={styles.notificationText}>
+                        You're free till 8 PM!
+                      </Text>
                     </View>
                     <Text style={styles.notificationDescription}>
-                      {notification?.message || 'Live jazz at Fulton St starts soon (7 min walk).'}
+                      {notification?.message ||
+                        "Live jazz at Fulton St starts soon (7 min walk)."}
                     </Text>
                   </View>
                 </View>
@@ -84,33 +104,35 @@ export default function Notification({ visible, onDismiss, onViewEvent, notifica
       </TouchableWithoutFeedback>
     </Modal>
   );
-}
+};
+
+export default Notification;
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing['3xl'],
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing["3xl"],
   },
   container: {
-    width: '100%',
+    width: "100%",
     maxWidth: 361,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.borderMedium,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   content: {
-    padding: spacing['3xl'],
+    padding: spacing["3xl"],
   },
   header: {
-    flexDirection: 'row',
-    marginBottom: spacing['3xl'],
+    flexDirection: "row",
+    marginBottom: spacing["3xl"],
   },
   avatarContainer: {
-    marginRight: spacing['2xl'],
+    marginRight: spacing["2xl"],
   },
   avatar: {
     width: 48,
@@ -119,8 +141,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundCard,
     borderWidth: 1,
     borderColor: colors.borderMedium,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarIcon: {
     fontSize: 28,
@@ -129,9 +151,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.md,
   },
   appName: {
@@ -145,8 +167,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   notificationTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacing.xs,
     gap: spacing.md,
   },
@@ -166,19 +188,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.xl,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: spacing['2xl'],
+    paddingTop: spacing["2xl"],
   },
   viewEventButton: {
     flex: 1,
     backgroundColor: colors.accentPurpleMedium,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.lg,
-    paddingHorizontal: spacing['2xl'],
-    alignItems: 'center',
+    paddingHorizontal: spacing["2xl"],
+    alignItems: "center",
   },
   viewEventText: {
     fontSize: typography.fontSize.sm,
@@ -190,8 +212,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.whiteOverlay,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.lg,
-    paddingHorizontal: spacing['2xl'],
-    alignItems: 'center',
+    paddingHorizontal: spacing["2xl"],
+    alignItems: "center",
   },
   dismissText: {
     fontSize: typography.fontSize.sm,
@@ -199,4 +221,3 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 });
-

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+// mobile/app/(tabs)/chat.tsx
+import React, { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,207 +7,218 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   RefreshControl,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import RecommendationCard from '../../components/RecommendationCard.js';
-import InputField from '../../components/InputField.js';
-import { colors, typography, spacing, borderRadius, shadows } from '../../constants/theme';
+  ScrollView as RNScrollView,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import RecommendationCard from "../../components/RecommendationCard";
+import InputField from "../../components/InputField";
+import { colors } from "../../constants/theme";
+import { router } from "expo-router";
+import { usePlace } from "../../context/PlaceContext";
+import {
+  useChat,
+  ChatMessage,
+  Recommendation,
+} from "../../context/ChatContext";
 
-const { width } = Dimensions.get('window');
+const BACKEND_URL =
+  process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.155:5000";
 
 export default function Chat() {
   const insets = useSafeAreaInsets();
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const scrollViewRef = useRef<RNScrollView | null>(null);
+  const { setSelectedPlace } = usePlace();
+  const { messages, setMessages } = useChat();
 
-  const [refreshing, setRefreshing] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [refreshing] = React.useState(false);
+  const [isTyping, setIsTyping] = React.useState(false);
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: 'ai',
-      content: "Find something fun with friends tonight.",
-      timestamp: new Date(Date.now() - 3600000),
-    },
-    {
-      id: 2,
-      role: 'ai',
-      content: "Need a quick study break spot",
-      timestamp: new Date(Date.now() - 1800000),
-    },
-    {
-      id: 3,
-      role: 'ai',
-      content: "Where can I grab dinner?",
-      timestamp: new Date(Date.now() - 600000),
-    },
-  ]);
-
-  const recommendations = [
-    {
-      id: 1,
-      title: 'Fulton Jazz Lounge',
-      description: 'Live jazz tonight at 8 PM',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '7 min walk',
-      popularity: 'Medium',
-    },
-    {
-      id: 2,
-      title: 'Brooklyn Rooftop',
-      description: 'Great vibes & skyline views',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '12 min walk',
-      popularity: 'High',
-    },
-    {
-      id: 3,
-      title: 'Butler Café',
-      description: 'Great for study breaks',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '3 min walk',
-      popularity: 'Low',
-    },
-    {
-      id: 4,
-      title: 'DeKalb Market Hall',
-      description: '40+ food vendors, all styles',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '5 min walk',
-      popularity: 'Medium',
-    },
-  ];
+  // Keep enough padding so InputField sits above the NavBar
+  const navOffset = insets.bottom + 100;
 
   useEffect(() => {
-    scrollViewRef.current?.scrollToEnd({ animated: true });
+    const id = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
+    return () => clearTimeout(id);
   }, [messages]);
 
-  const handleSend = (text: string) => {
-    if (!text.trim()) return;
+  const handleCardPress = (rec: Recommendation) => {
+    setSelectedPlace({
+      name: rec.title,
+      latitude: rec.lat ?? 40.693393,
+      longitude: rec.lng ?? -73.98555,
+      walkTime: rec.walkTime,
+      distance: rec.distance,
+      address: rec.description,
+    });
 
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    router.push("/(tabs)/map");
+  };
+
+  const handleSend = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Add user message
+    setMessages((prev: ChatMessage[]) => [
+      ...prev,
+      {
+        id: Date.now(),
+        type: "text",
+        role: "user",
+        content: trimmed,
+        timestamp: new Date(),
+      },
+    ]);
+
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed }),
+      });
+
+      const data = await response.json();
+
+      // Add AI reply text
+      setMessages((prev: ChatMessage[]) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          type: "text",
+          role: "ai",
+          content: data.reply || "I couldn’t think of anything — try again!",
+          timestamp: new Date(),
+        },
+      ]);
+
+      // If backend includes places → render recommendation cards
+      if (data.places && Array.isArray(data.places) && data.places.length > 0) {
+        const recs: Recommendation[] = data.places.map(
+          (p: any, index: number) => ({
+            id: index,
+            title: p.name,
+            description: p.address,
+            distance: p.distance,
+            walkTime: p.walk_time,
+            lat: p.location?.lat,
+            lng: p.location?.lng,
+            popularity: p.rating ? `⭐ ${p.rating}` : null,
+          })
+        );
+
+        setMessages((prev: ChatMessage[]) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            type: "recommendations",
+            role: "ai",
+            recommendations: recs,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (err) {
+      console.log(err);
+    } finally {
       setIsTyping(false);
-      const aiMessage = {
-        id: Date.now() + 1,
-        role: 'ai',
-        content: 'Here are some great options for you!',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-    }, 1200);
-  };
-
-  const formatTime = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-
-    return date.toLocaleDateString();
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    }
   };
 
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.background, colors.backgroundSecondary, colors.background]}
-        locations={[0, 0.5, 1]}
-        style={[styles.gradient, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        colors={[
+          colors.background,
+          colors.backgroundSecondary,
+          colors.background,
+        ]}
+        style={[
+          styles.gradient,
+          { paddingTop: insets.top, paddingBottom: navOffset },
+        ]}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={insets.top + 40}
         >
-          {/* HEADER */}
-          <View style={styles.header}>
-            <Text style={styles.headerText}>VioletVibes</Text>
-          </View>
-
-          {/* MESSAGES */}
           <ScrollView
             ref={scrollViewRef}
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => {}} />
+            }
           >
-            {messages.map((msg, index) => (
-              <Animated.View
-                entering={msg.role === 'ai' ? FadeInUp.delay(index * 25) : FadeInDown.delay(index * 25)}
-                key={msg.id}
-                style={[
-                  styles.messageContainer,
-                  msg.role === 'ai' && styles.aiMessageContainer,
-                ]}
-              >
-                <LinearGradient
-                  colors={[colors.gradientStart, colors.gradientEnd]}
-                  style={styles.messageBubble}
+            {messages.map((msg: ChatMessage, index: number) => {
+              if (msg.type === "recommendations") {
+                return (
+                  <Animated.View
+                    key={msg.id}
+                    entering={FadeInUp.delay(index * 40)}
+                    style={styles.aiBubbleContainer}
+                  >
+                    {msg.recommendations.map(
+                      (rec: Recommendation) => (
+                        <RecommendationCard
+                          key={rec.id}
+                          title={rec.title}
+                          description={rec.description}
+                          walkTime={rec.walkTime}
+                          popularity={rec.popularity}
+                          onPress={() => handleCardPress(rec)}
+                        />
+                      )
+                    )}
+                  </Animated.View>
+                );
+              }
+
+              return (
+                <Animated.View
+                  key={msg.id}
+                  entering={
+                    msg.role === "ai"
+                      ? FadeInUp.delay(index * 40)
+                      : FadeInDown.delay(index * 40)
+                  }
+                  style={[
+                    styles.messageBubble,
+                    msg.role === "ai" ? styles.aiBubble : styles.userBubble,
+                  ]}
                 >
-                  <Text style={styles.messageText}>{msg.content}</Text>
-                  <Text style={styles.timestamp}>{formatTime(msg.timestamp)}</Text>
-                </LinearGradient>
-              </Animated.View>
-            ))}
+                  <Text style={styles.text}>{msg.content}</Text>
+                </Animated.View>
+              );
+            })}
 
             {isTyping && (
-              <View style={[styles.messageContainer, styles.aiMessageContainer]}>
-                <View style={[styles.messageBubble, styles.typingBubble]}>
-                  <View style={styles.typingIndicator}>
-                    <View style={styles.typingDot} />
-                    <View style={styles.typingDot} />
-                    <View style={styles.typingDot} />
-                  </View>
-                </View>
-              </View>
+              <Animated.View
+                entering={FadeInUp}
+                style={[styles.messageBubble, styles.aiBubble]}
+              >
+                <Text style={styles.text}>Violet is thinking…</Text>
+              </Animated.View>
             )}
-
-            {/* RECOMMENDATIONS */}
-            <View style={styles.recommendationsContainer}>
-              {recommendations.map((rec) => (
-                <RecommendationCard
-                  key={rec.id}
-                  title={rec.title}
-                  description={rec.description}
-                  image={rec.image}
-                  walkTime={rec.walkTime}
-                  popularity={rec.popularity}
-                />
-              ))}
-            </View>
           </ScrollView>
 
-          {/* INPUT */}
-          <View style={styles.inputContainer}>
-            <InputField
-                placeholder="Ask VioletVibes..."
-                onSend={handleSend}
-                style={{}}   // ← Add this
-            />
+          {/* Extra bottom padding so this doesn't sit under NavBar */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingBottom: insets.bottom + 40,
+            }}
+          >
+            <InputField placeholder="Ask VioletVibes..." onSend={handleSend} />
           </View>
         </KeyboardAvoidingView>
       </LinearGradient>
@@ -214,68 +226,26 @@ export default function Chat() {
   );
 }
 
-/* ------------------ STYLES ------------------ */
+/* ---------- STYLES ---------- */
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   gradient: { flex: 1 },
-  keyboardView: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  scrollView: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 150,
-  },
-  messageContainer: {
-    width: '100%',
-    alignItems: 'flex-end',
-    marginBottom: 12,
-  },
-  aiMessageContainer: { alignItems: 'flex-start' },
+  content: { padding: 20, paddingBottom: 120 },
+  aiBubbleContainer: { width: "100%" },
   messageBubble: {
+    maxWidth: "80%",
     padding: 14,
-    borderRadius: 20,
-    maxWidth: '80%',
+    borderRadius: 18,
+    marginBottom: 10,
   },
-  messageText: {
-    color: colors.textPrimary,
-    fontSize: 16,
+  aiBubble: { backgroundColor: "#2b2f47" },
+  userBubble: {
+    backgroundColor: "#5a4ccf",
+    alignSelf: "flex-end",
   },
-  timestamp: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  typingBubble: {
-    backgroundColor: colors.backgroundCard,
-    padding: 14,
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.textSecondary,
-    opacity: 0.5,
-  },
-  recommendationsContainer: {
-    marginTop: 20,
-    gap: 16,
-  },
-  inputContainer: {
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
+  text: { color: "white", fontSize: 16 },
 });
+
+export {};
+

@@ -18,7 +18,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-import RecommendationCard from '../../components/RecommendationCard.js';
+import RecommendationCard from '../../components/RecommendationCard';
 import { colors, typography, spacing, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');

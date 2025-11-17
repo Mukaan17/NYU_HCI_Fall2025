@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Moment App",
-    "slug": "moment-app",
+    "name": "Violet Vibes",
+    "slug": "VioletVibes",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -11,17 +11,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.momentapp.moment",
-      "scheme": "moment-app"
+      "bundleIdentifier": "com.violetvibes.app",
+      "scheme": "violetvibes"
     },
     "android": {
-      "package": "com.momentapp.moment"
+      "package": "com.violetvibes.app"
     },
     "plugins": [
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Moment App to use your location to find awesome spots near you."
+          "locationAlwaysAndWhenInUsePermission": "Allow VioletVibes to use your location to find awesome spots near you."
         }
       ],
       "expo-notifications"

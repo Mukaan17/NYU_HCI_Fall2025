@@ -4,40 +4,45 @@ import { Slot, usePathname, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import NavBar from "../../components/NavBar";
 import { spacing } from "../../constants/theme";
+import { ChatProvider } from "../../context/ChatContext";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
 
-  // Determine current active tab
-  const activeTab: "dashboard" | "chat" | "map" | "safety" = 
-    pathname.includes("dashboard") ? "dashboard" :
-    pathname.includes("chat") ? "chat" :
-    pathname.includes("map") ? "map" :
-    "safety";
+  // Figure out which tab is active based on the current route
+  let activeTab: "dashboard" | "chat" | "map" | "safety";
 
-  // Type the tabId properly
-  const handleTabPress = (tabId: string) => {
-    router.replace(`/(tabs)/${tabId}`);
+  if (pathname === "/dashboard") activeTab = "dashboard";
+  else if (pathname === "/chat") activeTab = "chat";
+  else if (pathname === "/map") activeTab = "map";
+  else activeTab = "safety";
+
+  const handleTabPress = (id: string) => {
+  router.replace(`/${id}`);
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <Slot />
+    <ChatProvider>
+      <View style={{ flex: 1 }}>
+        {/* This is where (tabs)/chat, (tabs)/map, etc render */}
+        <Slot />
 
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          paddingBottom:
-            Math.max(insets.bottom, spacing["2xl"]) + spacing["2xl"],
-          paddingHorizontal: spacing["2xl"],
-        }}
-      >
-        <NavBar activeTab={activeTab} onTabPress={handleTabPress} />
+        {/* Custom NavBar, anchored to bottom */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            paddingBottom:
+              Math.max(insets.bottom, spacing["2xl"]) + spacing["2xl"],
+            paddingHorizontal: spacing["2xl"],
+          }}
+        >
+          <NavBar activeTab={activeTab} onTabPress={handleTabPress} />
+        </View>
       </View>
-    </View>
+    </ChatProvider>
   );
 }

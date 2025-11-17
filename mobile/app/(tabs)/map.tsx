@@ -1,141 +1,129 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
+// app/(tabs)/map.tsx
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet } from "react-native";
+import MapView, { Marker, Polyline, LatLng, Region } from "react-native-maps";
+import { usePlace } from "../../context/PlaceContext";
+import { colors, spacing, typography } from "../../constants/theme";
 
-import RecommendationCard from '../../components/RecommendationCard.js';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+const BACKEND_URL =
+  process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.155:5000";
 
-const { width, height } = Dimensions.get('window');
+// 2 MetroTech Center (Tandon)
+const DEFAULT_LAT = 40.693393;
+const DEFAULT_LNG = -73.98555;
 
 export default function Map() {
-  const insets = useSafeAreaInsets();
+  const { selectedPlace } = usePlace();
+  const [polylineCoords, setPolylineCoords] = useState<LatLng[]>([]);
 
-  const [location, setLocation] = useState<Location.LocationObjectCoords | null>(null);
-  const [region, setRegion] = useState({
-    latitude: 40.6934,
-    longitude: -73.9857,
+  const [region, setRegion] = useState<Region>({
+    latitude: DEFAULT_LAT,
+    longitude: DEFAULT_LNG,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
 
   useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        if (loc) {
-          setLocation(loc.coords);
-          setRegion({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          });
-        }
-      }
-    })();
-  }, []);
+    if (selectedPlace) {
+      const destLat = selectedPlace.latitude ?? DEFAULT_LAT;
+      const destLng = selectedPlace.longitude ?? DEFAULT_LNG;
 
-  const markers = [
-    {
-      id: 1,
-      coordinate: { latitude: 40.6934, longitude: -73.9857 },
-      title: 'Fulton Jazz Lounge',
-    },
-    {
-      id: 2,
-      coordinate: { latitude: 40.6920, longitude: -73.9840 },
-      title: 'Brooklyn Rooftop',
-    },
-    {
-      id: 3,
-      coordinate: { latitude: 40.6940, longitude: -73.9860 },
-      title: 'Butler Café',
-    },
-  ];
+      setRegion({
+        latitude: destLat,
+        longitude: destLng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+
+      fetchRoute(destLat, destLng);
+    } else {
+      // No selection → center on 2 MetroTech
+      setRegion({
+        latitude: DEFAULT_LAT,
+        longitude: DEFAULT_LNG,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+      setPolylineCoords([]);
+    }
+  }, [selectedPlace]);
+
+  const fetchRoute = async (destLat: number, destLng: number) => {
+    try {
+      const url = `${BACKEND_URL}/api/directions?lat=${destLat}&lng=${destLng}`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.polyline && Array.isArray(data.polyline)) {
+        setPolylineCoords(data.polyline as LatLng[]);
+      } else {
+        setPolylineCoords([]);
+      }
+    } catch (err) {
+      console.log("Directions error:", err);
+      setPolylineCoords([]);
+    }
+  };
+
+  const markerLat = selectedPlace?.latitude ?? DEFAULT_LAT;
+  const markerLng = selectedPlace?.longitude ?? DEFAULT_LNG;
+  const markerTitle = selectedPlace?.name ?? "2 MetroTech Center";
 
   return (
-    <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        region={region}
-        onRegionChangeComplete={setRegion}
-        showsUserLocation
-      >
-        {markers.map((m) => (
-          <Marker key={m.id} coordinate={m.coordinate} title={m.title} />
-        ))}
+    <View style={{ flex: 1 }}>
+      <MapView style={StyleSheet.absoluteFillObject} region={region}>
+        <Marker
+          coordinate={{
+            latitude: markerLat,
+            longitude: markerLng,
+          }}
+          title={markerTitle}
+        />
+
+        {polylineCoords.length > 0 && (
+          <Polyline
+            coordinates={polylineCoords}
+            strokeColor="#5B4BFF"
+            strokeWidth={5}
+          />
+        )}
       </MapView>
 
-      <View style={styles.overlayContainer}>
-        <View style={[styles.addressBadge, { top: insets.top + spacing['2xl'] }]}>
-          <LinearGradient
-            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-            style={styles.addressBadgeGradient}
-          >
-            <Text style={styles.addressIcon}>📍</Text>
-            <Text style={styles.addressText}>2 MetroTech Center</Text>
-          </LinearGradient>
-        </View>
-
-        <LinearGradient
-          colors={['transparent', colors.backgroundOverlay, colors.background]}
-          style={[styles.bottomSheet]}
-        >
-          <View style={styles.bottomSheetContent}>
-            <RecommendationCard
-              title="Fulton Jazz Lounge"
-              description="Live jazz tonight at 8 PM"
-              image="https://via.placeholder.com/96"
-              walkTime="7 min walk"
-              popularity="Medium"
-            />
-          </View>
-        </LinearGradient>
+      <View style={styles.infoPanel}>
+        <Text style={styles.title}>{markerTitle}</Text>
+        {selectedPlace && (
+          <Text style={styles.meta}>
+            {selectedPlace.walkTime} • {selectedPlace.distance}
+          </Text>
+        )}
+        {!selectedPlace && (
+          <Text style={styles.meta}>Home base • NYU Tandon</Text>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  map: { ...StyleSheet.absoluteFillObject },
-  overlayContainer: { ...StyleSheet.absoluteFillObject, pointerEvents: 'box-none' },
-
-  addressBadge: {
-    position: 'absolute',
-    left: width * 0.2,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  addressBadgeGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing['3xl'],
-    paddingVertical: spacing['2xl'],
-    gap: spacing.md,
-  },
-  addressIcon: { fontSize: 16 },
-  addressText: {
-    fontSize: typography.fontSize.base,
-    color: colors.textPrimary,
-  },
-
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    paddingTop: spacing['3xl'],
-    paddingHorizontal: spacing['2xl'],
-    width: '100%',
-  },
-  bottomSheetContent: {
-    backgroundColor: colors.glassBackground,
-    borderRadius: borderRadius.lg,
+  infoPanel: {
+    position: "absolute",
+    bottom: 30,
+    left: 20,
+    right: 20,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: spacing["2xl"],
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing['2xl'],
+  },
+  title: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  meta: {
+    marginTop: 6,
+    fontSize: typography.fontSize.lg,
+    color: colors.textSecondary,
   },
 });

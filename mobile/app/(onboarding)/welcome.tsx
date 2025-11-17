@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import PrimaryButton from '../../components/PrimaryButton.js';
+import PrimaryButton from '../../components/PrimaryButton';
 import { colors, typography, spacing, borderRadius } from '../../constants/theme';
 import { router } from "expo-router";
 

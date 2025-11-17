@@ -1,27 +1,48 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, Dimensions, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+// components/RecommendationCard.tsx
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Dimensions,
+  Platform,
+  TouchableOpacity,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { colors, typography, borderRadius, spacing } from '../constants/theme';
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { colors, typography, borderRadius, spacing } from "../constants/theme";
 
-const { width } = Dimensions.get('window');
-const AnimatedTouchable = Animated.createAnimatedComponent(View);
+const { width } = Dimensions.get("window");
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-export default function RecommendationCard({
+export type RecommendationCardProps = {
+  title: string;
+  description?: string;
+  image?: string;
+  walkTime?: string;
+  popularity?: string | null;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+};
+
+const RecommendationCard: React.FC<RecommendationCardProps> = ({
   title,
   description,
   image,
   walkTime,
   popularity,
-  onPress = () => {},
-  style = {},
-}) {
+  onPress,
+  style,
+}) => {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
@@ -43,36 +64,29 @@ export default function RecommendationCard({
     }
   };
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-      opacity: opacity.value,
-    };
-  });
-
-  const CardWrapper = onPress ? AnimatedTouchable : View;
-  const wrapperProps = onPress
-    ? {
-        onTouchStart: handlePressIn,
-        onTouchEnd: handlePressOut,
-        onPress: handlePress,
-        activeOpacity: 0.9,
-      }
-    : {};
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
 
   return (
     <Animated.View style={[styles.wrapper, animatedStyle]}>
-      <CardWrapper {...wrapperProps}>
+      <AnimatedTouchable
+        activeOpacity={0.9}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={handlePress}
+      >
         <View style={[styles.container, style]}>
           <BlurView
-            intensity={Platform.OS === 'ios' ? 40 : 30}
+            intensity={Platform.OS === "ios" ? 40 : 30}
             tint="dark"
             style={styles.blurContainer}
           >
             <View style={styles.glassOverlay} />
           </BlurView>
           <LinearGradient
-            colors={['rgba(28, 37, 65, 0.6)', 'rgba(21, 30, 56, 0.7)']}
+            colors={["rgba(28, 37, 65, 0.6)", "rgba(21, 30, 56, 0.7)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientOverlay}
@@ -81,8 +95,8 @@ export default function RecommendationCard({
           <View style={styles.content}>
             {image && (
               <View style={styles.imageContainer}>
-                <Image 
-                  source={{ uri: image }} 
+                <Image
+                  source={{ uri: image }}
                   style={styles.image}
                   resizeMode="cover"
                 />
@@ -95,7 +109,9 @@ export default function RecommendationCard({
             )}
             <View style={styles.textContainer}>
               <Text style={styles.title}>{title}</Text>
-              {description && <Text style={styles.description}>{description}</Text>}
+              {description && (
+                <Text style={styles.description}>{description}</Text>
+              )}
               <View style={styles.badges}>
                 {walkTime && !image && (
                   <View style={styles.walkTimeBadgeInline}>
@@ -111,23 +127,25 @@ export default function RecommendationCard({
             </View>
           </View>
         </View>
-      </CardWrapper>
+      </AnimatedTouchable>
     </Animated.View>
   );
-}
+};
+
+export default RecommendationCard;
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: spacing['2xl'], // 16pt margin between cards (Apple standard)
+    marginBottom: spacing["2xl"],
   },
   container: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    overflow: 'hidden',
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    overflow: "hidden",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.25,
         shadowRadius: 12,
@@ -138,41 +156,41 @@ const styles = StyleSheet.create({
     }),
   },
   blurContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
   glassOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(28, 37, 65, 0.3)',
+    backgroundColor: "rgba(28, 37, 65, 0.3)",
   },
   gradientOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
   border: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     borderRadius: borderRadius.lg,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   content: {
-    flexDirection: 'row',
-    padding: spacing['2xl'],
+    flexDirection: "row",
+    padding: spacing["2xl"],
     borderRadius: borderRadius.lg,
-    position: 'relative',
+    position: "relative",
     zIndex: 1,
   },
   imageContainer: {
@@ -183,24 +201,24 @@ const styles = StyleSheet.create({
     minWidth: 80,
     minHeight: 80,
     borderRadius: borderRadius.md,
-    marginRight: spacing['2xl'],
-    position: 'relative',
+    marginRight: spacing["2xl"],
+    position: "relative",
   },
   image: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: borderRadius.md,
     backgroundColor: colors.backgroundCardDark,
   },
   textContainer: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   title: {
-    fontSize: typography.fontSize['2xl'],
+    fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
-    lineHeight: typography.lineHeight['2xl'],
+    lineHeight: typography.lineHeight["2xl"],
     marginBottom: spacing.sm,
   },
   description: {
@@ -211,12 +229,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   badges: {
-    flexDirection: 'row',
-    gap: spacing['2xl'],
-    alignItems: 'center',
+    flexDirection: "row",
+    gap: spacing["2xl"],
+    alignItems: "center",
   },
   walkTimeBadge: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     backgroundColor: colors.accentPurpleText,
@@ -229,7 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   walkTimeText: {
     fontSize: typography.fontSize.xs,
@@ -241,7 +259,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   popularityText: {
     fontSize: typography.fontSize.xs,
@@ -249,4 +267,3 @@ const styles = StyleSheet.create({
     color: colors.textBlue,
   },
 });
-

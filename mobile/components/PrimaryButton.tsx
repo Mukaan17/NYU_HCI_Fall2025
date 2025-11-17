@@ -1,13 +1,32 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../constants/theme';
+// components/PrimaryButton.tsx
+import React from "react";
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from "../constants/theme";
 
-export default function PrimaryButton({
+type PrimaryButtonProps = {
+  title: string;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+};
+
+const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   title,
   onPress = () => {},
-  style = {},
+  style,
   disabled = false,
-}) {
+}) => {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -18,15 +37,17 @@ export default function PrimaryButton({
       <Text style={styles.label}>{title}</Text>
     </TouchableOpacity>
   );
-}
+};
+
+export default PrimaryButton;
 
 const styles = StyleSheet.create({
   button: {
     backgroundColor: colors.gradientStart,
     paddingVertical: spacing.lg,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing["2xl"],
     borderRadius: borderRadius.md,
-    alignItems: 'center',
+    alignItems: "center",
   },
   label: {
     fontSize: typography.fontSize.lg,

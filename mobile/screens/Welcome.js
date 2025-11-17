@@ -11,6 +11,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PrimaryButton from '../components/PrimaryButton';
+import SvgIcon from '../components/SvgIcon';
 import { colors, typography, spacing, borderRadius } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -50,7 +51,7 @@ export default function Welcome({ navigation }) {
               <BlurView intensity={40} style={styles.iconBlurView} />
             </View>
             <View style={styles.icon}>
-              <Text style={styles.iconText}>✨</Text>
+              <SvgIcon name="icon" size={Math.min(width * 0.25, 100)} color="#FFFFFF" />
             </View>
           </View>
 

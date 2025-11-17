@@ -45,7 +45,7 @@ export default function Safety({ navigation }) {
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary, colors.background]}
         locations={[0, 0.5, 1]}
-        style={[styles.gradient, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        style={[styles.gradient, { paddingTop: insets.top }]}
       >
         {/* Blur effect */}
         <View style={styles.blurContainer}>

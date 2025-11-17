@@ -12,6 +12,7 @@ import Animated, {
   withSequence,
   FadeInUp,
 } from 'react-native-reanimated';
+import SvgIcon from './SvgIcon';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -22,10 +23,10 @@ const AnimatedText = Animated.createAnimatedComponent(Text);
 
 export default function NavBar({ activeTab, onTabPress, style }) {
   const tabs = [
-    { id: 'dashboard', label: 'Home' },
-    { id: 'chat', label: 'Chat' },
-    { id: 'map', label: 'Map' },
-    { id: 'safety', label: 'Safety' },
+    { id: 'dashboard', label: 'Home', icon: 'home' },
+    { id: 'chat', label: 'Chat', icon: 'chat' },
+    { id: 'map', label: 'Map', icon: 'map' },
+    { id: 'safety', label: 'Safety', icon: 'safety' },
   ];
 
   const containerScale = useSharedValue(1);
@@ -261,8 +262,15 @@ export default function NavBar({ activeTab, onTabPress, style }) {
             };
           });
           
-          // Text style - static, only opacity changes
+          // Text and icon style - static, only opacity changes
           const textAnimatedStyle = useAnimatedStyle(() => {
+            return {
+              opacity: opacity.value,
+            };
+          });
+          
+          // Icon animated style - same opacity as text
+          const iconAnimatedStyle = useAnimatedStyle(() => {
             return {
               opacity: opacity.value,
             };
@@ -309,6 +317,13 @@ export default function NavBar({ activeTab, onTabPress, style }) {
               }}
             >
               <View style={styles.button}>
+                <Animated.View style={iconAnimatedStyle}>
+                  <SvgIcon
+                    name={tab.icon}
+                    size={20}
+                    color={isActive ? colors.textPrimary : colors.textSecondary}
+                  />
+                </Animated.View>
                 <AnimatedText
                   style={[
                     styles.buttonText,
@@ -456,11 +471,13 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   button: {
-    paddingVertical: spacing.lg, // 10pt vertical padding (total ~44pt with text)
+    paddingVertical: spacing.md, // 8pt vertical padding
     paddingHorizontal: spacing.md, // 8pt horizontal padding
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'column',
+    gap: spacing.xs, // 4pt gap between icon and text
     minHeight: 44, // Apple HIG minimum touch target size
     backgroundColor: 'transparent',
   },

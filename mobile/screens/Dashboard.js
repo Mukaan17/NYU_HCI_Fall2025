@@ -27,6 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import RecommendationCard from '../components/RecommendationCard';
 import Notification from '../components/Notification';
+import SvgIcon from '../components/SvgIcon';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -141,7 +142,7 @@ export default function Dashboard({ navigation }) {
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary, colors.background]}
         locations={[0, 0.5, 1]}
-        style={[styles.gradient, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        style={[styles.gradient, { paddingTop: insets.top }]}
       >
         {/* Blur effects */}
         <View style={styles.blurContainer1}>
@@ -165,11 +166,11 @@ export default function Dashboard({ navigation }) {
           {/* Status Badges */}
           <Animated.View entering={FadeInDown.delay(200)} style={styles.badgesContainer}>
             <View style={styles.weatherBadge}>
-              <Text style={styles.weatherIcon}>🌡️</Text>
+              <SvgIcon name="temp" size={20} color={colors.textBlue} />
               <Text style={styles.weatherText}>72°F</Text>
             </View>
             <View style={styles.scheduleBadge}>
-              <Text style={styles.scheduleIcon}>⏰</Text>
+              <SvgIcon name="clock" size={20} color={colors.textPrimary} />
               <Text style={styles.scheduleText}>Free until 6:30 PM</Text>
             </View>
             <View style={styles.moodBadge}>
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing['2xl'], // 16pt horizontal padding
     paddingTop: spacing['3xl'], // 20pt top padding
-    paddingBottom: 180, // Extra padding to prevent nav bar overlap (nav bar ~80pt + safe area + spacing)
+    paddingBottom: 120, // Extra padding to prevent nav bar overlap (nav bar ~80pt + safe area)
   },
   header: {
     marginBottom: spacing['3xl'],
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md, // 8pt gap between badges
+    gap: spacing.lg, // 12pt gap between badges
     flexWrap: 'nowrap',
     marginBottom: spacing['4xl'],
     width: '100%',
@@ -318,17 +319,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentBlueMedium,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
   },
   weatherIcon: {
     fontSize: 16,
   },
   weatherText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textBlue,
   },
@@ -339,17 +340,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
   },
   scheduleIcon: {
     fontSize: 16,
   },
   scheduleText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
   },
@@ -358,15 +359,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
     justifyContent: 'center',
     alignItems: 'center',
   },
   moodText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textSecondary,
   },

@@ -8,6 +8,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import SvgIcon from './SvgIcon';
 import { colors, typography, spacing, borderRadius } from '../constants/theme';
 
 export default function Notification({ visible, onDismiss, onViewEvent, notification }) {
@@ -42,7 +43,7 @@ export default function Notification({ visible, onDismiss, onViewEvent, notifica
                 <View style={styles.header}>
                   <View style={styles.avatarContainer}>
                     <View style={styles.avatar}>
-                      <Text style={styles.avatarIcon}>✨</Text>
+                      <SvgIcon name="icon" size={28} color="#FFFFFF" />
                     </View>
                   </View>
                   <View style={styles.headerText}>

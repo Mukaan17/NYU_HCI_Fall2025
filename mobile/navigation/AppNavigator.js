@@ -60,7 +60,7 @@ function MainTabsWithNavBar() {
     <View style={{ flex: 1 }}>
       <MainTabs />
       {/* NavBar overlay - positioned consistently across all screens */}
-      <View style={[styles.navBarOverlay, { paddingBottom: Math.max(insets.bottom, spacing['2xl']) + spacing['2xl'] }]}>
+      <View style={[styles.navBarOverlay, { paddingBottom: insets.bottom }]}>
         <NavBar activeTab={getActiveTab()} onTabPress={handleTabPress} />
       </View>
     </View>

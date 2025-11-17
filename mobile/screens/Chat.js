@@ -2,7 +2,7 @@
  * @Author: Mukhil Sundararaj
  * @Date:   2025-11-14 11:50:47
  * @Last Modified by:   Mukhil Sundararaj
- * @Last Modified time: 2025-11-17 12:36:37
+ * @Last Modified time: 2025-11-17 15:50:33
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -21,11 +21,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import RecommendationCard from '../components/RecommendationCard';
 import InputField from '../components/InputField';
+import SvgIcon from '../components/SvgIcon';
 import useLocation from '../hooks/useLocation';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
-const NAV_BAR_OFFSET = 50; // Approximate height of custom nav bar overlay + spacing
+const NAV_BAR_OFFSET = 75; // Approximate height of custom nav bar overlay + spacing
 
 // API Configuration - Update with your Flask server IP
 // For iOS Simulator: use 'localhost' or '127.0.0.1'
@@ -263,7 +264,7 @@ export default function Chat({ navigation, route }) {
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary, colors.background]}
         locations={[0, 0.5, 1]}
-        style={[styles.gradient, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        style={[styles.gradient, { paddingTop: insets.top }]}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -281,11 +282,11 @@ export default function Chat({ navigation, route }) {
             />
             <View style={styles.headerContent}>
               <View style={styles.weatherBadge}>
-                <Text style={styles.weatherIcon}>🌡️</Text>
+                <SvgIcon name="temp" size={20} color={colors.textBlue} />
                 <Text style={styles.weatherText}>72°F</Text>
               </View>
               <View style={styles.scheduleBadge}>
-                <Text style={styles.scheduleIcon}>⏰</Text>
+                <SvgIcon name="clock" size={20} color={colors.textPrimary} />
                 <Text style={styles.scheduleText}>Free until 6:30 PM</Text>
               </View>
               <View style={styles.moodBadge}>
@@ -415,14 +416,14 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 70.5,
+    height: 80,
     opacity: 0.4,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md, // 8pt gap between badges
+    gap: spacing.lg, // 12pt gap between badges
     flexWrap: 'nowrap',
     width: '100%',
   },
@@ -433,17 +434,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentBlueMedium,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
   },
   weatherIcon: {
     fontSize: 16,
   },
   weatherText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textBlue,
   },
@@ -454,17 +455,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
   },
   scheduleIcon: {
     fontSize: 16,
   },
   scheduleText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
   },
@@ -473,15 +474,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     flexShrink: 0,
-    height: 32, // Fixed height for alignment
+    height: 40, // Balanced height
     justifyContent: 'center',
     alignItems: 'center',
   },
   moodText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textSecondary,
   },
@@ -491,7 +492,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing['2xl'], // 16pt horizontal padding
     paddingTop: spacing['3xl'], // 20pt top padding
-    paddingBottom: 180, // Extra padding to prevent nav bar overlap
+    paddingBottom: 120, // Extra padding to prevent nav bar overlap (nav bar ~80pt + safe area)
   },
   messageContainer: {
     marginBottom: spacing.xl,

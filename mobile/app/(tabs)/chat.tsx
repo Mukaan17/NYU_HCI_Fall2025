@@ -37,7 +37,7 @@ export default function Chat() {
   const [isTyping, setIsTyping] = React.useState(false);
 
   // Keep enough padding so InputField sits above the NavBar
-  const navOffset = insets.bottom + 100;
+  const navOffset = insets.bottom + 40;
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -215,7 +215,7 @@ export default function Chat() {
           <View
             style={{
               paddingHorizontal: 20,
-              paddingBottom: insets.bottom + 40,
+              paddingBottom: insets.bottom,
             }}
           >
             <InputField placeholder="Ask VioletVibes..." onSend={handleSend} />
@@ -231,7 +231,7 @@ export default function Chat() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   gradient: { flex: 1 },
-  content: { padding: 20, paddingBottom: 120 },
+  content: { padding: 20, paddingBottom: 50 },
   aiBubbleContainer: { width: "100%" },
   messageBubble: {
     maxWidth: "80%",

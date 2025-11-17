@@ -8,7 +8,7 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
+import useLocation from '../hooks/useLocation';
 import RecommendationCard from '../components/RecommendationCard';
 import { colors, typography, spacing, borderRadius } from '../constants/theme';
 
@@ -16,7 +16,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function Map({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [location, setLocation] = useState(null);
+  const { location, loading, error } = useLocation();
   const [region, setRegion] = useState({
     latitude: 40.6934,
     longitude: -73.9857,
@@ -24,28 +24,17 @@ export default function Map({ navigation }) {
     longitudeDelta: 0.01,
   });
 
+  // Update region when location changes
   useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          if (loc && loc.coords) {
-            setLocation(loc.coords);
-            setRegion({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error getting location:', error);
-        // Use default location (Downtown Brooklyn)
-      }
-    })();
-  }, []);
+    if (location && !loading) {
+      setRegion({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    }
+  }, [location, loading]);
 
   const markers = [
     {
@@ -83,6 +72,7 @@ export default function Map({ navigation }) {
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
         showsMyLocationButton={false}
+        followsUserLocation={true}
       >
           {markers.map((marker) => (
             <Marker

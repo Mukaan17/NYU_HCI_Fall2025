@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * @Author: Mukhil Sundararaj
+ * @Date:   2025-11-14 11:50:47
+ * @Last Modified by:   Mukhil Sundararaj
+ * @Last Modified time: 2025-11-17 12:36:37
+ */
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -14,110 +21,142 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import RecommendationCard from '../components/RecommendationCard';
 import InputField from '../components/InputField';
+import useLocation from '../hooks/useLocation';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
+const NAV_BAR_OFFSET = 50; // Approximate height of custom nav bar overlay + spacing
 
-export default function Chat({ navigation }) {
+// API Configuration - Update with your Flask server IP
+// For iOS Simulator: use 'localhost' or '127.0.0.1'
+// For physical device: use your computer's local IP (e.g., '192.168.1.100')
+// Note: Using port 5001 because 5000 is often used by AirPlay Receiver on macOS
+const API_BASE_URL = __DEV__ ? 'http://localhost:5001' : 'https://your-production-url.com';
+const USE_API = true; // Set to true to enable real API calls
+
+export default function Chat({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef(null);
+  const { location } = useLocation();
   const [refreshing, setRefreshing] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState([
     {
-      id: 1,
+      id: 0,
       role: 'ai',
-      content: "Find something fun with friends tonight.",
-      timestamp: new Date(Date.now() - 3600000),
-    },
-    {
-      id: 2,
-      role: 'ai',
-      content: "Need a quick study break spot",
-      timestamp: new Date(Date.now() - 1800000),
-    },
-    {
-      id: 3,
-      role: 'ai',
-      content: "Where can I grab dinner?",
-      timestamp: new Date(Date.now() - 600000),
+      content: "Hey! 👋 I'm Violet, your AI concierge. I can help you find great spots nearby—food, cafés, events, and more. What are you looking for?",
+      timestamp: new Date(),
+      recommendations: [],
     },
   ]);
-
-  const recommendations = [
-    {
-      id: 1,
-      title: 'Fulton Jazz Lounge',
-      description: 'Live jazz tonight at 8 PM',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '7 min walk',
-      popularity: 'Medium',
-    },
-    {
-      id: 2,
-      title: 'Brooklyn Rooftop',
-      description: 'Great vibes & skyline views',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '12 min walk',
-      popularity: 'High',
-    },
-    {
-      id: 3,
-      title: 'Butler Café',
-      description: 'Great for study breaks',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '3 min walk',
-      popularity: 'Low',
-    },
-    {
-      id: 4,
-      title: 'DeKalb Market Hall',
-      description: '40+ food vendors, all styles',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '5 min walk',
-      popularity: 'Medium',
-    },
-  ];
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
-    // Scroll to bottom when new messages are added
-    if (scrollViewRef.current) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    // Only scroll to bottom on initial load or when user sends a message
+    // Don't auto-scroll when AI responds to keep user's scroll position
+    if (scrollViewRef.current && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Only auto-scroll if it's the welcome message or a user message
+      if (lastMessage.id === 0 || lastMessage.role === 'user') {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
     }
   }, [messages]);
 
-  const handleSend = async (text) => {
+  const handleSend = useCallback(async (text) => {
     if (!text || !text.trim()) return;
     
     const userMessage = { id: Date.now(), role: 'user', content: text.trim(), timestamp: new Date() };
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
-    // Simulate AI response - in production, this would call your API
+    // Call API or simulate response
     try {
-      // Uncomment when API is ready:
-      // const res = await fetch("http://YOUR_IP:5000/api/chat", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ mood: "chill", message: text.trim() }),
-      // });
-      // const data = await res.json();
-      // const aiMessage = { id: Date.now() + 1, role: 'ai', content: data.reply || "...", timestamp: new Date() };
-      // setMessages((prev) => [...prev, aiMessage]);
-
-      // Temporary: Simulate AI response
-      setTimeout(() => {
+      if (USE_API) {
+        // Prepare request body with message and location
+        const requestBody = {
+          message: text.trim(),
+        };
+        
+        // Add location if available
+        if (location) {
+          requestBody.latitude = location.latitude;
+          requestBody.longitude = location.longitude;
+        }
+        
+        // Real API call to Flask backend
+        const res = await fetch(`${API_BASE_URL}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+        const data = await res.json();
         setIsTyping(false);
+        
+        // Format recommendations from API response
+        let formattedRecs = [];
+        if (data.recommendations && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+          formattedRecs = data.recommendations.map((place, index) => {
+            // Determine popularity based on rating
+            let popularity = 'Low';
+            if (place.rating) {
+              if (place.rating >= 4.5) popularity = 'High';
+              else if (place.rating >= 4.0) popularity = 'Medium';
+            }
+            
+            // Format walk time - handle different API response formats
+            let walkTime = 'N/A';
+            if (place.walk_time) {
+              walkTime = place.walk_time;
+            } else if (place.distance) {
+              walkTime = place.distance;
+            } else if (typeof place.walk_time === 'string') {
+              walkTime = place.walk_time;
+            }
+            
+            const formattedRec = {
+              id: Date.now() + index + 1000,
+              title: place.name || 'Unknown Place',
+              description: place.address || place.vicinity || 'Nearby location',
+              image: null, // Google Places photos require additional API call
+              walkTime: walkTime,
+              popularity: popularity,
+              rating: place.rating,
+              openNow: place.open_now,
+              mapsLink: place.maps_link,
+            };
+            
+            console.log('Formatted recommendation:', formattedRec);
+            return formattedRec;
+          });
+        }
+        
+        // Add AI message with recommendations attached
         const aiMessage = {
           id: Date.now() + 1,
           role: 'ai',
-          content: 'Here are some great options for you!',
+          content: data.reply || "Sorry, I couldn't process that request.",
           timestamp: new Date(),
+          recommendations: formattedRecs,
         };
+        console.log('AI Message with recommendations:', aiMessage.recommendations.length);
         setMessages((prev) => [...prev, aiMessage]);
-      }, 1500);
+      } else {
+        // Simulated response for demo (no API)
+        setTimeout(() => {
+          setIsTyping(false);
+          const aiMessage = {
+            id: Date.now() + 1,
+            role: 'ai',
+            content: 'Here are some great options for you!',
+            timestamp: new Date(),
+            recommendations: [],
+          };
+          setMessages((prev) => [...prev, aiMessage]);
+        }, 1500);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       setIsTyping(false);
@@ -126,10 +165,35 @@ export default function Chat({ navigation }) {
         role: 'ai',
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date(),
+        recommendations: [],
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
-  };
+  }, []);
+
+  // Handle auto-prompt from navigation params
+  // Use both useFocusEffect and useEffect to catch all cases
+  useFocusEffect(
+    useCallback(() => {
+      // Reset ref when screen gains focus
+      autoSentRef.current = false;
+    }, [])
+  );
+
+  useEffect(() => {
+    const autoPrompt = route.params?.autoPrompt;
+    if (autoPrompt && !autoSentRef.current) {
+      autoSentRef.current = true;
+      // Small delay to ensure screen is fully mounted and ready
+      const timer = setTimeout(() => {
+        console.log('Auto-sending prompt:', autoPrompt);
+        handleSend(autoPrompt);
+        // Clear the param after using it
+        navigation.setParams({ autoPrompt: undefined });
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [route.params?.autoPrompt, navigation, handleSend]);
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -141,6 +205,48 @@ export default function Chat({ navigation }) {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
     return date.toLocaleDateString();
+  };
+
+  const renderMessageText = (text) => {
+    // Parse markdown-style bold text (**text**)
+    const parts = [];
+    const regex = /\*\*(.*?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Add text before the bold part
+      if (match.index > lastIndex) {
+        parts.push({ text: text.substring(lastIndex, match.index), bold: false });
+      }
+      // Add the bold part
+      parts.push({ text: match[1], bold: true });
+      lastIndex = regex.lastIndex;
+    }
+
+    // Add remaining text after last match
+    if (lastIndex < text.length) {
+      parts.push({ text: text.substring(lastIndex), bold: false });
+    }
+
+    // If no bold text found, return original text
+    if (parts.length === 0) {
+      return <Text style={styles.messageText}>{text}</Text>;
+    }
+
+    // Render with bold parts
+    return (
+      <Text style={styles.messageText}>
+        {parts.map((part, index) => (
+          <Text
+            key={index}
+            style={part.bold ? styles.messageTextBold : styles.messageText}
+          >
+            {part.text}
+          </Text>
+        ))}
+      </Text>
+    );
   };
 
   const onRefresh = React.useCallback(() => {
@@ -199,29 +305,54 @@ export default function Chat({ navigation }) {
             }
           >
             {messages.map((message, index) => (
-              <Animated.View
-                key={message.id}
-                entering={message.role === 'user' ? FadeInDown.delay(index * 50) : FadeInUp.delay(index * 50)}
-                style={[
-                  styles.messageContainer,
-                  message.role === 'ai' && styles.aiMessageContainer,
-                ]}
-              >
-                <LinearGradient
-                  colors={[colors.gradientStart, colors.gradientEnd]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+              <React.Fragment key={message.id}>
+                <Animated.View
+                  entering={message.role === 'user' ? FadeInDown.delay(index * 50) : FadeInUp.delay(index * 50)}
                   style={[
-                    styles.messageBubble,
-                    message.role === 'ai' && styles.aiBubble,
+                    styles.messageContainer,
+                    message.role === 'ai' && styles.aiMessageContainer,
                   ]}
                 >
-                  <Text style={styles.messageText}>{message.content}</Text>
-                  {message.timestamp && (
-                    <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
-                  )}
-                </LinearGradient>
-              </Animated.View>
+                  <LinearGradient
+                    colors={message.role === 'user' 
+                      ? [colors.gradientStart, colors.gradientEnd] 
+                      : ['#31374D', '#31374D']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[
+                      styles.messageBubble,
+                      message.role === 'ai' && styles.aiBubble,
+                    ]}
+                  >
+                    {renderMessageText(message.content)}
+                    {message.timestamp && (
+                      <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
+                    )}
+                  </LinearGradient>
+                </Animated.View>
+                
+                {/* Show recommendations right after AI message that generated them */}
+                {message.role === 'ai' && message.recommendations && message.recommendations.length > 0 && (
+                  <Animated.View
+                    entering={FadeInUp.delay((index + 1) * 50)}
+                    style={styles.recommendationsContainer}
+                  >
+                    {message.recommendations.map((rec, recIndex) => {
+                      console.log('Rendering recommendation card:', rec);
+                      return (
+                        <RecommendationCard
+                          key={rec.id || `rec-${index}-${recIndex}`}
+                          title={rec.title || 'Unknown Place'}
+                          description={rec.description || 'Nearby location'}
+                          image={rec.image}
+                          walkTime={rec.walkTime || 'N/A'}
+                          popularity={rec.popularity || 'Low'}
+                        />
+                      );
+                    })}
+                  </Animated.View>
+                )}
+              </React.Fragment>
             ))}
 
             {/* Typing Indicator */}
@@ -239,24 +370,15 @@ export default function Chat({ navigation }) {
                 </View>
               </Animated.View>
             )}
-
-            {/* Recommendations */}
-            <View style={styles.recommendationsContainer}>
-              {recommendations.map((rec) => (
-                <RecommendationCard
-                  key={rec.id}
-                  title={rec.title}
-                  description={rec.description}
-                  image={rec.image}
-                  walkTime={rec.walkTime}
-                  popularity={rec.popularity}
-                />
-              ))}
-            </View>
           </ScrollView>
 
-          {/* Input Field */}
-          <View style={styles.inputContainer}>
+          {/* Input Field - add extra bottom padding so nav bar doesn't overlap */}
+          <View
+            style={[
+              styles.inputContainer,
+              { paddingBottom: Math.max(insets.bottom, spacing['2xl']) + NAV_BAR_OFFSET },
+            ]}
+          >
             <InputField
               placeholder="Ask VioletVibes..."
               onSend={handleSend}
@@ -298,10 +420,11 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing['2xl'], // 16pt gap between badges (Apple standard)
-    flexWrap: 'wrap',
+    gap: spacing.md, // 8pt gap between badges
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   weatherBadge: {
     flexDirection: 'row',
@@ -310,10 +433,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentBlueMedium,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.md,
+    gap: spacing.sm,
     flexShrink: 0,
+    height: 32, // Fixed height for alignment
   },
   weatherIcon: {
     fontSize: 16,
@@ -330,11 +454,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.md,
-    flex: 1,
-    minWidth: width * 0.4,
+    gap: spacing.sm,
+    flexShrink: 0,
+    height: 32, // Fixed height for alignment
   },
   scheduleIcon: {
     fontSize: 16,
@@ -349,9 +473,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     flexShrink: 0,
+    height: 32, // Fixed height for alignment
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   moodText: {
     fontSize: typography.fontSize.sm,
@@ -392,6 +519,12 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.xl,
     marginBottom: spacing.xs,
   },
+  messageTextBold: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.textPrimary,
+    lineHeight: typography.lineHeight.xl,
+  },
   timestamp: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.regular,
@@ -415,7 +548,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   recommendationsContainer: {
-    marginTop: spacing.xl,
+    marginTop: spacing['2xl'],
+    marginBottom: spacing.xl,
+    alignItems: 'flex-start',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   inputContainer: {
     paddingBottom: spacing['2xl'], // 16pt bottom padding before nav bar

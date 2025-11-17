@@ -119,12 +119,15 @@ export default function RecommendationCard({
 const styles = StyleSheet.create({
   wrapper: {
     marginBottom: spacing['2xl'], // 16pt margin between cards (Apple standard)
+    width: '100%',
+    alignSelf: 'stretch',
   },
   container: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
     overflow: 'hidden',
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',

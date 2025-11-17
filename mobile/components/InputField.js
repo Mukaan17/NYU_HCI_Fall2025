@@ -70,7 +70,7 @@ export default function InputField({ placeholder, onSend, style }) {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={text.trim() ? [colors.gradientStart, colors.gradientEnd] : [colors.border, colors.border]}
+            colors={text.trim() ? ['#776FF6', '#776FF6'] : [colors.border, colors.border]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.sendButtonGradient}

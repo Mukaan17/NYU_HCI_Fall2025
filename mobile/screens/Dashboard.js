@@ -1,4 +1,10 @@
-import React, { useEffect } from 'react';
+/**
+ * @Author: Mukhil Sundararaj
+ * @Date:   2025-11-14 15:32:51
+ * @Last Modified by:   Mukhil Sundararaj
+ * @Last Modified time: 2025-11-17 12:58:11
+ */
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +26,7 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import RecommendationCard from '../components/RecommendationCard';
+import Notification from '../components/Notification';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -28,6 +35,15 @@ const AnimatedView = Animated.createAnimatedComponent(View);
 
 export default function Dashboard({ navigation }) {
   const insets = useSafeAreaInsets();
+  const [showNotification, setShowNotification] = useState(false);
+
+  // Demo: Show notification after 3 seconds (simulating calendar-based trigger)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowNotification(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const recommendations = [
     {
@@ -57,14 +73,14 @@ export default function Dashboard({ navigation }) {
   ];
 
   const quickActions = [
-    { id: 1, icon: '🍔', label: 'Find Food', color: colors.accentPurple },
-    { id: 2, icon: '🎵', label: 'Events', color: colors.accentBlue },
-    { id: 3, icon: '☕', label: 'Cafés', color: colors.accentPurple },
-    { id: 4, icon: '🎯', label: 'Explore', color: colors.accentBlue },
+    { id: 1, icon: '🍔', label: 'Find Food', color: colors.accentPurple, prompt: 'Find me a good place to eat nearby' },
+    { id: 2, icon: '🎵', label: 'Events', color: colors.accentBlue, prompt: 'What events are happening nearby tonight?' },
+    { id: 3, icon: '☕', label: 'Cafés', color: colors.accentPurple, prompt: 'Find a quiet café for studying' },
+    { id: 4, icon: '🎯', label: 'Explore', color: colors.accentBlue, prompt: 'What are some interesting places to explore nearby?' },
   ];
 
 
-  const QuickActionCard = ({ icon, label, color, delay = 0 }) => {
+  const QuickActionCard = ({ icon, label, color, delay = 0, prompt, onPress }) => {
     const scale = useSharedValue(1);
 
     const animatedStyle = useAnimatedStyle(() => {
@@ -81,6 +97,12 @@ export default function Dashboard({ navigation }) {
       scale.value = withSpring(1);
     };
 
+    const handlePress = () => {
+      if (onPress && prompt) {
+        onPress(prompt);
+      }
+    };
+
     return (
       <Animated.View
         entering={FadeInDown.delay(delay).springify()}
@@ -89,6 +111,7 @@ export default function Dashboard({ navigation }) {
         <TouchableOpacity
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
+          onPress={handlePress}
           activeOpacity={0.9}
           style={styles.quickActionCardWrapper}
         >
@@ -165,6 +188,16 @@ export default function Dashboard({ navigation }) {
                   label={action.label}
                   color={action.color}
                   delay={300 + index * 50}
+                  prompt={action.prompt}
+                  onPress={(prompt) => {
+                    // Use jumpTo for tab navigation to ensure params are passed correctly
+                    const tabNavigator = navigation.getParent();
+                    if (tabNavigator) {
+                      tabNavigator.navigate('ChatTab', { autoPrompt: prompt });
+                    } else {
+                      navigation.navigate('ChatTab', { autoPrompt: prompt });
+                    }
+                  }}
                 />
               ))}
             </View>
@@ -190,6 +223,19 @@ export default function Dashboard({ navigation }) {
           </Animated.View>
         </ScrollView>
       </LinearGradient>
+      
+      {/* Notification Modal for Demo */}
+      <Notification
+        visible={showNotification}
+        onDismiss={() => setShowNotification(false)}
+        onViewEvent={() => {
+          setShowNotification(false);
+          navigation.navigate('ChatTab');
+        }}
+        notification={{
+          message: "You're free till 8 PM — live jazz at Fulton St starts soon (7 min walk)."
+        }}
+      />
     </View>
   );
 }
@@ -258,11 +304,12 @@ const styles = StyleSheet.create({
   },
   badgesContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xl,
-    flexWrap: 'wrap',
+    gap: spacing.md, // 8pt gap between badges
+    flexWrap: 'nowrap',
     marginBottom: spacing['4xl'],
+    width: '100%',
   },
   weatherBadge: {
     flexDirection: 'row',
@@ -271,10 +318,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentBlueMedium,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.md,
+    gap: spacing.sm,
     flexShrink: 0,
+    height: 32, // Fixed height for alignment
   },
   weatherIcon: {
     fontSize: 16,
@@ -291,11 +339,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.md,
-    flex: 1,
-    minWidth: width * 0.4,
+    gap: spacing.sm,
+    flexShrink: 0,
+    height: 32, // Fixed height for alignment
   },
   scheduleIcon: {
     fontSize: 16,
@@ -310,9 +358,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     flexShrink: 0,
+    height: 32, // Fixed height for alignment
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   moodText: {
     fontSize: typography.fontSize.sm,

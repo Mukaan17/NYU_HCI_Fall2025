@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -9,6 +10,7 @@ import datetime
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for mobile app to connect
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -29,8 +31,10 @@ Your goals:
 # --------------------------------------------------------------------------------------
 # WEATHER
 # --------------------------------------------------------------------------------------
-def get_weather_data():
-    lat, lon = 40.6942, -73.9866
+def get_weather_data(lat=None, lon=None):
+    # Use provided location or default to NYU Tandon
+    if lat is None or lon is None:
+        lat, lon = 40.6942, -73.9866
     api_key = os.getenv("OPENWEATHER_API_KEY")
 
     url = (
@@ -49,8 +53,10 @@ def get_weather_data():
 # --------------------------------------------------------------------------------------
 # GOOGLE PLACES
 # --------------------------------------------------------------------------------------
-def fetch_nearby_places(place_type="restaurant"):
-    lat, lon = 40.6942, -73.9866
+def fetch_nearby_places(place_type="restaurant", lat=None, lon=None):
+    # Use provided location or default to NYU Tandon
+    if lat is None or lon is None:
+        lat, lon = 40.6942, -73.9866
     api_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
     url = (
@@ -192,27 +198,31 @@ def chat():
 
         data = request.get_json()
         user_message = data.get("message", "").lower()
+        
+        # Get user location from request, or use default NYU Tandon location
+        user_lat = data.get("latitude", 40.6942)
+        user_lon = data.get("longitude", -73.9866)
 
-        weather = get_weather_data()
+        weather = get_weather_data(user_lat, user_lon)
 
         FAST_TRIGGERS = ["quick", "rush", "10 minutes", "ten minutes", "little time", "short break"]
         fast_mode = any(t in user_message for t in FAST_TRIGGERS)
 
         if fast_mode:
             places = (
-                fetch_nearby_places("meal_takeaway") +
-                fetch_nearby_places("fast_food") +
-                fetch_nearby_places("cafe")
+                fetch_nearby_places("meal_takeaway", user_lat, user_lon) +
+                fetch_nearby_places("fast_food", user_lat, user_lon) +
+                fetch_nearby_places("cafe", user_lat, user_lon)
             )
         else:
-            places = fetch_nearby_places("restaurant")
+            places = fetch_nearby_places("restaurant", user_lat, user_lon)
 
         places = places[:10]
 
         enriched = []
         for p in places:
             d = get_walking_directions(
-                40.6942, -73.9866,
+                user_lat, user_lon,
                 p["location"]["lat"], p["location"]["lng"]
             )
             enriched.append({
@@ -261,7 +271,11 @@ def chat():
 
         response = model.generate_content(prompt)
 
-        return jsonify({"reply": response.text})
+        # Return both the AI reply and the enriched places data for recommendations
+        return jsonify({
+            "reply": response.text,
+            "recommendations": enriched[:5]  # Return top 5 recommendations
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -281,4 +295,6 @@ def events():
 # RUN SERVER
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Allow connections from mobile devices on the same network
+    # Using port 5001 because 5000 is often used by AirPlay Receiver on macOS
+    app.run(debug=True, host='0.0.0.0', port=5001)

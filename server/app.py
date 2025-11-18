@@ -6,7 +6,7 @@ import google.generativeai as genai
 import os
 from services.directions_service import get_walking_directions
 from utils.cache import init_requests_cache
-from services.recommendation_service import build_chat_response
+from services.recommendation_service import build_chat_response, get_quick_recommendations
 from services.nyc_events_service import events_near_bbox  # your existing file name
 from utils.chat_memory import ChatMemory
 
@@ -46,6 +46,28 @@ def chat():
     except Exception as e:
         print("CHAT ERROR:", e)
         return jsonify({"error": "Internal server error"}), 500
+
+# ─────────────────────────────────────────────────────────────
+# QUICK ACTION RECOMMENDATIONS
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/quick_recs", methods=["GET"])
+def quick_recs():
+    """
+    Lightweight, non-chat recommendations for Dashboard Quick Actions.
+
+    Example:
+      /api/quick_recs?category=quick_bites
+      /api/quick_recs?category=chill_cafes
+      /api/quick_recs?category=events
+      /api/quick_recs?category=explore
+    """
+    try:
+        category = (request.args.get("category") or "explore").lower()
+        result = get_quick_recommendations(category, limit=10)
+        return jsonify(result)
+    except Exception as e:
+        print("QUICK_RECS ERROR:", e)
+        return jsonify({"error": "Unable to fetch quick recommendations"}), 500
 
 # ─────────────────────────────────────────────────────────────
 # EVENTS

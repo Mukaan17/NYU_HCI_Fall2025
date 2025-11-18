@@ -35,8 +35,7 @@ export default function TabsLayout() {
             bottom: 0,
             left: 0,
             right: 0,
-            paddingBottom:
-              Math.max(insets.bottom, spacing["2xl"]) + spacing["2xl"],
+            paddingBottom: spacing["2xl"],
             paddingHorizontal: spacing["2xl"],
           }}
         >

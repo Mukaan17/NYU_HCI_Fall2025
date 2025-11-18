@@ -8,6 +8,7 @@ export type SelectedPlace = {
   walkTime?: string;
   distance?: string;
   address?: string;
+  image?: string | null;   // ✅ Add this line
 } | null;
 
 type PlaceContextType = {

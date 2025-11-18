@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SvgIcon from "../../components/SvgIcon";
 import RecommendationCard from "../../components/RecommendationCard";
 import InputField from "../../components/InputField";
-
+import { getWeather } from "../../utils/getWeather";
 import { colors, typography, spacing, borderRadius, shadows } from "../../constants/theme";
 import { useChat, ChatMessage, Recommendation } from "../../context/ChatContext";
 import { usePlace } from "../../context/PlaceContext";
@@ -36,9 +36,25 @@ export default function Chat() {
   const { messages, setMessages } = useChat();
   const { setSelectedPlace } = usePlace();
   const { location } = useLocation();
+  useEffect(() => {
+    async function loadWeather() {
+      if (!location) return;
+
+      const w = await getWeather(location.latitude, location.longitude);
+      if (w) {
+        setTemp(w.temp);
+        setWeatherEmoji(w.emoji);
+      }
+    }
+    loadWeather();
+  }, [location]);
+
 
   const [isTyping, setIsTyping] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [temp, setTemp] = useState<number | null>(null);
+  const [weatherEmoji, setWeatherEmoji] = useState<string>("☀️");
 
   /* ------------------ Auto scroll to bottom ------------------ */
   useEffect(() => {
@@ -107,6 +123,7 @@ export default function Chat() {
               lat: p.location?.lat,
               lng: p.location?.lng,
               popularity: p.rating ? `⭐ ${p.rating}` : "N/A",
+              image: p.photo_url,
             })
           );
 
@@ -179,8 +196,9 @@ export default function Chat() {
             />
             <View style={styles.headerContent}>
               <View style={styles.weatherBadge}>
-                <SvgIcon name="temp" size={18} color={colors.textBlue} />
-                <Text style={styles.weatherText}>72°F</Text>
+                <Text style={styles.weatherText}>
+                  {weatherEmoji} {temp ? `${temp}°F` : "—"}
+                </Text>
               </View>
               <View style={styles.scheduleBadge}>
                 <SvgIcon name="clock" size={18} color={colors.textPrimary} />
@@ -216,6 +234,7 @@ export default function Chat() {
                         description={rec.description}
                         walkTime={rec.walkTime}
                         popularity={rec.popularity}
+                        image={rec.image}
                         onPress={() => handleCardPress(rec)}
                       />
                     ))}

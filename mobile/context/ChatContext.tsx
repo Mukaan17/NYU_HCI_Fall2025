@@ -10,6 +10,7 @@ export type Recommendation = {
   lat?: number;
   lng?: number;
   popularity?: string | null;
+  image?: string | null;   // ✅ Add this line
 };
 
 export type TextMessage = {

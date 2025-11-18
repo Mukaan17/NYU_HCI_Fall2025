@@ -26,7 +26,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 export type RecommendationCardProps = {
   title: string;
   description?: string;
-  image?: string;
+  image?: string | null;
   walkTime?: string;
   popularity?: string | null;
   onPress?: () => void;
@@ -103,12 +103,6 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
                   style={styles.image}
                   resizeMode="cover"
                 />
-
-                {walkTime && (
-                  <View style={styles.walkTimeBadge}>
-                    <Text style={styles.walkTimeText}>{walkTime}</Text>
-                  </View>
-                )}
               </View>
             )}
 
@@ -130,6 +124,11 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
                 {popularity && (
                   <View style={styles.popularityBadge}>
                     <Text style={styles.popularityText}>{popularity}</Text>
+                  </View>
+                )}
+                {walkTime && (
+                  <View style={styles.walkTimeBadgeInline}>
+                    <Text style={styles.walkTimeText}>{walkTime}</Text>
                   </View>
                 )}
               </View>

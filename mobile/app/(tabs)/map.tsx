@@ -1,4 +1,4 @@
-// app/(tabs)/map.tsx
+// mobile/app/(tabs)/map.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -7,6 +7,7 @@ import {
   Dimensions,
   StyleProp,
   ViewStyle,
+  Image,
 } from "react-native";
 import MapView, { Marker, Polyline, LatLng, Region } from "react-native-maps";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,9 +20,9 @@ import { colors, typography, spacing, borderRadius } from "../../constants/theme
 const { width, height } = Dimensions.get("window");
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.155:5000";
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000";
 
-// 2 MetroTech Center (Tandon) as default
+// NYU Tandon default
 const DEFAULT_LAT = 40.693393;
 const DEFAULT_LNG = -73.98555;
 
@@ -38,9 +39,8 @@ export default function Map() {
     longitudeDelta: 0.01,
   });
 
-  // Update region + route whenever selection or user location changes
+  /* ---------------------- Update map region ---------------------- */
   useEffect(() => {
-    // If we have a selected place: center on it and fetch route
     if (selectedPlace) {
       const destLat = selectedPlace.latitude ?? DEFAULT_LAT;
       const destLng = selectedPlace.longitude ?? DEFAULT_LNG;
@@ -56,7 +56,6 @@ export default function Map() {
       return;
     }
 
-    // No selected place → center on user if we have it
     if (location && !loading) {
       setRegion({
         latitude: location.latitude,
@@ -64,76 +63,61 @@ export default function Map() {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
+
       setPolylineCoords([]);
       return;
     }
 
-    // Fallback: default Tandon
     setRegion({
       latitude: DEFAULT_LAT,
       longitude: DEFAULT_LNG,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     });
-    setPolylineCoords([]);
   }, [selectedPlace, location, loading]);
 
+  /* ------------------------ Fetch walking route ------------------------ */
   const fetchRoute = async (destLat: number, destLng: number) => {
     try {
-      // Backend is responsible for choosing the origin (e.g. 2 MetroTech)
       const url = `${BACKEND_URL}/api/directions?lat=${destLat}&lng=${destLng}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const res = await fetch(url);
+      const data = await res.json();
 
-      if (data.polyline && Array.isArray(data.polyline)) {
-        setPolylineCoords(data.polyline as LatLng[]);
-      } else {
-        setPolylineCoords([]);
-      }
+      if (Array.isArray(data.polyline)) setPolylineCoords(data.polyline);
+      else setPolylineCoords([]);
     } catch (err) {
-      console.log("Directions error:", err);
+      console.log("Route error:", err);
       setPolylineCoords([]);
     }
   };
 
   const markerLat = selectedPlace?.latitude ?? DEFAULT_LAT;
   const markerLng = selectedPlace?.longitude ?? DEFAULT_LNG;
+
   const markerTitle = selectedPlace?.name ?? "2 MetroTech Center";
   const markerMeta =
     selectedPlace && (selectedPlace.walkTime || selectedPlace.distance)
-      ? `${selectedPlace.walkTime ?? "Walk time N/A"} • ${
-          selectedPlace.distance ?? "Distance N/A"
-        }`
+      ? `${selectedPlace.walkTime ?? ""} • ${selectedPlace.distance ?? ""}`
       : "Home base • NYU Tandon";
 
   return (
     <View style={styles.container}>
-      {/* Base map */}
+      {/* Map */}
       <MapView
         style={styles.map as StyleProp<ViewStyle>}
         region={region}
-        onRegionChangeComplete={setRegion}
         showsUserLocation
         showsMyLocationButton={false}
-        followsUserLocation={false}
       >
-        <Marker
-          coordinate={{ latitude: markerLat, longitude: markerLng }}
-          title={markerTitle}
-        />
-
+        <Marker coordinate={{ latitude: markerLat, longitude: markerLng }} />
         {polylineCoords.length > 0 && (
-          <Polyline
-            coordinates={polylineCoords}
-            strokeColor="#5B4BFF"
-            strokeWidth={5}
-          />
+          <Polyline coordinates={polylineCoords} strokeColor="#5B4BFF" strokeWidth={5} />
         )}
       </MapView>
 
-      {/* Overlay UI (JS visual layout) */}
+      {/* UI Overlay */}
       <View style={styles.overlayContainer}>
-        {/* Center location indicator (only if we have user location) */}
+        {/* Center Pulse */}
         {location && (
           <View style={styles.locationIndicator}>
             <View style={styles.locationDot}>
@@ -147,7 +131,7 @@ export default function Map() {
           </View>
         )}
 
-        {/* Address badge at top */}
+        {/* Centered Address Badge */}
         <View
           style={[
             styles.addressBadge,
@@ -155,12 +139,7 @@ export default function Map() {
           ]}
         >
           <LinearGradient
-            colors={[
-              colors.glassBackgroundLight,
-              colors.glassBackgroundDarkLight,
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            colors={[colors.glassBackgroundLight, colors.glassBackgroundDarkLight]}
             style={styles.addressBadgeGradient}
           >
             <Text style={styles.addressIcon}>📍</Text>
@@ -170,26 +149,27 @@ export default function Map() {
           </LinearGradient>
         </View>
 
-        {/* Bottom sheet – NO RecommendationCard, just info + directions placeholder */}
+        {/* Bottom Sheet */}
         <LinearGradient
-          colors={[
-            "transparent",
-            colors.backgroundOverlay,
-            colors.background,
-          ]}
-          locations={[0, 0.5, 1]}
+          colors={["transparent", colors.backgroundOverlay, colors.background]}
           style={[
             styles.bottomSheet,
-            {
-              paddingBottom:
-                Math.max(insets.bottom, spacing["2xl"]) + 90, // keep room for NavBar
-            },
+            { paddingBottom: Math.max(insets.bottom, spacing["2xl"]) + 90 },
           ]}
         >
           <View style={styles.bottomSheetContent}>
             <View style={styles.bottomSheetInfo}>
+              {selectedPlace?.image && (
+                <Image
+                  source={{ uri: selectedPlace.image }}
+                  style={styles.bottomImage}
+                  resizeMode="cover"
+                />
+              )}
+
               <Text style={styles.placeTitle}>{markerTitle}</Text>
               <Text style={styles.placeMeta}>{markerMeta}</Text>
+
               <Text style={styles.placeholderText}>
                 Walking directions coming soon…
               </Text>
@@ -201,22 +181,18 @@ export default function Map() {
   );
 }
 
-/* ---------- STYLES (from JS layout, adjusted for TSX/Context) ---------- */
+/* --------------------------- Styles --------------------------- */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
-  },
+  container: { flex: 1 },
+  map: { ...StyleSheet.absoluteFillObject },
+
   overlayContainer: {
     ...StyleSheet.absoluteFillObject,
     pointerEvents: "box-none",
   },
-  /* Center pulse around user location */
+
+  /* User Location Pulse */
   locationIndicator: {
     position: "absolute",
     left: width / 2 - 10,
@@ -234,10 +210,7 @@ const styles = StyleSheet.create({
     borderColor: colors.textPrimary,
     overflow: "hidden",
   },
-  locationGradient: {
-    width: "100%",
-    height: "100%",
-  },
+  locationGradient: { width: "100%", height: "100%" },
   locationRing: {
     position: "absolute",
     width: 64,
@@ -255,16 +228,16 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     backgroundColor: colors.gradientStart,
-    opacity: 0.371,
+    opacity: 0.35,
     top: -30,
     left: -30,
   },
 
-  /* Address badge */
+  /* Centered Address Badge */
   addressBadge: {
     position: "absolute",
-    left: width * 0.25,
-    maxWidth: width * 0.7,
+    alignSelf: "center",
+    maxWidth: width * 0.8,
     borderRadius: borderRadius.md,
     overflow: "hidden",
   },
@@ -277,24 +250,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  addressIcon: {
-    fontSize: 15,
-  },
+  addressIcon: { fontSize: 15 },
   addressText: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
   },
 
-  /* Bottom sheet */
+  /* Bottom Sheet */
   bottomSheet: {
     position: "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: spacing["3xl"], // 20pt top padding
-    paddingHorizontal: spacing["2xl"], // 16pt horizontal padding
-    paddingBottom: 100, // will be overridden with safe area + nav height
+    width: "100%",
+    paddingTop: spacing["3xl"],
+    paddingHorizontal: spacing["2xl"],
   },
   bottomSheetContent: {
     backgroundColor: colors.glassBackground,
@@ -303,9 +272,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.xs,
   },
-  bottomSheetInfo: {
-    padding: spacing["2xl"],
+  bottomSheetInfo: { padding: spacing["2xl"] },
+
+  bottomImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 12,
   },
+
   placeTitle: {
     fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.semiBold,
@@ -314,7 +289,6 @@ const styles = StyleSheet.create({
   },
   placeMeta: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.regular,
     color: colors.textSecondary,
     marginBottom: spacing.lg,
   },

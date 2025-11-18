@@ -6,10 +6,7 @@ import {
   StyleSheet,
   Dimensions,
   Platform,
-  StyleProp,
-  ViewStyle,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -21,6 +18,7 @@ import Animated, {
   withSequence,
   FadeInUp,
 } from "react-native-reanimated";
+import SvgIcon from "./SvgIcon";
 import {
   colors,
   typography,
@@ -38,15 +36,15 @@ const AnimatedText = Animated.createAnimatedComponent(Text);
 interface NavBarProps {
   activeTab: string;
   onTabPress: (id: string) => void;
-  style?: StyleProp<ViewStyle>;
+  style?: any;
 }
 
 export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
   const tabs = [
-    { id: "dashboard", label: "Home" },
-    { id: "chat", label: "Chat" },
-    { id: "map", label: "Map" },
-    { id: "safety", label: "Safety" },
+    { id: "dashboard", label: "Home", icon: "home" },
+    { id: "chat", label: "Chat", icon: "chat" },
+    { id: "map", label: "Map", icon: "map" },
+    { id: "safety", label: "Safety", icon: "safety" },
   ];
 
   const containerScale = useSharedValue(1);
@@ -63,7 +61,7 @@ export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
   const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
   const hasAnimated = useRef(false);
 
-  // Entrance animation
+  // Entrance animation (unchanged)
   useEffect(() => {
     if (!hasAnimated.current) {
       containerScale.value = 0.95;
@@ -98,42 +96,35 @@ export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
     }
   }, []);
 
-  // Animate highlight
+  // Animate highlight (unchanged)
   useEffect(() => {
     const animateHighlight = () => {
-      const active = tabLayouts.current[activeTab];
-      if (active) {
-        highlightPosition.value = withSpring(active.x, {
+      const activeLayout = tabLayouts.current[activeTab];
+
+      if (activeLayout) {
+        highlightPosition.value = withSpring(activeLayout.x, {
+          damping: 15,
+          stiffness: 200,
+        });
+        highlightWidth.value = withSpring(activeLayout.width, {
           damping: 15,
           stiffness: 200,
         });
 
-        highlightWidth.value = withSpring(active.width, {
-          damping: 15,
-          stiffness: 200,
-        });
-
-        highlightScale.value = withSequence(
-          withSpring(1.08),
-          withSpring(1)
-        );
+        highlightScale.value = withSequence(withSpring(1.08), withSpring(1));
 
         highlightBorderRadius.value = withSequence(
           withSpring(borderRadius.full * 0.6),
           withSpring(borderRadius.full)
         );
 
-        const rotationAmount = (Math.random() - 0.5) * 3;
-        highlightRotation.value = withSequence(
-          withSpring(rotationAmount),
-          withSpring(0)
-        );
+        const rot = (Math.random() - 0.5) * 3;
+        highlightRotation.value = withSequence(withSpring(rot), withSpring(0));
 
-        const offsetX = (Math.random() - 0.5) * 6;
-        const offsetY = (Math.random() - 0.5) * 3;
-
-        blobOffsetX.value = withSequence(withSpring(offsetX), withSpring(0));
-        blobOffsetY.value = withSequence(withSpring(offsetY), withSpring(0));
+        const offX = (Math.random() - 0.5) * 6;
+        const offY = (Math.random() - 0.5) * 3;
+        blobOffsetX.value = withSequence(withSpring(offX), withSpring(0));
+        blobOffsetY.value = withSequence(withSpring(offY), withSpring(0));
       }
     };
 
@@ -175,7 +166,7 @@ export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
       </BlurView>
 
       <View style={styles.container}>
-        {/* Liquid highlight */}
+        {/* Highlight blob */}
         <Animated.View
           style={[styles.slidingHighlight, highlightAnimatedStyle]}
         >
@@ -185,26 +176,15 @@ export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
           </View>
         </Animated.View>
 
+        {/* Tabs */}
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
-
           const scale = useSharedValue(1);
           const opacity = useSharedValue(isActive ? 1 : 0.7);
-          const prevActiveRef = useRef(isActive);
-
-          useEffect(() => {
-            if (prevActiveRef.current !== isActive) {
-              opacity.value = withTiming(isActive ? 1 : 0.7, { duration: 200 });
-              prevActiveRef.current = isActive;
-            } else {
-              opacity.value = isActive ? 1 : 0.7;
-            }
-          }, [isActive]);
 
           const buttonAnimatedStyle = useAnimatedStyle(() => ({
             transform: [{ scale: scale.value }],
           }));
-
           const textAnimatedStyle = useAnimatedStyle(() => ({
             opacity: opacity.value,
           }));
@@ -214,23 +194,37 @@ export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
               key={tab.id}
               onPress={() => handleTabPressInternal(tab.id)}
               onPressIn={() =>
-                (scale.value = withSpring(0.95, { damping: 12, stiffness: 400 }))
+                (scale.value = withSpring(0.95, {
+                  damping: 12,
+                  stiffness: 400,
+                }))
               }
               onPressOut={() =>
-                (scale.value = withSpring(1, { damping: 12, stiffness: 400 }))
+                (scale.value = withSpring(1, {
+                  damping: 12,
+                  stiffness: 400,
+                }))
               }
               style={[styles.tabButton, buttonAnimatedStyle]}
               activeOpacity={0.8}
-              onLayout={(event) => {
-                const { x, width } = event.nativeEvent.layout;
+              onLayout={(e) => {
+                const { x, width } = e.nativeEvent.layout;
                 tabLayouts.current[tab.id] = { x, width };
               }}
             >
               <View style={styles.button}>
+                <SvgIcon
+                  name={tab.icon}
+                  size={20}
+                  color={isActive ? colors.textPrimary : colors.textSecondary}
+                />
+
                 <AnimatedText
                   style={[
                     styles.buttonText,
-                    isActive ? styles.activeButtonText : styles.inactiveButtonText,
+                    isActive
+                      ? styles.activeButtonText
+                      : styles.inactiveButtonText,
                     textAnimatedStyle,
                   ]}
                 >
@@ -258,14 +252,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 20,
       },
-      android: {
-        elevation: 8,
-      },
+      android: { elevation: 8 },
     }),
   },
   blurContainer: {
-    position: "absolute",
-    inset: 0,
+    ...StyleSheet.absoluteFillObject,
     borderRadius: borderRadius.full,
   },
   glassOverlay: {
@@ -313,11 +304,13 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   button: {
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "column",
+    gap: spacing.xs,
     minHeight: 44,
   },
   buttonText: {

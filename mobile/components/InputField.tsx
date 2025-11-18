@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  ViewStyle,
   StyleProp,
+  ViewStyle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+
 import {
   colors,
   typography,
@@ -28,7 +29,6 @@ import {
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-// ✅ Add props interface
 interface InputFieldProps {
   placeholder: string;
   onSend: (text: string) => void | Promise<void>;
@@ -44,11 +44,11 @@ export default function InputField({
   const sendButtonScale = useSharedValue(1);
 
   const handleSend = () => {
-    if (text.trim()) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onSend(text.trim());
-      setText("");
-    }
+    if (!text.trim()) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onSend(text.trim());
+    setText("");
   };
 
   const handlePressIn = () => {
@@ -59,15 +59,14 @@ export default function InputField({
     sendButtonScale.value = withSpring(1);
   };
 
-  const animatedButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: sendButtonScale.value }],
-    };
-  });
+  const animatedButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: sendButtonScale.value }],
+  }));
 
   return (
     <View style={[styles.container, style]}>
       <View style={styles.inputWrapper}>
+        {/* Frosted background */}
         <BlurView
           intensity={Platform.OS === "ios" ? 60 : 40}
           tint="dark"
@@ -83,11 +82,11 @@ export default function InputField({
             placeholderTextColor={colors.textSecondary}
             value={text}
             onChangeText={setText}
-            multiline={false}
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
 
+          {/* Animated Send Button */}
           <AnimatedTouchable
             onPress={handleSend}
             onPressIn={handlePressIn}
@@ -139,18 +138,10 @@ const styles = StyleSheet.create({
     }),
   },
   blurContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
   },
   glassOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(28, 37, 65, 0.5)",
   },
   inputContainer: {
@@ -160,7 +151,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: 60,
     gap: spacing["2xl"],
-    position: "relative",
     zIndex: 1,
   },
   input: {

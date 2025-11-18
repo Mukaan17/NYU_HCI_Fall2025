@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "MomentApp.app"
-               BlueprintName = "MomentApp"
-               ReferencedContainer = "container:MomentApp.xcodeproj">
+               BuildableName = "VioletVibes.app"
+               BlueprintName = "VioletVibes"
+               ReferencedContainer = "container:VioletVibes.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "MomentAppTests.xctest"
-               BlueprintName = "MomentAppTests"
-               ReferencedContainer = "container:MomentApp.xcodeproj">
+               BuildableName = "VioletVibesTests.xctest"
+               BlueprintName = "VioletVibesTests"
+               ReferencedContainer = "container:VioletVibes.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "MomentApp.app"
-            BlueprintName = "MomentApp"
-            ReferencedContainer = "container:MomentApp.xcodeproj">
+            BuildableName = "VioletVibes.app"
+            BlueprintName = "VioletVibes"
+            ReferencedContainer = "container:VioletVibes.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "MomentApp.app"
-            BlueprintName = "MomentApp"
-            ReferencedContainer = "container:MomentApp.xcodeproj">
+            BuildableName = "VioletVibes.app"
+            BlueprintName = "VioletVibes"
+            ReferencedContainer = "container:VioletVibes.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

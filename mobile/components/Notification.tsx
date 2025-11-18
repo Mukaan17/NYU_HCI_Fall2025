@@ -1,4 +1,3 @@
-// components/Notification.tsx
 import React from "react";
 import {
   View,
@@ -9,6 +8,7 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import SvgIcon from "./SvgIcon";
 import { colors, typography, spacing, borderRadius } from "../constants/theme";
 
 type NotificationData = {
@@ -30,13 +30,8 @@ const Notification: React.FC<NotificationProps> = ({
 }) => {
   if (!visible) return null;
 
-  const handleDismiss = () => {
-    onDismiss?.();
-  };
-
-  const handleViewEvent = () => {
-    onViewEvent?.();
-  };
+  const handleDismiss = () => onDismiss?.();
+  const handleViewEvent = () => onViewEvent?.();
 
   return (
     <Modal
@@ -55,24 +50,27 @@ const Notification: React.FC<NotificationProps> = ({
                 end={{ x: 1, y: 1 }}
                 style={styles.content}
               >
-                {/* Header */}
+                {/* HEADER */}
                 <View style={styles.header}>
                   <View style={styles.avatarContainer}>
                     <View style={styles.avatar}>
-                      <Text style={styles.avatarIcon}>✨</Text>
+                      <SvgIcon name="icon" size={28} color="#FFFFFF" />
                     </View>
                   </View>
+
                   <View style={styles.headerText}>
                     <View style={styles.headerTop}>
                       <Text style={styles.appName}>VioletVibes</Text>
                       <Text style={styles.time}>now</Text>
                     </View>
+
                     <View style={styles.notificationTitle}>
                       <Text style={styles.bellIcon}>🔔</Text>
                       <Text style={styles.notificationText}>
                         You're free till 8 PM!
                       </Text>
                     </View>
+
                     <Text style={styles.notificationDescription}>
                       {notification?.message ||
                         "Live jazz at Fulton St starts soon (7 min walk)."}
@@ -80,7 +78,7 @@ const Notification: React.FC<NotificationProps> = ({
                   </View>
                 </View>
 
-                {/* Actions */}
+                {/* ACTION BUTTONS */}
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.viewEventButton}
@@ -89,6 +87,7 @@ const Notification: React.FC<NotificationProps> = ({
                   >
                     <Text style={styles.viewEventText}>View Event</Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.dismissButton}
                     onPress={handleDismiss}
@@ -143,9 +142,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderMedium,
     justifyContent: "center",
     alignItems: "center",
-  },
-  avatarIcon: {
-    fontSize: 28,
   },
   headerText: {
     flex: 1,

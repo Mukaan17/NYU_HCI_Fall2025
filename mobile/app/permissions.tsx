@@ -8,10 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 
 // IMPORTANT: your components are .js files
-import PrimaryButton from '../../components/PrimaryButton';
+import PrimaryButton from '../components/PrimaryButton';
 
 // IMPORTANT: your theme is theme.js
-import { colors, typography, spacing, borderRadius } from '../../constants/theme';
+import { colors, typography, spacing, borderRadius } from '../constants/theme';
 
 import { router } from "expo-router";
 

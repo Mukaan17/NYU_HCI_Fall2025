@@ -1,4 +1,3 @@
-// components/RecommendationCard.tsx
 import React from "react";
 import {
   View,
@@ -78,6 +77,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         onPress={handlePress}
       >
         <View style={[styles.container, style]}>
+          {/* Blur Glass Background */}
           <BlurView
             intensity={Platform.OS === "ios" ? 40 : 30}
             tint="dark"
@@ -85,13 +85,16 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
           >
             <View style={styles.glassOverlay} />
           </BlurView>
+
+          {/* Gradient Overlay */}
           <LinearGradient
             colors={["rgba(28, 37, 65, 0.6)", "rgba(21, 30, 56, 0.7)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientOverlay}
           />
-          <View style={styles.border} />
+
+          {/* Content */}
           <View style={styles.content}>
             {image && (
               <View style={styles.imageContainer}>
@@ -100,6 +103,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
                   style={styles.image}
                   resizeMode="cover"
                 />
+
                 {walkTime && (
                   <View style={styles.walkTimeBadge}>
                     <Text style={styles.walkTimeText}>{walkTime}</Text>
@@ -107,17 +111,22 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
                 )}
               </View>
             )}
+
             <View style={styles.textContainer}>
               <Text style={styles.title}>{title}</Text>
+
               {description && (
                 <Text style={styles.description}>{description}</Text>
               )}
+
               <View style={styles.badges}>
+                {/* Inline walk time if no image */}
                 {walkTime && !image && (
                   <View style={styles.walkTimeBadgeInline}>
                     <Text style={styles.walkTimeText}>{walkTime}</Text>
                   </View>
                 )}
+
                 {popularity && (
                   <View style={styles.popularityBadge}>
                     <Text style={styles.popularityText}>{popularity}</Text>
@@ -137,6 +146,7 @@ export default RecommendationCard;
 const styles = StyleSheet.create({
   wrapper: {
     marginBottom: spacing["2xl"],
+    width: "100%",
   },
   container: {
     borderRadius: borderRadius.lg,
@@ -156,41 +166,18 @@ const styles = StyleSheet.create({
     }),
   },
   blurContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
   },
   glassOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(28, 37, 65, 0.3)",
   },
   gradientOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  border: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: borderRadius.lg,
-    backgroundColor: "transparent",
+    ...StyleSheet.absoluteFillObject,
   },
   content: {
     flexDirection: "row",
     padding: spacing["2xl"],
-    borderRadius: borderRadius.lg,
-    position: "relative",
     zIndex: 1,
   },
   imageContainer: {
@@ -218,14 +205,11 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
-    lineHeight: typography.lineHeight["2xl"],
     marginBottom: spacing.sm,
   },
   description: {
     fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.regular,
     color: colors.textSecondary,
-    lineHeight: typography.lineHeight.loose,
     marginBottom: spacing.sm,
   },
   badges: {
@@ -242,28 +226,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
+  walkTimeText: {
+    color: colors.textAccent,
+    fontSize: typography.fontSize.xs,
+  },
   walkTimeBadgeInline: {
     backgroundColor: colors.accentPurpleText,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    alignSelf: "flex-start",
-  },
-  walkTimeText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.textAccent,
   },
   popularityBadge: {
     backgroundColor: colors.accentBlue,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    alignSelf: "flex-start",
   },
   popularityText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
     color: colors.textBlue,
+    fontSize: typography.fontSize.xs,
   },
 });

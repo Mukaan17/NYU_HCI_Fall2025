@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Moment App</string>
+    <string>Violet Vibes</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -27,14 +27,14 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>moment-app</string>
-          <string>com.momentapp.moment</string>
+          <string>violetvibes</string>
+          <string>com.violetvibes.app</string>
         </array>
       </dict>
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>exp+moment-app</string>
+          <string>exp+violetvibes</string>
         </array>
       </dict>
     </array>
@@ -56,7 +56,7 @@
     <key>NSCalendarsUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your calendars</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Allow Moment App to use your location to find awesome spots near you.</string>
+    <string>Allow VioletVibes to use your location to find awesome spots near you.</string>
     <key>NSLocationAlwaysUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSLocationWhenInUseUsageDescription</key>

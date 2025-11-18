@@ -1,4 +1,5 @@
-import React from 'react';
+// mobile/app/(tabs)/dashboard.tsx
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,69 +8,124 @@ import {
   Dimensions,
   TouchableOpacity,
   Platform,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
+import { router } from "expo-router";
 
-import RecommendationCard from '../../components/RecommendationCard';
-import { colors, typography, spacing, borderRadius, shadows } from '../../constants/theme';
+import RecommendationCard from "../../components/RecommendationCard";
+import Notification from "../../components/Notification";
+import SvgIcon from "../../components/SvgIcon";
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from "../../constants/theme";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
+
+type QuickAction = {
+  id: number;
+  icon: string;
+  label: string;
+  color: string;
+  prompt: string;
+};
 
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
+  const [showNotification, setShowNotification] = useState(false);
+
+  // Demo: show a notification after 3 seconds, like JS version
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowNotification(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const recommendations = [
     {
       id: 1,
-      title: 'Fulton Jazz Lounge',
-      description: 'Live jazz tonight at 8 PM',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '7 min walk',
-      popularity: 'High',
+      title: "Fulton Jazz Lounge",
+      description: "Live jazz tonight at 8 PM",
+      image: "https://via.placeholder.com/96",
+      walkTime: "7 min walk",
+      popularity: "High",
     },
     {
       id: 2,
-      title: 'Brooklyn Rooftop',
-      description: 'Great vibes & skyline views',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '12 min walk',
-      popularity: 'Medium',
+      title: "Brooklyn Rooftop",
+      description: "Great vibes & skyline views",
+      image: "https://via.placeholder.com/96",
+      walkTime: "12 min walk",
+      popularity: "Medium",
     },
     {
       id: 3,
-      title: 'Butler Café',
-      description: 'Great for study breaks',
-      image: 'https://via.placeholder.com/96',
-      walkTime: '3 min walk',
-      popularity: 'Low',
+      title: "Butler Café",
+      description: "Great for study breaks",
+      image: "https://via.placeholder.com/96",
+      walkTime: "3 min walk",
+      popularity: "Low",
     },
   ];
 
-  const quickActions = [
-    { id: 1, icon: '🍔', label: 'Find Food', color: colors.accentPurple },
-    { id: 2, icon: '🎵', label: 'Events', color: colors.accentBlue },
-    { id: 3, icon: '☕', label: 'Cafés', color: colors.accentPurple },
-    { id: 4, icon: '🎯', label: 'Explore', color: colors.accentBlue },
+  const quickActions: QuickAction[] = [
+    {
+      id: 1,
+      icon: "🍔",
+      label: "Find Food",
+      color: colors.accentPurple,
+      prompt: "Find me a good place to eat nearby",
+    },
+    {
+      id: 2,
+      icon: "🎵",
+      label: "Events",
+      color: colors.accentBlue,
+      prompt: "What events are happening nearby tonight?",
+    },
+    {
+      id: 3,
+      icon: "☕",
+      label: "Cafés",
+      color: colors.accentPurple,
+      prompt: "Find a quiet café for studying",
+    },
+    {
+      id: 4,
+      icon: "🎯",
+      label: "Explore",
+      color: colors.accentBlue,
+      prompt: "What are some interesting places to explore nearby?",
+    },
   ];
 
-  const QuickActionCard = ({
-    icon,
-    label,
-    color,
-    delay = 0,
-  }: {
+  type QuickActionCardProps = {
     icon: string;
     label: string;
     color: string;
     delay?: number;
+    prompt: string;
+    onPress: (prompt: string) => void;
+  };
+
+  const QuickActionCard: React.FC<QuickActionCardProps> = ({
+    icon,
+    label,
+    color,
+    delay = 0,
+    prompt,
+    onPress,
   }) => {
     const scale = useSharedValue(1);
 
@@ -77,8 +133,17 @@ export default function Dashboard() {
       transform: [{ scale: scale.value }],
     }));
 
-    const handlePressIn = () => (scale.value = withSpring(0.94));
-    const handlePressOut = () => (scale.value = withSpring(1));
+    const handlePressIn = () => {
+      scale.value = withSpring(0.95);
+    };
+
+    const handlePressOut = () => {
+      scale.value = withSpring(1);
+    };
+
+    const handlePress = () => {
+      onPress(prompt);
+    };
 
     return (
       <Animated.View
@@ -88,13 +153,26 @@ export default function Dashboard() {
         <TouchableOpacity
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
+          onPress={handlePress}
           activeOpacity={0.9}
           style={styles.quickActionCardWrapper}
         >
-          <BlurView intensity={Platform.OS === 'ios' ? 50 : 35} style={styles.quickActionBlur} />
-
+          <BlurView
+            intensity={Platform.OS === "ios" ? 50 : 35}
+            tint="dark"
+            style={styles.quickActionBlur}
+          >
+            <View
+              style={[
+                styles.quickActionGlassOverlay,
+                { backgroundColor: `${color}30` },
+              ]}
+            />
+          </BlurView>
           <LinearGradient
-            colors={[color + '40', color + '20']}
+            colors={[`${color}40`, `${color}20`]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.quickActionCard}
           >
             <Text style={styles.quickActionIcon}>{icon}</Text>
@@ -105,25 +183,57 @@ export default function Dashboard() {
     );
   };
 
+  const handleQuickActionPress = (prompt: string) => {
+    // Expo Router version of "navigate to ChatTab with autoPrompt"
+    router.push({
+      pathname: "/(tabs)/chat",
+      params: { autoPrompt: prompt },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.background, colors.backgroundSecondary, colors.background]}
-        style={[styles.gradient, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        colors={[
+          colors.background,
+          colors.backgroundSecondary,
+          colors.background,
+        ]}
+        locations={[0, 0.5, 1]}
+        style={[styles.gradient, { paddingTop: insets.top }]}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Blurry background blobs from JS design */}
+        <View style={styles.blurContainer1}>
+          <BlurView intensity={80} style={styles.blur1} />
+        </View>
+        <View style={styles.blurContainer2}>
+          <BlurView intensity={60} style={styles.blur2} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
           <Animated.View entering={FadeInDown.delay(100)} style={styles.header}>
             <Text style={styles.greeting}>Hey there! 👋</Text>
-            <Text style={styles.subtitle}>Here's what's happening around you</Text>
+            <Text style={styles.subtitle}>
+              Here's what's happening around you
+            </Text>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(200)} style={styles.badgesContainer}>
+          {/* Status Badges (SvgIcon temp/clock + mood) */}
+          <Animated.View
+            entering={FadeInDown.delay(200)}
+            style={styles.badgesContainer}
+          >
             <View style={styles.weatherBadge}>
-              <Text style={styles.weatherIcon}>🌡️</Text>
+              <SvgIcon name="temp" size={20} color={colors.textBlue} />
               <Text style={styles.weatherText}>72°F</Text>
             </View>
             <View style={styles.scheduleBadge}>
-              <Text style={styles.scheduleIcon}>⏰</Text>
+              <SvgIcon name="clock" size={20} color={colors.textPrimary} />
               <Text style={styles.scheduleText}>Free until 6:30 PM</Text>
             </View>
             <View style={styles.moodBadge}>
@@ -131,7 +241,11 @@ export default function Dashboard() {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(300)} style={styles.quickActionsContainer}>
+          {/* Quick Actions */}
+          <Animated.View
+            entering={FadeInDown.delay(300)}
+            style={styles.quickActionsContainer}
+          >
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.quickActionsGrid}>
               {quickActions.map((action, index) => (
@@ -140,17 +254,25 @@ export default function Dashboard() {
                   icon={action.icon}
                   label={action.label}
                   color={action.color}
-                  delay={300 + index * 80}
+                  prompt={action.prompt}
+                  delay={300 + index * 50}
+                  onPress={handleQuickActionPress}
                 />
               ))}
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(500)} style={styles.recommendationsSection}>
+          {/* Top Recommendations */}
+          <Animated.View
+            entering={FadeInDown.delay(500)}
+            style={styles.recommendationsSection}
+          >
             <Text style={styles.sectionTitle}>Top Recommendations</Text>
-
             {recommendations.map((rec, index) => (
-              <Animated.View key={rec.id} entering={FadeInDown.delay(600 + index * 120)}>
+              <Animated.View
+                key={rec.id}
+                entering={FadeInDown.delay(600 + index * 100)}
+              >
                 <RecommendationCard
                   title={rec.title}
                   description={rec.description}
@@ -163,112 +285,220 @@ export default function Dashboard() {
           </Animated.View>
         </ScrollView>
       </LinearGradient>
+
+      {/* Notification modal demo, like JS version */}
+      <Notification
+        visible={showNotification}
+        onDismiss={() => setShowNotification(false)}
+        onViewEvent={() => {
+          setShowNotification(false);
+          router.push("/(tabs)/chat");
+        }}
+        notification={{
+          message:
+            "You're free till 8 PM — live jazz at Fulton St starts soon (7 min walk).",
+        }}
+      />
     </View>
   );
 }
 
+/* ------------ STYLES (JS visual design) ------------ */
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  gradient: { flex: 1 },
-  scrollView: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: spacing['2xl'],
-    paddingTop: spacing['3xl'],
-    paddingBottom: 180,
+  container: {
+    flex: 1,
   },
-  header: { marginBottom: spacing['3xl'] },
+  gradient: {
+    flex: 1,
+  },
+  blurContainer1: {
+    position: "absolute",
+    left: -width * 0.2,
+    top: height * 0.1,
+    width: width * 0.75,
+    height: width * 0.75,
+    borderRadius: 1000000,
+    overflow: "hidden",
+  },
+  blur1: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.accentPurpleMedium,
+    opacity: 0.881,
+  },
+  blurContainer2: {
+    position: "absolute",
+    left: width * 0.22,
+    top: height * 0.35,
+    width,
+    height: width,
+    borderRadius: 1000000,
+    overflow: "hidden",
+  },
+  blur2: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.accentBlue,
+    opacity: 0.619,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing["2xl"],
+    paddingTop: spacing["3xl"],
+    paddingBottom: 120, // leave room for NavBar overlay
+  },
+  header: {
+    marginBottom: spacing["3xl"],
+  },
   greeting: {
-    fontSize: typography.fontSize['3xl'],
+    fontSize: typography.fontSize["3xl"],
     fontWeight: typography.fontWeight.bold,
     color: colors.textPrimary,
+    marginBottom: spacing.xs,
+    lineHeight: typography.lineHeight["3xl"],
+    letterSpacing: -0.64,
   },
   subtitle: {
     fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.regular,
     color: colors.textSecondary,
+    lineHeight: typography.lineHeight.xl,
   },
   badgesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.xl,
-    marginBottom: spacing['4xl'],
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.lg,
+    flexWrap: "nowrap",
+    marginBottom: spacing["4xl"],
+    width: "100%",
   },
   weatherBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.accentBlue,
+    borderWidth: 1,
+    borderColor: colors.accentBlueMedium,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    flexShrink: 0,
+    height: 40,
   },
-  weatherIcon: { fontSize: 16 },
   weatherText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semiBold,
     color: colors.textBlue,
   },
   scheduleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
-    paddingVertical: spacing.xs,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glassBackground,
     borderWidth: 1,
     borderColor: colors.border,
-    flex: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    flexShrink: 0,
+    height: 40,
   },
-  scheduleIcon: { fontSize: 16 },
   scheduleText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
   },
   moodBadge: {
     backgroundColor: colors.whiteOverlay,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing['2xl'],
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    flexShrink: 0,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
   },
   moodText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semiBold,
     color: colors.textSecondary,
-    fontSize: typography.fontSize.sm,
   },
-
-  /* QUICK ACTIONS */
-  quickActionsContainer: { marginBottom: spacing['4xl'] },
+  quickActionsContainer: {
+    marginBottom: spacing["4xl"],
+  },
   sectionTitle: {
-    fontSize: typography.fontSize['2xl'],
+    fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.bold,
     color: colors.textPrimary,
-    marginBottom: spacing['2xl'],
+    marginBottom: spacing["2xl"],
+    lineHeight: typography.lineHeight["2xl"],
   },
   quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing['2xl'],
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing["2xl"],
+    marginBottom: spacing["2xl"],
   },
   quickActionCardWrapper: {
-    width: (width - spacing['2xl'] * 3) / 2,
+    width: (width - spacing["2xl"] * 2 - spacing["2xl"]) / 2,
     aspectRatio: 1.2,
     borderRadius: borderRadius.md,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: "rgba(255, 255, 255, 0.15)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   quickActionBlur: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  quickActionGlassOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   quickActionCard: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing['2xl'],
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
     gap: spacing.md,
+    padding: spacing["2xl"],
+    position: "relative",
+    zIndex: 1,
   },
-  quickActionIcon: { fontSize: 32 },
+  quickActionIcon: {
+    fontSize: 32,
+  },
   quickActionLabel: {
     fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
   },
-
-  recommendationsSection: { marginBottom: spacing['4xl'] },
+  recommendationsSection: {
+    marginBottom: spacing["4xl"],
+  },
 });
+
+export {};

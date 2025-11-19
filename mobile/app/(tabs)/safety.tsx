@@ -4,14 +4,23 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Linking,
   Alert,
   Dimensions,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  SlideInDown,
+  Easing,
+} from "react-native-reanimated";
 
 import { colors, typography, spacing, borderRadius } from "../../constants/theme";
 
@@ -66,7 +75,10 @@ export default function Safety() {
           {/* --------------------------------------
               HEADER
           --------------------------------------- */}
-          <View style={styles.header}>
+          <Animated.View
+            entering={FadeInDown.delay(200).duration(400).easing(Easing.out(Easing.ease))}
+            style={styles.header}
+          >
             <View style={styles.iconBlurContainer}>
               <BlurView intensity={40} style={styles.iconBlur} />
             </View>
@@ -77,17 +89,25 @@ export default function Safety() {
 
             <Text style={styles.title}>Safety Center</Text>
             <Text style={styles.subtitle}>We're here to keep you safe</Text>
-          </View>
+          </Animated.View>
 
           {/* --------------------------------------
               ACTION BUTTONS
           --------------------------------------- */}
           <View style={styles.actionsContainer}>
             {/* CALL NYU PUBLIC SAFETY */}
-            <TouchableOpacity
-              style={styles.emergencyButton}
-              onPress={handleCallNYU}
-              activeOpacity={0.8}
+            <Animated.View entering={FadeInDown.delay(400).duration(400).easing(Easing.out(Easing.ease))}>
+              <Pressable
+              style={({ pressed }) => [
+                styles.emergencyButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                if (Platform.OS === "ios") {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }
+                handleCallNYU();
+              }}
             >
               <View style={styles.emergencyButtonContent}>
                 <View style={styles.emergencyIconContainer}>
@@ -97,13 +117,22 @@ export default function Safety() {
                 <Text style={styles.emergencyButtonText}>Call NYU Public Safety</Text>
                 <Text style={styles.emergencyArrow}>→</Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
+            </Animated.View>
 
             {/* SHARE LIVE LOCATION */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleShareLocation}
-              activeOpacity={0.8}
+            <Animated.View entering={FadeInDown.delay(500).duration(400).easing(Easing.out(Easing.ease))}>
+              <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                if (Platform.OS === "ios") {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                handleShareLocation();
+              }}
             >
               <LinearGradient
                 colors={[colors.gradientStart, colors.gradientEnd]}
@@ -120,13 +149,22 @@ export default function Safety() {
                   </View>
                 </View>
               </LinearGradient>
-            </TouchableOpacity>
+            </Pressable>
+            </Animated.View>
 
             {/* FIND SAFE ROUTE */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleFindSafeRoute}
-              activeOpacity={0.8}
+            <Animated.View entering={FadeInDown.delay(600).duration(400).easing(Easing.out(Easing.ease))}>
+              <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                if (Platform.OS === "ios") {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                handleFindSafeRoute();
+              }}
             >
               <LinearGradient
                 colors={[colors.gradientBlueStart, colors.gradientBlueEnd]}
@@ -143,19 +181,30 @@ export default function Safety() {
                   </View>
                 </View>
               </LinearGradient>
-            </TouchableOpacity>
+            </Pressable>
+            </Animated.View>
           </View>
 
           {/* --------------------------------------
               EMERGENCY CONTACTS
           --------------------------------------- */}
-          <View style={styles.contactsContainer}>
+          <Animated.View
+            entering={FadeInUp.delay(700).duration(400).easing(Easing.out(Easing.ease))}
+            style={styles.contactsContainer}
+          >
             {/* 911 */}
             <View style={styles.contactRow}>
               <Text style={styles.contactLabel}>Emergency Services</Text>
-              <TouchableOpacity onPress={handleCall911}>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS === "ios") {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  handleCall911();
+                }}
+              >
                 <Text style={styles.contactValue}>911</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <View style={styles.contactDivider} />
@@ -163,11 +212,18 @@ export default function Safety() {
             {/* NYU PUBLIC SAFETY */}
             <View style={styles.contactRow}>
               <Text style={styles.contactLabel}>NYU Public Safety</Text>
-              <TouchableOpacity onPress={handleCallNYU}>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS === "ios") {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  handleCallNYU();
+                }}
+              >
                 <Text style={styles.contactValue}>(212) 998-2222</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </LinearGradient>
     </View>
@@ -240,10 +296,15 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.textPrimary,
     marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
   },
   subtitle: {
     fontSize: typography.fontSize.lg,
     color: colors.textSecondary,
+    fontFamily: typography.fontFamily,
+  },
+  buttonPressed: {
+    opacity: 0.8,
   },
 
   /* ----- ACTION BUTTONS ----- */
@@ -278,6 +339,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textError,
+    fontFamily: typography.fontFamily,
   },
   emergencyArrow: {
     fontSize: 20,
@@ -309,10 +371,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
     marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
   },
   actionButtonSubtext: {
     fontSize: typography.fontSize.sm,
     color: "rgba(255,255,255,0.7)",
+    fontFamily: typography.fontFamily,
   },
 
   /* ----- CONTACTS ----- */
@@ -331,11 +395,13 @@ const styles = StyleSheet.create({
   contactLabel: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.base,
+    fontFamily: typography.fontFamily,
   },
   contactValue: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semiBold,
+    fontFamily: typography.fontFamily,
   },
   contactDivider: {
     height: 1,

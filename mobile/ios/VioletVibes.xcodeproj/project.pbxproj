@@ -7,29 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		026258BE996E083BB96696DE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 17DAD2A68A7604E254412B79 /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		1621A2647D9740062806BAE0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 759724424AF00E539D43376E /* ExpoModulesProvider.swift */; };
-		25A543E95031193BC4C394BB /* libPods-VioletVibes.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C33957DE639CD5B26E66D0A2 /* libPods-VioletVibes.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		F024605E29F80DB69B224B5E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D48EC582DD93C888BA3553 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F8D95046FEF1B03A1936D459 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0CF514541ACB1CBD6241D40D /* PrivacyInfo.xcprivacy */; };
+		FB008B02C52E02D750921BE5 /* libPods-VioletVibes.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4BB396D64CCF238611F665EC /* libPods-VioletVibes.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0CF514541ACB1CBD6241D40D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VioletVibes/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		12C5CC7AEA35E8771AB88824 /* Pods-VioletVibes.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VioletVibes.debug.xcconfig"; path = "Target Support Files/Pods-VioletVibes/Pods-VioletVibes.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* VioletVibes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VioletVibes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = VioletVibes/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = VioletVibes/Info.plist; sourceTree = "<group>"; };
-		759724424AF00E539D43376E /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VioletVibes/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		17DAD2A68A7604E254412B79 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VioletVibes/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4BB396D64CCF238611F665EC /* libPods-VioletVibes.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VioletVibes.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AB274A2019E3FC83ADE1670 /* Pods-VioletVibes.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VioletVibes.release.xcconfig"; path = "Target Support Files/Pods-VioletVibes/Pods-VioletVibes.release.xcconfig"; sourceTree = "<group>"; };
+		7F1B4550B1A2661E87756C82 /* Pods-VioletVibes.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VioletVibes.debug.xcconfig"; path = "Target Support Files/Pods-VioletVibes/Pods-VioletVibes.debug.xcconfig"; sourceTree = "<group>"; };
+		A4D48EC582DD93C888BA3553 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VioletVibes/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = VioletVibes/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C33957DE639CD5B26E66D0A2 /* libPods-VioletVibes.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VioletVibes.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = VioletVibes/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* VioletVibes-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "VioletVibes-Bridging-Header.h"; path = "VioletVibes/VioletVibes-Bridging-Header.h"; sourceTree = "<group>"; };
-		FA588A03D349CDD993531E1C /* Pods-VioletVibes.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VioletVibes.release.xcconfig"; path = "Target Support Files/Pods-VioletVibes/Pods-VioletVibes.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				25A543E95031193BC4C394BB /* libPods-VioletVibes.a in Frameworks */,
+				FB008B02C52E02D750921BE5 /* libPods-VioletVibes.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,28 +53,36 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				0CF514541ACB1CBD6241D40D /* PrivacyInfo.xcprivacy */,
+				17DAD2A68A7604E254412B79 /* PrivacyInfo.xcprivacy */,
 			);
 			name = VioletVibes;
-			sourceTree = "<group>";
-		};
-		22077E38F0C768663D94A749 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				12C5CC7AEA35E8771AB88824 /* Pods-VioletVibes.debug.xcconfig */,
-				FA588A03D349CDD993531E1C /* Pods-VioletVibes.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				C33957DE639CD5B26E66D0A2 /* libPods-VioletVibes.a */,
+				4BB396D64CCF238611F665EC /* libPods-VioletVibes.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		347A4B73247529FFFF8D99B6 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				7F1B4550B1A2661E87756C82 /* Pods-VioletVibes.debug.xcconfig */,
+				5AB274A2019E3FC83ADE1670 /* Pods-VioletVibes.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		352394130A4CBFCBA7DA095D /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				88AA911ECF37EBAE4F51E540 /* VioletVibes */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -91,8 +99,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				22077E38F0C768663D94A749 /* Pods */,
-				F212214B501921507AA6C6F7 /* ExpoModulesProviders */,
+				347A4B73247529FFFF8D99B6 /* Pods */,
+				352394130A4CBFCBA7DA095D /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -107,6 +115,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		88AA911ECF37EBAE4F51E540 /* VioletVibes */ = {
+			isa = PBXGroup;
+			children = (
+				A4D48EC582DD93C888BA3553 /* ExpoModulesProvider.swift */,
+			);
+			name = VioletVibes;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -114,22 +130,6 @@
 			);
 			name = Supporting;
 			path = VioletVibes/Supporting;
-			sourceTree = "<group>";
-		};
-		F212214B501921507AA6C6F7 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				FFA6EB16AB3CDAAD7B23316A /* VioletVibes */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		FFA6EB16AB3CDAAD7B23316A /* VioletVibes */ = {
-			isa = PBXGroup;
-			children = (
-				759724424AF00E539D43376E /* ExpoModulesProvider.swift */,
-			);
-			name = VioletVibes;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VioletVibes" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				3AECF54B48409A00A92452B2 /* [Expo] Configure project */,
+				197E3C5A8054C2E2092F124E /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				66D4849EE74E6AE9E5885C46 /* [CP] Embed Pods Frameworks */,
+				386CD1592472B79E02AC4C93 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				F8D95046FEF1B03A1936D459 /* PrivacyInfo.xcprivacy in Resources */,
+				026258BE996E083BB96696DE /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +242,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		3AECF54B48409A00A92452B2 /* [Expo] Configure project */ = {
+		197E3C5A8054C2E2092F124E /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -266,7 +266,7 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-VioletVibes/expo-configure-project.sh\"\n";
 		};
-		66D4849EE74E6AE9E5885C46 /* [CP] Embed Pods Frameworks */ = {
+		386CD1592472B79E02AC4C93 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -336,7 +336,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				1621A2647D9740062806BAE0 /* ExpoModulesProvider.swift in Sources */,
+				F024605E29F80DB69B224B5E /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,7 +345,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 12C5CC7AEA35E8771AB88824 /* Pods-VioletVibes.debug.xcconfig */;
+			baseConfigurationReference = 7F1B4550B1A2661E87756C82 /* Pods-VioletVibes.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -381,7 +381,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FA588A03D349CDD993531E1C /* Pods-VioletVibes.release.xcconfig */;
+			baseConfigurationReference = 5AB274A2019E3FC83ADE1670 /* Pods-VioletVibes.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

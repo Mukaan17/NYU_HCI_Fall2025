@@ -8,10 +8,21 @@ import {
   StyleProp,
   ViewStyle,
   Image,
+  Platform,
 } from "react-native";
 import MapView, { Marker, Polyline, LatLng, Region } from "react-native-maps";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  SlideInDown,
+  SlideInUp,
+  Easing,
+} from "react-native-reanimated";
 
 import useLocation from "../../hooks/useLocation";
 import { usePlace } from "../../context/PlaceContext";
@@ -20,7 +31,7 @@ import { colors, typography, spacing, borderRadius } from "../../constants/theme
 const { width, height } = Dimensions.get("window");
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000";
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5001";
 
 // NYU Tandon default
 const DEFAULT_LAT = 40.693393;
@@ -132,7 +143,8 @@ export default function Map() {
         )}
 
         {/* Centered Address Badge */}
-        <View
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400).easing(Easing.out(Easing.ease))}
           style={[
             styles.addressBadge,
             { top: insets.top + spacing["2xl"] },
@@ -147,35 +159,83 @@ export default function Map() {
               {selectedPlace?.address ?? "2 MetroTech Center"}
             </Text>
           </LinearGradient>
-        </View>
+        </Animated.View>
 
         {/* Bottom Sheet */}
-        <LinearGradient
-          colors={["transparent", colors.backgroundOverlay, colors.background]}
-          style={[
-            styles.bottomSheet,
-            { paddingBottom: Math.max(insets.bottom, spacing["2xl"]) + 90 },
-          ]}
+        <Animated.View
+          entering={SlideInUp.delay(400).duration(400).easing(Easing.out(Easing.ease))}
+          style={styles.bottomSheetWrapper}
         >
-          <View style={styles.bottomSheetContent}>
-            <View style={styles.bottomSheetInfo}>
-              {selectedPlace?.image && (
-                <Image
-                  source={{ uri: selectedPlace.image }}
-                  style={styles.bottomImage}
-                  resizeMode="cover"
-                />
+          <View style={styles.bottomSheetGradient}>
+            <View style={styles.bottomSheetContent}>
+              {isLiquidGlassSupported && Platform.OS === "ios" ? (
+                <LiquidGlassView
+                  effect="regular"
+                  style={styles.bottomSheetGlass}
+                  tintColor="rgba(28, 37, 65, 0.65)"
+                >
+                  <View style={styles.bottomSheetInfo}>
+                    {selectedPlace?.image && (
+                      <Animated.View entering={FadeIn.delay(600)}>
+                        <Image
+                          source={{ uri: selectedPlace.image }}
+                          style={styles.bottomImage}
+                          resizeMode="cover"
+                        />
+                      </Animated.View>
+                    )}
+
+                    <Animated.View entering={FadeInDown.delay(700)}>
+                      <Text style={styles.placeTitle}>{markerTitle}</Text>
+                    </Animated.View>
+                    <Animated.View entering={FadeInDown.delay(800)}>
+                      <Text style={styles.placeMeta}>{markerMeta}</Text>
+                    </Animated.View>
+
+                    <Animated.View entering={FadeInDown.delay(900)}>
+                      <Text style={styles.placeholderText}>
+                        Walking directions coming soon…
+                      </Text>
+                    </Animated.View>
+                  </View>
+                </LiquidGlassView>
+              ) : (
+                <View style={styles.bottomSheetBlur}>
+                  <BlurView
+                    intensity={Platform.OS === "ios" ? 70 : 40}
+                    tint="systemChromeMaterialDark"
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.bottomSheetBlurOverlay} />
+                  <View style={styles.bottomSheetInfo}>
+                    {selectedPlace?.image && (
+                      <Animated.View entering={FadeIn.delay(600)}>
+                        <Image
+                          source={{ uri: selectedPlace.image }}
+                          style={styles.bottomImage}
+                          resizeMode="cover"
+                        />
+                      </Animated.View>
+                    )}
+
+                    <Animated.View entering={FadeInDown.delay(700)}>
+                      <Text style={styles.placeTitle}>{markerTitle}</Text>
+                    </Animated.View>
+                    <Animated.View entering={FadeInDown.delay(800)}>
+                      <Text style={styles.placeMeta}>{markerMeta}</Text>
+                    </Animated.View>
+
+                    <Animated.View entering={FadeInDown.delay(900)}>
+                      <Text style={styles.placeholderText}>
+                        Walking directions coming soon…
+                      </Text>
+                    </Animated.View>
+                  </View>
+                </View>
               )}
-
-              <Text style={styles.placeTitle}>{markerTitle}</Text>
-              <Text style={styles.placeMeta}>{markerMeta}</Text>
-
-              <Text style={styles.placeholderText}>
-                Walking directions coming soon…
-              </Text>
             </View>
           </View>
-        </LinearGradient>
+        </Animated.View>
       </View>
     </View>
   );
@@ -255,47 +315,79 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
+  },
+  placeTitle: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.semiBold,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
+  },
+  placeMeta: {
+    fontSize: typography.fontSize.base,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    fontFamily: typography.fontFamily,
+  },
+  placeholderText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.textSecondary,
+    opacity: 0.8,
+    fontFamily: typography.fontFamily,
   },
 
   /* Bottom Sheet */
-  bottomSheet: {
+  bottomSheetWrapper: {
     position: "absolute",
-    bottom: 0,
-    width: "100%",
-    paddingTop: spacing["3xl"],
-    paddingHorizontal: spacing["2xl"],
+    bottom: 80, // Account for tab bar height
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  bottomSheetGradient: {
+    paddingHorizontal: spacing.lg, // 16px - iOS standard margin
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   bottomSheetContent: {
-    backgroundColor: colors.glassBackground,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xs,
+    borderRadius: 20, // iOS standard card corner radius
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
   },
-  bottomSheetInfo: { padding: spacing["2xl"] },
+  bottomSheetGlass: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  bottomSheetBlur: {
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 0.5,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  bottomSheetBlurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(28, 37, 65, 0.3)",
+  },
+  bottomSheetInfo: {
+    padding: spacing["2xl"], // 24px - iOS standard padding
+  },
 
   bottomImage: {
     width: "100%",
     height: 160,
     borderRadius: 12,
     marginBottom: 12,
-  },
-
-  placeTitle: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.semiBold,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  placeMeta: {
-    fontSize: typography.fontSize.base,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  placeholderText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.textSecondary,
-    opacity: 0.8,
   },
 });
 

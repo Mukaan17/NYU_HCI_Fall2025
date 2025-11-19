@@ -4,7 +4,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
   StyleProp,
@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
 
 import {
   colors,
@@ -27,7 +28,7 @@ import {
   shadows,
 } from "../constants/theme";
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface InputFieldProps {
   placeholder: string;
@@ -63,53 +64,97 @@ export default function InputField({
     transform: [{ scale: sendButtonScale.value }],
   }));
 
+  const hasLiquidGlass = isLiquidGlassSupported;
+
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.inputWrapper}>
-        {/* Frosted background */}
-        <BlurView
-          intensity={Platform.OS === "ios" ? 60 : 40}
-          tint="dark"
-          style={styles.blurContainer}
+      {hasLiquidGlass && Platform.OS === "ios" ? (
+        <LiquidGlassView
+          effect="regular"
+          style={styles.inputWrapper}
+          tintColor="rgba(108, 99, 255, 0.1)"
         >
-          <View style={styles.glassOverlay} />
-        </BlurView>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textSecondary}
+              value={text}
+              onChangeText={setText}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              keyboardAppearance="dark"
+            />
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textSecondary}
-            value={text}
-            onChangeText={setText}
-            returnKeyType="send"
-            onSubmitEditing={handleSend}
-          />
-
-          {/* Animated Send Button */}
-          <AnimatedTouchable
-            onPress={handleSend}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[styles.sendButton, animatedButtonStyle]}
-            disabled={!text.trim()}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={
-                text.trim()
-                  ? [colors.gradientStart, colors.gradientEnd]
-                  : [colors.border, colors.border]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sendButtonGradient}
+            {/* Animated Send Button */}
+            <AnimatedPressable
+              onPress={handleSend}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              style={[styles.sendButton, animatedButtonStyle]}
+              disabled={!text.trim()}
             >
-              <Text style={styles.sendIcon}>→</Text>
-            </LinearGradient>
-          </AnimatedTouchable>
+              <LinearGradient
+                colors={
+                  text.trim()
+                    ? [colors.gradientStart, colors.gradientEnd]
+                    : [colors.border, colors.border]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.sendButtonGradient}
+              >
+                <Text style={styles.sendIcon}>→</Text>
+              </LinearGradient>
+            </AnimatedPressable>
+          </View>
+        </LiquidGlassView>
+      ) : (
+        <View style={styles.inputWrapper}>
+          {/* Fallback: Frosted background */}
+          <BlurView
+            intensity={Platform.OS === "ios" ? 60 : 40}
+            tint="systemChromeMaterialDark"
+            style={styles.blurContainer}
+          >
+            <View style={styles.glassOverlay} />
+          </BlurView>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textSecondary}
+              value={text}
+              onChangeText={setText}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              keyboardAppearance="dark"
+            />
+
+            <AnimatedPressable
+              onPress={handleSend}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              style={[styles.sendButton, animatedButtonStyle]}
+              disabled={!text.trim()}
+            >
+              <LinearGradient
+                colors={
+                  text.trim()
+                    ? [colors.gradientStart, colors.gradientEnd]
+                    : [colors.border, colors.border]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.sendButtonGradient}
+              >
+                <Text style={styles.sendIcon}>→</Text>
+              </LinearGradient>
+            </AnimatedPressable>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -158,6 +203,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.regular,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
   },
   sendButton: {
     width: 44,

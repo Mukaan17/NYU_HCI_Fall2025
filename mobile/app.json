@@ -12,7 +12,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.violetvibes.app",
-      "scheme": "violetvibes"
+      "scheme": "violetvibes",
+      "icon": "./media/App Icon.png"
     },
     "android": {
       "package": "com.violetvibes.app"
@@ -28,4 +29,3 @@
     ]
   }
 }
-

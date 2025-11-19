@@ -1,47 +1,42 @@
 // app/(tabs)/_layout.tsx
-import { View } from "react-native";
-import { Slot, usePathname, router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import NavBar from "../../components/NavBar";
-import { spacing } from "../../constants/theme";
-import { ChatProvider } from "../../context/ChatContext";
+import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
+import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
 
 export default function TabsLayout() {
-  const insets = useSafeAreaInsets();
-  const pathname = usePathname();
-
-  // Figure out which tab is active based on the current route
-  let activeTab: "dashboard" | "chat" | "map" | "safety";
-
-  if (pathname === "/dashboard") activeTab = "dashboard";
-  else if (pathname === "/chat") activeTab = "chat";
-  else if (pathname === "/map") activeTab = "map";
-  else activeTab = "safety";
-
-  const handleTabPress = (id: string) => {
-  router.replace(`/${id}`);
-  };
-
   return (
-    <ChatProvider>
-      <View style={{ flex: 1 }}>
-        {/* This is where (tabs)/chat, (tabs)/map, etc render */}
-        <Slot />
-
-        {/* Custom NavBar, anchored to bottom */}
-        <View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            paddingBottom: spacing["2xl"],
-            paddingHorizontal: spacing["2xl"],
-          }}
-        >
-          <NavBar activeTab={activeTab} onTabPress={handleTabPress} />
-        </View>
-      </View>
-    </ChatProvider>
+    <NativeTabs
+      tabBarBackground={() => {
+        if (isLiquidGlassSupported) {
+          return (
+            <LiquidGlassView
+              effect="regular"
+              style={{ flex: 1 }}
+              tintColor="rgba(28, 32, 48, 0.6)"
+            />
+          );
+        }
+        return null; // Falls back to system blur
+      }}
+    >
+      <NativeTabs.Trigger name="dashboard">
+        <Label>Home</Label>
+        <Icon sf="house.fill" />
+      </NativeTabs.Trigger>
+      
+      <NativeTabs.Trigger name="chat">
+        <Label>Chat</Label>
+        <Icon sf="message.fill" />
+      </NativeTabs.Trigger>
+      
+      <NativeTabs.Trigger name="map">
+        <Label>Map</Label>
+        <Icon sf="map.fill" />
+      </NativeTabs.Trigger>
+      
+      <NativeTabs.Trigger name="safety">
+        <Label>Safety</Label>
+        <Icon sf="shield.fill" />
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

@@ -6,7 +6,7 @@ import {
   Image,
   Dimensions,
   Platform,
-  TouchableOpacity,
+  Pressable,
   StyleProp,
   ViewStyle,
 } from "react-native";
@@ -18,10 +18,11 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
 import { colors, typography, borderRadius, spacing } from "../constants/theme";
 
 const { width } = Dimensions.get("window");
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type RecommendationCardProps = {
   title: string;
@@ -68,32 +69,21 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
     opacity: opacity.value,
   }));
 
+  const hasLiquidGlass = isLiquidGlassSupported;
+
   return (
     <Animated.View style={[styles.wrapper, animatedStyle]}>
-      <AnimatedTouchable
-        activeOpacity={0.9}
+      <AnimatedPressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={handlePress}
       >
-        <View style={[styles.container, style]}>
-          {/* Blur Glass Background */}
-          <BlurView
-            intensity={Platform.OS === "ios" ? 40 : 30}
-            tint="dark"
-            style={styles.blurContainer}
+        {hasLiquidGlass && Platform.OS === "ios" ? (
+          <LiquidGlassView
+            effect="regular"
+            style={[styles.container, style]}
+            tintColor="rgba(108, 99, 255, 0.12)"
           >
-            <View style={styles.glassOverlay} />
-          </BlurView>
-
-          {/* Gradient Overlay */}
-          <LinearGradient
-            colors={["rgba(28, 37, 65, 0.6)", "rgba(21, 30, 56, 0.7)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientOverlay}
-          />
-
           {/* Content */}
           <View style={styles.content}>
             {image && (
@@ -134,8 +124,68 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
               </View>
             </View>
           </View>
+          </LiquidGlassView>
+        ) : (
+          <View style={[styles.container, style]}>
+            {/* Fallback: Blur Glass Background */}
+            <BlurView
+              intensity={Platform.OS === "ios" ? 40 : 30}
+              tint="systemChromeMaterialDark"
+              style={styles.blurContainer}
+            >
+              <View style={styles.glassOverlay} />
+            </BlurView>
+
+            {/* Gradient Overlay */}
+            <LinearGradient
+              colors={["rgba(28, 37, 65, 0.6)", "rgba(21, 30, 56, 0.7)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientOverlay}
+            />
+
+            {/* Content */}
+            <View style={styles.content}>
+              {image && (
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: image }}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+
+              <View style={styles.textContainer}>
+                <Text style={styles.title}>{title}</Text>
+
+                {description && (
+                  <Text style={styles.description}>{description}</Text>
+                )}
+
+                <View style={styles.badges}>
+                {walkTime && !image && (
+                  <View style={styles.walkTimeBadgeInline}>
+                    <Text style={styles.walkTimeText}>{walkTime}</Text>
+                  </View>
+                )}
+
+                {popularity && (
+                  <View style={styles.popularityBadge}>
+                    <Text style={styles.popularityText}>{popularity}</Text>
+                  </View>
+                )}
+                {walkTime && (
+                  <View style={styles.walkTimeBadgeInline}>
+                    <Text style={styles.walkTimeText}>{walkTime}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
         </View>
-      </AnimatedTouchable>
+        )}
+      </AnimatedPressable>
     </Animated.View>
   );
 };
@@ -205,11 +255,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
     marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily,
   },
   description: {
     fontSize: typography.fontSize.lg,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily,
   },
   badges: {
     flexDirection: "row",
@@ -228,6 +280,7 @@ const styles = StyleSheet.create({
   walkTimeText: {
     color: colors.textAccent,
     fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily,
   },
   walkTimeBadgeInline: {
     backgroundColor: colors.accentPurpleText,
@@ -244,5 +297,6 @@ const styles = StyleSheet.create({
   popularityText: {
     color: colors.textBlue,
     fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily,
   },
 });

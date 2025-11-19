@@ -4,8 +4,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  SlideInDown,
+  withSpring,
+  useSharedValue,
+  useAnimatedStyle,
+  Easing,
+} from "react-native-reanimated";
 
-import PrimaryButton from "../components/PrimaryButton";
+import LiquidGlassButton from "../components/LiquidGlassButton";
 import SvgIcon from "../components/SvgIcon";
 
 import { colors, typography, spacing, borderRadius } from "../constants/theme";
@@ -45,7 +55,10 @@ export default function Welcome() {
       {/* CONTENT */}
       <View style={styles.content}>
         {/* Icon Bubble */}
-        <View style={styles.iconContainer}>
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400).easing(Easing.out(Easing.ease))}
+          style={styles.iconContainer}
+        >
           <View style={styles.iconBlur}>
             <BlurView intensity={40} style={styles.iconBlurView} />
           </View>
@@ -53,25 +66,34 @@ export default function Welcome() {
           <View style={styles.icon}>
             <SvgIcon name="icon" size={Math.min(width * 0.25, 100)} color="#FFFFFF" />
           </View>
-        </View>
+        </Animated.View>
 
         {/* Heading */}
-        <View style={styles.headingContainer}>
+        <Animated.View
+          entering={FadeInDown.delay(400).duration(400).easing(Easing.out(Easing.ease))}
+          style={styles.headingContainer}
+        >
           <Text style={styles.heading}>Hey There 👋</Text>
-        </View>
+        </Animated.View>
 
         {/* Description */}
-        <View style={styles.descriptionContainer}>
+        <Animated.View
+          entering={FadeInDown.delay(600).duration(400).easing(Easing.out(Easing.ease))}
+          style={styles.descriptionContainer}
+        >
           <Text style={styles.description}>
             I'm <Text style={styles.violetText}>Violet</Text>, your AI concierge for Downtown
           </Text>
           <Text style={styles.description}>Brooklyn. Let's find your next vibe.</Text>
-        </View>
+        </Animated.View>
 
         {/* Button */}
-        <View style={styles.buttonContainer}>
-          <PrimaryButton title="Let's Go" onPress={handleLetsGo} />
-        </View>
+        <Animated.View
+          entering={SlideInDown.delay(800).duration(400).easing(Easing.out(Easing.ease))}
+          style={styles.buttonContainer}
+        >
+          <LiquidGlassButton title="Let's Go" onPress={handleLetsGo} variant="glass" />
+        </Animated.View>
       </View>
     </View>
   );
@@ -173,6 +195,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: typography.lineHeight["3xl"],
     letterSpacing: -0.64,
+    fontFamily: typography.fontFamily,
   },
   descriptionContainer: {
     marginBottom: spacing["6xl"],
@@ -186,10 +209,12 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight["2xl"],
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.xl,
+    fontFamily: typography.fontFamily,
   },
   violetText: {
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textAccent,
+    fontFamily: typography.fontFamily,
   },
 
   /* BUTTON */

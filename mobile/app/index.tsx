@@ -10,14 +10,23 @@ export default function Index() {
 
   useEffect(() => {
     const check = async () => {
+      // TEMPORARY: Clear AsyncStorage to reset onboarding (remove this after testing)
+      await AsyncStorage.removeItem("hasSeenWelcome");
+      await AsyncStorage.removeItem("hasCompletedPermissions");
+      
       const hasSeenWelcome = await AsyncStorage.getItem("hasSeenWelcome");
       const hasCompletedPermissions = await AsyncStorage.getItem("hasCompletedPermissions");
 
+      console.log("🔍 AsyncStorage Check:", { hasSeenWelcome, hasCompletedPermissions });
+
       if (!hasSeenWelcome) {
-        router.replace("/(onboarding)/welcome");
+        console.log("📍 Navigating to /welcome");
+        router.replace("/welcome");
       } else if (!hasCompletedPermissions) {
-        router.replace("/(onboarding)/permissions");
+        console.log("📍 Navigating to /permissions");
+        router.replace("/permissions");
       } else {
+        console.log("📍 Navigating to /(tabs)/dashboard");
         router.replace("/(tabs)/dashboard");
       }
 

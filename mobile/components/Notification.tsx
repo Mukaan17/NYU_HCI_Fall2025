@@ -4,10 +4,13 @@ import {
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
+  Pressable,
   TouchableWithoutFeedback,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
+import * as Haptics from "expo-haptics";
 import SvgIcon from "./SvgIcon";
 import { colors, typography, spacing, borderRadius } from "../constants/theme";
 
@@ -30,8 +33,76 @@ const Notification: React.FC<NotificationProps> = ({
 }) => {
   if (!visible) return null;
 
-  const handleDismiss = () => onDismiss?.();
-  const handleViewEvent = () => onViewEvent?.();
+  const handleDismiss = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onDismiss?.();
+  };
+  
+  const handleViewEvent = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    onViewEvent?.();
+  };
+
+  const hasLiquidGlass = isLiquidGlassSupported;
+
+  const renderContent = () => (
+    <>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <SvgIcon name="icon" size={28} color="#FFFFFF" />
+          </View>
+        </View>
+
+        <View style={styles.headerText}>
+          <View style={styles.headerTop}>
+            <Text style={styles.appName}>VioletVibes</Text>
+            <Text style={styles.time}>now</Text>
+          </View>
+
+            <View style={styles.notificationTitle}>
+              <Text style={styles.bellIcon}>🔔</Text>
+              <Text style={styles.notificationText}>
+                You're free till 8 PM!
+              </Text>
+            </View>
+
+          <Text style={styles.notificationDescription}>
+            {notification?.message ||
+              "Live jazz at Fulton St starts soon (7 min walk)."}
+          </Text>
+        </View>
+      </View>
+
+      {/* ACTION BUTTONS */}
+      <View style={styles.actions}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.viewEventButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={handleViewEvent}
+        >
+          <Text style={styles.viewEventText}>View Event</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.dismissButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={handleDismiss}
+        >
+          <Text style={styles.dismissText}>Dismiss</Text>
+        </Pressable>
+      </View>
+    </>
+  );
 
   return (
     <Modal
@@ -44,59 +115,24 @@ const Notification: React.FC<NotificationProps> = ({
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.container}>
-              <LinearGradient
-                colors={[colors.backgroundCard, colors.backgroundCardDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.content}
-              >
-                {/* HEADER */}
-                <View style={styles.header}>
-                  <View style={styles.avatarContainer}>
-                    <View style={styles.avatar}>
-                      <SvgIcon name="icon" size={28} color="#FFFFFF" />
-                    </View>
-                  </View>
-
-                  <View style={styles.headerText}>
-                    <View style={styles.headerTop}>
-                      <Text style={styles.appName}>VioletVibes</Text>
-                      <Text style={styles.time}>now</Text>
-                    </View>
-
-                    <View style={styles.notificationTitle}>
-                      <Text style={styles.bellIcon}>🔔</Text>
-                      <Text style={styles.notificationText}>
-                        You're free till 8 PM!
-                      </Text>
-                    </View>
-
-                    <Text style={styles.notificationDescription}>
-                      {notification?.message ||
-                        "Live jazz at Fulton St starts soon (7 min walk)."}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* ACTION BUTTONS */}
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={styles.viewEventButton}
-                    onPress={handleViewEvent}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.viewEventText}>View Event</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.dismissButton}
-                    onPress={handleDismiss}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.dismissText}>Dismiss</Text>
-                  </TouchableOpacity>
-                </View>
-              </LinearGradient>
+              {hasLiquidGlass && Platform.OS === "ios" ? (
+                <LiquidGlassView
+                  effect="regular"
+                  style={styles.content}
+                  tintColor="rgba(28, 37, 65, 0.8)"
+                >
+                  {renderContent()}
+                </LiquidGlassView>
+              ) : (
+                <LinearGradient
+                  colors={[colors.backgroundCard, colors.backgroundCardDark]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.content}
+                >
+                  {renderContent()}
+                </LinearGradient>
+              )}
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -156,11 +192,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.bold,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
   },
   time: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
     color: colors.textSecondary,
+    fontFamily: typography.fontFamily,
   },
   notificationTitle: {
     flexDirection: "row",
@@ -175,6 +213,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
   },
   notificationDescription: {
     fontSize: typography.fontSize.base,
@@ -182,6 +221,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: typography.lineHeight.relaxed,
     marginTop: spacing.xs,
+    fontFamily: typography.fontFamily,
+  },
+  buttonPressed: {
+    opacity: 0.8,
   },
   actions: {
     flexDirection: "row",
@@ -202,6 +245,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.gradientStart,
+    fontFamily: typography.fontFamily,
   },
   dismissButton: {
     flex: 1,
@@ -210,10 +254,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing["2xl"],
     alignItems: "center",
+    minHeight: 44, // iOS minimum touch target
   },
   dismissText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
   },
 });

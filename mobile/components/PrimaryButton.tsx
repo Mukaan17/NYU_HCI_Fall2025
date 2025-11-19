@@ -1,12 +1,14 @@
 // components/PrimaryButton.tsx
 import React from "react";
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   StyleProp,
   ViewStyle,
+  Platform,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import {
   colors,
   typography,
@@ -27,15 +29,27 @@ const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   style,
   disabled = false,
 }) => {
+  const handlePress = () => {
+    if (disabled) return;
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onPress();
+  };
+
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.button, style, disabled && { opacity: 0.5 }]}
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.button,
+        style,
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}
       disabled={disabled}
-      activeOpacity={0.8}
     >
       <Text style={styles.label}>{title}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -48,10 +62,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing["2xl"],
     borderRadius: borderRadius.md,
     alignItems: "center",
+    minHeight: 44, // iOS minimum touch target
+  },
+  pressed: {
+    opacity: 0.8,
+  },
+  disabled: {
+    opacity: 0.5,
   },
   label: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
   },
 });

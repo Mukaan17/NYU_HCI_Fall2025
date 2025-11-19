@@ -1,30 +1,11 @@
 // app/_layout.tsx
-import { Slot, router, useSegments } from "expo-router";
-import { useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Slot } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { PlaceProvider } from "../context/PlaceContext";
 import { ChatProvider } from "../context/ChatContext";
 
 export default function RootLayout() {
-  const segments = useSegments();
-
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      const hasSeenWelcome = await AsyncStorage.getItem("hasSeenWelcome");
-      const hasCompletedPermissions = await AsyncStorage.getItem("hasCompletedPermissions");
-
-      if (!hasSeenWelcome) {
-        router.replace("/welcome");
-      } else if (!hasCompletedPermissions) {
-        router.replace("/permissions");
-      }
-    };
-
-    checkOnboarding();
-  }, [segments]);
-
   return (
     <SafeAreaProvider>
       <PlaceProvider>

@@ -6,7 +6,7 @@
 import Foundation
 import CoreLocation
 
-struct SelectedPlace: Identifiable, Codable {
+struct SelectedPlace: Identifiable, Codable, Sendable, Equatable {
     let id = UUID()
     let name: String
     let latitude: Double
@@ -32,6 +32,17 @@ struct SelectedPlace: Identifiable, Codable {
         self.distance = distance
         self.address = address
         self.image = image
+    }
+    
+    static func == (lhs: SelectedPlace, rhs: SelectedPlace) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.name == rhs.name &&
+        lhs.latitude == rhs.latitude &&
+        lhs.longitude == rhs.longitude &&
+        lhs.walkTime == rhs.walkTime &&
+        lhs.distance == rhs.distance &&
+        lhs.address == rhs.address &&
+        lhs.image == rhs.image
     }
 }
 

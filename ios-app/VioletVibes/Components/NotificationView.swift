@@ -17,7 +17,9 @@ struct NotificationView: View {
                 Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture {
+                        withAnimation(.spring(response: 0.3)) {
                         onDismiss()
+                        }
                     }
                 
                 VStack(spacing: 0) {
@@ -110,7 +112,11 @@ struct NotificationView: View {
                         .stroke(Theme.Colors.borderMedium, lineWidth: 1)
                 )
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.9).combined(with: .opacity),
+                removal: .scale(scale: 0.95).combined(with: .opacity)
+            ))
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: visible)
         }
     }
 }

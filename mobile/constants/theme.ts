@@ -1,6 +1,8 @@
 // =======================
 // COLORS
 // =======================
+import { PlatformColor } from 'react-native';
+
 export const colors = {
   background: '#0b132b',
   backgroundSecondary: '#0d1630',
@@ -44,12 +46,32 @@ export const colors = {
   whiteOverlay: 'rgba(255,255,255,0.05)',
   whiteOverlayLight: 'rgba(255,255,255,0.1)',
   whiteOverlayMedium: 'rgba(255,255,255,0.2)',
+
+  // iOS System Colors (using PlatformColor for automatic adaptation)
+  systemBlue: Platform.OS === 'ios' ? PlatformColor('systemBlue') : '#007AFF',
+  systemGray: Platform.OS === 'ios' ? PlatformColor('systemGray') : '#8E8E93',
+  systemGray2: Platform.OS === 'ios' ? PlatformColor('systemGray2') : '#AEAEB2',
+  systemGray3: Platform.OS === 'ios' ? PlatformColor('systemGray3') : '#C7C7CC',
+  systemGray4: Platform.OS === 'ios' ? PlatformColor('systemGray4') : '#D1D1D6',
+  systemGray5: Platform.OS === 'ios' ? PlatformColor('systemGray5') : '#E5E5EA',
+  systemGray6: Platform.OS === 'ios' ? PlatformColor('systemGray6') : '#F2F2F7',
+  label: Platform.OS === 'ios' ? PlatformColor('label') : '#000000',
+  secondaryLabel: Platform.OS === 'ios' ? PlatformColor('secondaryLabel') : '#3C3C43',
+  tertiaryLabel: Platform.OS === 'ios' ? PlatformColor('tertiaryLabel') : '#3C3C4399',
+  quaternaryLabel: Platform.OS === 'ios' ? PlatformColor('quaternaryLabel') : '#3C3C434D',
+  separator: Platform.OS === 'ios' ? PlatformColor('separator') : '#3C3C434A',
+  opaqueSeparator: Platform.OS === 'ios' ? PlatformColor('opaqueSeparator') : '#C6C6C8',
+  systemBackground: Platform.OS === 'ios' ? PlatformColor('systemBackground') : '#FFFFFF',
+  secondarySystemBackground: Platform.OS === 'ios' ? PlatformColor('secondarySystemBackground') : '#F2F2F7',
+  tertiarySystemBackground: Platform.OS === 'ios' ? PlatformColor('tertiarySystemBackground') : '#FFFFFF',
 };
 
 // =======================
 // TYPOGRAPHY
 // =======================
 import type { TextStyle } from 'react-native';
+import { Platform } from 'react-native';
+
 export const typography = {
   fontWeight: {
   regular: "400" as TextStyle["fontWeight"],
@@ -81,6 +103,13 @@ export const typography = {
   // REQUIRED FIXES
   heading: 32,
   body: 14,
+
+  // iOS System Font
+  fontFamily: Platform.select({
+    ios: 'System',
+    android: 'Roboto',
+    default: 'System',
+  }),
 };
 
 // =======================

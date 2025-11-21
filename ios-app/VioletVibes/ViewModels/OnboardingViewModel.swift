@@ -5,28 +5,32 @@
 
 import Foundation
 import SwiftUI
+import Observation
 
-class OnboardingViewModel: ObservableObject {
-    @Published var hasSeenWelcome: Bool = false
-    @Published var hasCompletedPermissions: Bool = false
+@Observable
+final class OnboardingViewModel {
+    var hasSeenWelcome: Bool = false
+    var hasCompletedPermissions: Bool = false
     
     private let storage = StorageService.shared
     
     func checkOnboardingStatus() async {
-        await MainActor.run {
-            hasSeenWelcome = storage.hasSeenWelcome
-            hasCompletedPermissions = storage.hasCompletedPermissions
-        }
+        hasSeenWelcome = await storage.hasSeenWelcome
+        hasCompletedPermissions = await storage.hasCompletedPermissions
     }
     
     func markWelcomeSeen() {
-        storage.hasSeenWelcome = true
+        Task { @MainActor in
+            await storage.setHasSeenWelcome(true)
         hasSeenWelcome = true
+        }
     }
     
     func markPermissionsCompleted() {
-        storage.hasCompletedPermissions = true
+        Task { @MainActor in
+            await storage.setHasCompletedPermissions(true)
         hasCompletedPermissions = true
+        }
     }
 }
 

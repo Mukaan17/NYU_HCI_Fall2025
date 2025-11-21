@@ -5,18 +5,21 @@
 
 import Foundation
 import CoreLocation
-import Combine
+import Observation
 
-class LocationService: NSObject, ObservableObject {
+@MainActor
+@Observable
+final class LocationService: NSObject {
     static let shared = LocationService()
     
     private let locationManager = CLLocationManager()
     
-    @Published var location: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    @Published var error: Error?
+    var location: CLLocation?
+    var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    var error: Error?
     
     private var locationUpdateTask: Task<Void, Never>?
+    private var permissionContinuation: CheckedContinuation<Bool, Never>?
     
     override init() {
         super.init()
@@ -27,20 +30,34 @@ class LocationService: NSObject, ObservableObject {
     
     // MARK: - Permissions
     func requestPermission() async -> Bool {
-        guard authorizationStatus == .notDetermined else {
-            return authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways
+        // If already determined, return immediately
+        let currentStatus = authorizationStatus
+        guard currentStatus == .notDetermined else {
+            return currentStatus == .authorizedWhenInUse || currentStatus == .authorizedAlways
+        }
+        
+        // Cancel any existing continuation to prevent leaks
+        if let oldContinuation = permissionContinuation {
+            permissionContinuation = nil
+            oldContinuation.resume(returning: false)
         }
         
         locationManager.requestWhenInUseAuthorization()
         
-        // Wait for authorization status update
+        // Wait for authorization status update with timeout
         return await withCheckedContinuation { continuation in
-            var cancellable: AnyCancellable?
-            cancellable = $authorizationStatus
-                .dropFirst()
-                .sink { status in
-                    continuation.resume(returning: status == .authorizedWhenInUse || status == .authorizedAlways)
-                    cancellable?.cancel()
+            permissionContinuation = continuation
+            
+            // Set up timeout to ensure continuation is always resumed
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second timeout
+                
+                // If continuation still exists, resume it with current status
+                if let cont = self.permissionContinuation {
+                    self.permissionContinuation = nil
+                    let status = self.authorizationStatus
+                    cont.resume(returning: status == .authorizedWhenInUse || status == .authorizedAlways)
+                }
                 }
         }
     }
@@ -68,24 +85,26 @@ class LocationService: NSObject, ObservableObject {
             throw LocationError.notAuthorized
         }
         
+        locationManager.requestLocation()
+        
+        // Wait for location update with timeout
         return try await withCheckedThrowingContinuation { continuation in
-            var cancellable: AnyCancellable?
-            cancellable = $location
-                .compactMap { $0 }
-                .first()
-                .sink { location in
-                    continuation.resume(returning: location)
-                    cancellable?.cancel()
-                }
-            
-            locationManager.requestLocation()
-            
-            // Timeout after 10 seconds
-            Task {
+            let timeoutTask = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
                 if !Task.isCancelled {
-                    cancellable?.cancel()
                     continuation.resume(throwing: LocationError.timeout)
+                }
+            }
+            
+            // Poll for location
+            Task {
+                while !Task.isCancelled {
+                    if let currentLocation = location {
+                        timeoutTask.cancel()
+                        continuation.resume(returning: currentLocation)
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
             }
         }
@@ -103,7 +122,15 @@ extension LocationService: CLLocationManagerDelegate {
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
+        let newStatus = manager.authorizationStatus
+        authorizationStatus = newStatus
+        
+        // Resume permission continuation if waiting (only if still set to prevent double resume)
+        if let continuation = permissionContinuation {
+            permissionContinuation = nil
+            let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
+            continuation.resume(returning: isAuthorized)
+        }
     }
 }
 

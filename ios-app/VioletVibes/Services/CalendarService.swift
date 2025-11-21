@@ -18,10 +18,14 @@ class CalendarService {
         let status = EKEventStore.authorizationStatus(for: .event)
         
         switch status {
-        case .authorized:
+        case .authorized, .fullAccess, .writeOnly:
             return true
         case .notDetermined:
-            return await eventStore.requestAccess(to: .event)
+            do {
+                return try await eventStore.requestAccess(to: .event)
+            } catch {
+                return false
+            }
         case .denied, .restricted:
             return false
         @unknown default:
@@ -31,7 +35,8 @@ class CalendarService {
     
     // MARK: - Calendar Access
     var hasPermission: Bool {
-        EKEventStore.authorizationStatus(for: .event) == .authorized
+        let status = EKEventStore.authorizationStatus(for: .event)
+        return status == .authorized || status == .fullAccess || status == .writeOnly
     }
     
     func getCalendars() -> [EKCalendar] {

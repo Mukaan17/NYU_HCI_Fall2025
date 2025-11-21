@@ -6,7 +6,7 @@
 import Foundation
 import SwiftUI
 
-struct QuickAction: Identifiable {
+struct QuickAction: Identifiable, Sendable {
     let id: Int
     let icon: String
     let label: String

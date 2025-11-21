@@ -9,25 +9,26 @@ import SwiftUI
 
 @main
 struct VioletVibesApp: App {
-    @StateObject private var onboardingViewModel = OnboardingViewModel()
-    @StateObject private var chatViewModel = ChatViewModel()
-    @StateObject private var placeViewModel = PlaceViewModel()
-    @StateObject private var locationManager = LocationManager()
+    @State private var onboardingViewModel = OnboardingViewModel()
+    @State private var chatViewModel = ChatViewModel()
+    @State private var placeViewModel = PlaceViewModel()
+    @State private var locationManager = LocationManager()
     
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(onboardingViewModel)
-                .environmentObject(chatViewModel)
-                .environmentObject(placeViewModel)
-                .environmentObject(locationManager)
+                .environment(onboardingViewModel)
+                .environment(chatViewModel)
+                .environment(placeViewModel)
+                .environment(locationManager)
                 .preferredColorScheme(.dark)
         }
     }
 }
 
 struct RootView: View {
-    @EnvironmentObject var onboardingViewModel: OnboardingViewModel
+    @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isLoading = true
     
     var body: some View {
@@ -48,6 +49,24 @@ struct RootView: View {
             await onboardingViewModel.checkOnboardingStatus()
             isLoading = false
         }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background {
+                // Schedule notification when app goes to background
+                Task {
+                    await scheduleBackgroundNotification()
+                }
+            }
+        }
+    }
+    
+    private func scheduleBackgroundNotification() async {
+        let notificationService = NotificationService.shared
+        let message = "You're free till 8 PM — Live jazz at Fulton St starts soon (7 min walk)."
+        await notificationService.scheduleNotification(
+            title: "You're free till 8 PM!",
+            body: message,
+            timeInterval: 3.0 // Send 3 seconds after app goes to background
+        )
     }
 }
 

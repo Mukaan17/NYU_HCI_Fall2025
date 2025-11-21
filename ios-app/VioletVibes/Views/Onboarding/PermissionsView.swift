@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct PermissionsView: View {
-    @EnvironmentObject var onboardingViewModel: OnboardingViewModel
+    @Environment(OnboardingViewModel.self) private var onboardingViewModel
     
     @State private var locationPermission: Bool = false
     @State private var calendarPermission: Bool = false
@@ -30,33 +30,67 @@ struct PermissionsView: View {
             )
             .ignoresSafeArea()
             
+            // Blur Shapes
+            GeometryReader { geometry in
+                Circle()
+                    .fill(Theme.Colors.gradientStart.opacity(0.15))
+                    .frame(width: 300, height: 300)
+                    .offset(x: -50, y: -100)
+                    .blur(radius: 60)
+                
+                Circle()
+                    .fill(Theme.Colors.gradientStart.opacity(0.12))
+                    .frame(width: 250, height: 250)
+                    .offset(x: geometry.size.width - 200, y: geometry.size.height - 200)
+                    .blur(radius: 50)
+            }
+            .allowsHitTesting(false)
+            
+            VStack(spacing: 0) {
+                Spacer()
+            
             ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-                    Text("Permissions")
-                        .themeFont(size: .`3xl`, weight: .bold)
-                        .foregroundColor(Theme.Colors.textPrimary)
+                    VStack(spacing: Theme.Spacing.`4xl`) {
+                        // Permission Cards
+                        VStack(spacing: Theme.Spacing.`4xl`) {
+                            PermissionCard(
+                                icon: "📍",
+                                title: "Allow Location",
+                                description: "To find awesome spots near you.",
+                                isEnabled: locationPermission
+                            )
+                            
+                            PermissionCard(
+                                icon: "📅",
+                                title: "Sync Calendar",
+                                description: "To find suggestions for your downtime.",
+                                isEnabled: calendarPermission
+                            )
+                            
+                            PermissionCard(
+                                icon: "🔔",
+                                title: "Enable Notifications",
+                                description: "For real-time alerts on events and deals.",
+                                isEnabled: notificationPermission
+                            )
+                        }
+                        .padding(.horizontal, Theme.Spacing.`2xl`)
                         .padding(.top, Theme.Spacing.`6xl`)
                     
-                    Text("Location: \(locationPermission ? "Enabled" : "Disabled")")
-                        .themeFont(size: .base)
-                        .foregroundColor(Theme.Colors.textSecondary)
-                    
-                    Text("Calendar: \(calendarPermission ? "Enabled" : "Disabled")")
-                        .themeFont(size: .base)
-                        .foregroundColor(Theme.Colors.textSecondary)
-                    
-                    Text("Notifications: \(notificationPermission ? "Enabled" : "Disabled")")
-                        .themeFont(size: .base)
-                        .foregroundColor(Theme.Colors.textSecondary)
-                    
+                        // Enable All Button
                     PrimaryButton(title: "Enable All") {
                         Task {
                             await requestAllPermissions()
                         }
                     }
-                    .padding(.top, Theme.Spacing.`2xl`)
+                        .padding(.horizontal, Theme.Spacing.`2xl`)
+                        .padding(.top, Theme.Spacing.`4xl`)
+                        .padding(.bottom, Theme.Spacing.`6xl`)
+                    }
                 }
-                .padding(Theme.Spacing.lg)
+                .scrollIndicators(.hidden)
+                
+                Spacer()
             }
         }
         .task {
@@ -86,4 +120,3 @@ struct PermissionsView: View {
         }
     }
 }
-

@@ -17,7 +17,7 @@ The app determines the server URL in this priority order:
    - Add `API_URL` key with your server URL
 
 3. **Default** (fallback)
-   - Uses `http://localhost:5000` if nothing else is configured
+   - Uses `http://localhost:5001` if nothing else is configured
 
 ### Example Config.plist
 
@@ -27,9 +27,9 @@ The app determines the server URL in this priority order:
 <plist version="1.0">
 <dict>
     <key>API_URL</key>
-    <string>http://localhost:5000</string>
+    <string>http://localhost:5001</string>
     <!-- Or use your server's IP/domain -->
-    <!-- <string>http://192.168.1.100:5000</string> -->
+    <!-- <string>http://192.168.1.100:5001</string> -->
     <!-- <string>https://your-server.com</string> -->
 </dict>
 </plist>
@@ -156,9 +156,9 @@ The iOS app calls these endpoints from your Flask server:
 
 ### For Simulator (localhost)
 
-The app can connect to `localhost:5000` when running on the iOS Simulator if:
+The app can connect to `localhost:5001` when running on the iOS Simulator if:
 - Your Flask server is running on your Mac
-- Server is bound to `0.0.0.0` (which it is: `app.run(host="0.0.0.0", port=5000)`)
+- Server is bound to `0.0.0.0` (which it is: `app.run(host="0.0.0.0", port=5001)`)
 - No additional configuration needed
 
 ### For Physical Device
@@ -174,7 +174,7 @@ When testing on a physical iPhone/iPad:
 2. **Update Config.plist:**
    ```xml
    <key>API_URL</key>
-   <string>http://192.168.1.100:5000</string>
+   <string>http://192.168.1.100:5001</string>
    ```
 
 3. **Ensure Mac and iPhone are on same WiFi network**
@@ -241,7 +241,7 @@ All errors are caught and displayed to the user via UI.
 
 2. **Verify server is running:**
    ```bash
-   curl http://localhost:5000/health
+   curl http://localhost:5001/health
    # Should return: {"status":"ok"}
    ```
 

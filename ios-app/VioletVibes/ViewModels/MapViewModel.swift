@@ -6,11 +6,13 @@
 import Foundation
 import MapKit
 import SwiftUI
+import Observation
 
-class MapViewModel: ObservableObject {
-    @Published var region: MKCoordinateRegion
-    @Published var polylineCoordinates: [CLLocationCoordinate2D] = []
-    @Published var isLoadingRoute: Bool = false
+@Observable
+final class MapViewModel {
+    var cameraPosition: MapCameraPosition
+    var polylineCoordinates: [CLLocationCoordinate2D] = []
+    var isLoadingRoute: Bool = false
     
     private let apiService = APIService.shared
     
@@ -19,23 +21,23 @@ class MapViewModel: ObservableObject {
     private let defaultLng = -73.98555
     
     init() {
-        region = MKCoordinateRegion(
+        let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng),
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         )
+        cameraPosition = .region(region)
     }
     
     func updateRegion(latitude: Double, longitude: Double) {
-        region = MKCoordinateRegion(
+        let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         )
+        cameraPosition = .region(region)
     }
     
     func fetchRoute(destinationLat: Double, destinationLng: Double) async {
-        await MainActor.run {
             isLoadingRoute = true
-        }
         
         do {
             let response = try await apiService.getDirections(lat: destinationLat, lng: destinationLng)
@@ -46,22 +48,16 @@ class MapViewModel: ObservableObject {
                     return CLLocationCoordinate2D(latitude: point[0], longitude: point[1])
                 }
                 
-                await MainActor.run {
-                    self.polylineCoordinates = coordinates
-                    self.isLoadingRoute = false
-                }
+                polylineCoordinates = coordinates
+                isLoadingRoute = false
             } else {
-                await MainActor.run {
-                    self.polylineCoordinates = []
-                    self.isLoadingRoute = false
-                }
+                polylineCoordinates = []
+                isLoadingRoute = false
             }
         } catch {
             print("Route error: \(error)")
-            await MainActor.run {
-                self.polylineCoordinates = []
-                self.isLoadingRoute = false
-            }
+            polylineCoordinates = []
+            isLoadingRoute = false
         }
     }
     

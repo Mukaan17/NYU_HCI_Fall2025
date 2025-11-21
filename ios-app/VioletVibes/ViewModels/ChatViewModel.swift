@@ -5,10 +5,12 @@
 
 import Foundation
 import SwiftUI
+import Observation
 
-class ChatViewModel: ObservableObject {
-    @Published var messages: [ChatMessage] = []
-    @Published var isTyping: Bool = false
+@Observable
+final class ChatViewModel {
+    var messages: [ChatMessage] = []
+    var isTyping: Bool = false
     
     private let apiService = APIService.shared
     
@@ -38,36 +40,43 @@ class ChatViewModel: ObservableObject {
             timestamp: Date()
         )
         
-        await MainActor.run {
             messages.append(userMessage)
             isTyping = true
-        }
         
         do {
             let response = try await apiService.sendChatMessage(trimmed, latitude: latitude, longitude: longitude)
             
+            await MainActor.run {
             // Add AI text reply
             let aiMessage = ChatMessage(
                 id: Int(Date().timeIntervalSince1970) + 1,
                 type: .text,
                 role: .ai,
-                content: response.reply,
+                    content: response.replyText,
                 timestamp: Date()
             )
             
-            await MainActor.run {
                 messages.append(aiMessage)
-            }
             
             // Add recommendations if present
             if let places = response.places, !places.isEmpty {
+                    let baseTimestamp = Int(Date().timeIntervalSince1970 * 1000)
                 let recommendations = places.enumerated().map { index, place in
-                    Recommendation(
-                        id: index,
+                        // Generate truly unique ID: use place.id if valid, otherwise use hash of title+location+index
+                        let uniqueId: Int
+                        if place.id != 0 {
+                            uniqueId = place.id
+                        } else {
+                            // Create unique ID from place data to avoid duplicates
+                            let idString = "\(place.title)\(place.lat ?? 0)\(place.lng ?? 0)\(index)"
+                            uniqueId = abs(idString.hashValue) + baseTimestamp + index
+                        }
+                        return Recommendation(
+                            id: uniqueId,
                         title: place.title,
                         description: place.description,
+                            distance: place.distance,
                         walkTime: place.walkTime,
-                        distance: place.distance,
                         lat: place.lat,
                         lng: place.lng,
                         popularity: place.popularity,
@@ -84,17 +93,16 @@ class ChatViewModel: ObservableObject {
                     timestamp: Date()
                 )
                 
-                await MainActor.run {
                     messages.append(recommendationsMessage)
-                    isTyping = false
                 }
-            } else {
-                await MainActor.run {
+                
                     isTyping = false
-                }
             }
         } catch {
             print("Chat error: \(error)")
+            print("Error details: \(error.localizedDescription)")
+            
+            await MainActor.run {
             let errorMessage = ChatMessage(
                 id: Int(Date().timeIntervalSince1970) + 1,
                 type: .text,
@@ -103,7 +111,6 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date()
             )
             
-            await MainActor.run {
                 messages.append(errorMessage)
                 isTyping = false
             }

@@ -7,7 +7,7 @@ import SwiftUI
 
 struct QuickResultsView: View {
     let category: String
-    @EnvironmentObject var placeViewModel: PlaceViewModel
+    @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(\.dismiss) var dismiss
     
     @State private var places: [Recommendation] = []
@@ -97,6 +97,7 @@ struct QuickResultsView: View {
                     }
                     .padding(.bottom, 140)
                 }
+                .scrollIndicators(.hidden)
             }
         }
         .navigationBarHidden(true)

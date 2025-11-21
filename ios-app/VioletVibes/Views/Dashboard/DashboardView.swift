@@ -4,16 +4,17 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct DashboardView: View {
-    @EnvironmentObject var locationManager: LocationManager
-    @StateObject private var viewModel = DashboardViewModel()
+    @Environment(LocationManager.self) private var locationManager
+    @State private var viewModel = DashboardViewModel()
     @State private var navigateToCategory: String?
     
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
+                // Background - use explicit colors for debugging
                 LinearGradient(
                     colors: [
                         Theme.Colors.background,
@@ -39,25 +40,61 @@ struct DashboardView: View {
                         .offset(x: geometry.size.width * 0.22, y: geometry.size.height * 0.35)
                         .blur(radius: 60)
                 }
+                .allowsHitTesting(false)
                 
                 ScrollView {
                     VStack(spacing: Theme.Spacing.`4xl`) {
-                        // Header
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Hey there! 👋")
-                                .themeFont(size: .`3xl`, weight: .bold)
-                                .foregroundColor(Theme.Colors.textPrimary)
+                        // Header with Profile Button
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Hey there! 👋")
+                                    .themeFont(size: .`3xl`, weight: .bold)
+                                    .foregroundColor(Theme.Colors.textPrimary)
+                                
+                                Text("Here's what's happening around you")
+                                    .themeFont(size: .lg)
+                                    .foregroundColor(Theme.Colors.textSecondary)
+                            }
                             
-                            Text("Here's what's happening around you")
-                                .themeFont(size: .lg)
-                                .foregroundColor(Theme.Colors.textSecondary)
+                            Spacer()
+                            
+                            // Profile Button - Scrolls with content
+                            Menu {
+                                Button(action: {
+                                    // Account Settings action
+                                }) {
+                                    Label("Account Settings", systemImage: "gearshape.fill")
+                                }
+                                
+                                Button(action: {
+                                    // About action
+                                }) {
+                                    Label("About", systemImage: "info.circle")
+                                }
+                                
+                                Divider()
+                                
+                                Button(role: .destructive, action: {
+                                    // Logout action
+                                }) {
+                                    Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                                }
+                            } label: {
+                                Image(systemName: "person.crop.circle")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(Theme.Colors.textPrimary)
+                                    .frame(width: 48, height: 48)
+                                    .background(
+                                        Circle()
+                                            .stroke(Theme.Colors.border.opacity(0.2), lineWidth: 2)
+                                    )
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, Theme.Spacing.`3xl`)
                         
-                        // Badges
+                        // Badges - Centered horizontally
                         HStack(spacing: Theme.Spacing.lg) {
-                            // Weather Badge
+                            // Weather Badge - Always show, with fallback if weather not loaded
                             if let weather = viewModel.weather {
                                 Text("\(weather.emoji) \(weather.temp)°F")
                                     .themeFont(size: .base, weight: .semiBold)
@@ -70,6 +107,24 @@ struct DashboardView: View {
                                             .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
                                     )
                                     .cornerRadius(Theme.BorderRadius.md)
+                            } else {
+                                // Show loading/placeholder while weather is being fetched
+                                HStack(spacing: Theme.Spacing.xs) {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(Theme.Colors.textBlue)
+                                    Text("Loading...")
+                                        .themeFont(size: .base, weight: .semiBold)
+                                        .foregroundColor(Theme.Colors.textBlue)
+                                }
+                                .padding(.horizontal, Theme.Spacing.xl)
+                                .padding(.vertical, Theme.Spacing.sm)
+                                .background(Theme.Colors.accentBlue)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                        .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
+                                )
+                                .cornerRadius(Theme.BorderRadius.md)
                             }
                             
                             // Schedule Badge
@@ -98,6 +153,8 @@ struct DashboardView: View {
                                 )
                                 .cornerRadius(Theme.BorderRadius.md)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, Theme.Spacing.`4xl`)
                         
                         // Quick Actions
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
@@ -110,10 +167,7 @@ struct DashboardView: View {
                                 GridItem(.flexible(), spacing: Theme.Spacing.`2xl`)
                             ], spacing: Theme.Spacing.`2xl`) {
                                 ForEach(QuickAction.allActions) { action in
-                                    NavigationLink(value: action.prompt) {
-                                        QuickActionCard(action: action)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
+                                    QuickActionCard(action: action)
                                 }
                             }
                         }
@@ -132,6 +186,7 @@ struct DashboardView: View {
                     .padding(.horizontal, Theme.Spacing.`2xl`)
                     .padding(.bottom, 120)
                 }
+                .scrollIndicators(.hidden)
             }
             .navigationDestination(for: String.self) { category in
                 QuickResultsView(category: category)
@@ -139,22 +194,48 @@ struct DashboardView: View {
             .navigationBarHidden(true)
         }
         .task {
+            // Load sample recommendations first (doesn't require network)
+            // This should happen immediately to show content
+            await MainActor.run {
+                viewModel.loadSampleRecommendations()
+            }
+            
+            // Try to load weather - use user location or fallback to Brooklyn
             if let location = locationManager.location {
                 await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+            } else {
+                // Fallback to Brooklyn coordinates (2 MetroTech Center)
+                print("Dashboard: No location available, using default Brooklyn location for weather")
+                await viewModel.loadWeather(latitude: 40.693393, longitude: -73.98555)
             }
-            viewModel.loadSampleRecommendations()
-            viewModel.showDemoNotification()
+            
         }
-        .overlay(
-            NotificationView(
-                visible: viewModel.showNotification,
-                onDismiss: { viewModel.showNotification = false },
-                onViewEvent: {
-                    viewModel.showNotification = false
-                },
-                message: "You're free till 8 PM — Live jazz at Fulton St starts soon (7 min walk)."
-            )
-        )
+        .onChange(of: locationManager.location) { oldValue, newValue in
+            // Reload weather when location changes
+            if let location = newValue {
+                Task {
+                    await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+                }
+            }
+        }
+        .onAppear {
+            // Ensure recommendations are loaded even if task fails
+            if viewModel.recommendations.isEmpty {
+                viewModel.loadSampleRecommendations()
+            }
+            
+            // Try to load weather on appear - use user location or fallback
+            if let location = locationManager.location {
+                Task {
+                    await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+                }
+            } else if viewModel.weather == nil {
+                // Only load default if weather hasn't been loaded yet
+                Task {
+                    await viewModel.loadWeather(latitude: 40.693393, longitude: -73.98555)
+                }
+            }
+        }
     }
 }
 
@@ -163,6 +244,7 @@ struct QuickActionCard: View {
     @State private var isPressed = false
     
     var body: some View {
+        NavigationLink(value: action.prompt) {
         VStack(spacing: Theme.Spacing.`2xl`) {
             Text(action.icon)
                 .font(.system(size: 32))
@@ -192,9 +274,11 @@ struct QuickActionCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                .stroke(Theme.Colors.border, lineWidth: 1)
+                    .stroke(Theme.Colors.border.opacity(0.15), lineWidth: 1)
         )
-        .scaleEffect(isPressed ? 0.95 : 1.0)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
@@ -210,4 +294,5 @@ struct QuickActionCard: View {
         )
     }
 }
+
 

@@ -7,27 +7,39 @@ import SwiftUI
 import MapKit
 
 struct MapView: View {
-    @EnvironmentObject var placeViewModel: PlaceViewModel
-    @EnvironmentObject var locationManager: LocationManager
-    @StateObject private var viewModel = MapViewModel()
+    @Environment(PlaceViewModel.self) private var placeViewModel
+    @Environment(LocationManager.self) private var locationManager
+    @State private var viewModel = MapViewModel()
     
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
     
     var body: some View {
         ZStack {
-            // Map
-            Map(coordinateRegion: $viewModel.region, annotationItems: annotations) { annotation in
-                MapMarker(coordinate: annotation.coordinate, tint: Theme.Colors.gradientStart)
+            // Map using modern iOS 17+ API
+            Map(position: $viewModel.cameraPosition) {
+                // User location
+                if let location = locationManager.location {
+                    UserAnnotation()
+                }
+                
+                // Destination marker
+                if let place = placeViewModel.selectedPlace {
+                    Annotation(place.name, coordinate: place.coordinate) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(Theme.Colors.gradientStart)
+                            .font(.system(size: 32))
+                    }
+                }
+                
+                // Route polyline
+                if !viewModel.polylineCoordinates.isEmpty {
+                    MapPolyline(coordinates: viewModel.polylineCoordinates)
+                        .stroke(Theme.Colors.gradientStart, lineWidth: 5)
+                }
             }
-            // Note: MapKit polyline rendering would need MKPolyline and MKMapView
-            // For now, we'll use annotations to show the route
+            .mapStyle(.standard(elevation: .realistic))
             .ignoresSafeArea()
-            
-            // User location indicator
-            if let location = locationManager.location {
-                UserLocationIndicator(coordinate: location.coordinate)
-            }
             
             // Address Badge
             VStack {
@@ -168,16 +180,16 @@ struct MapView: View {
                 )
             }
         }
-        .onChange(of: placeViewModel.selectedPlace) { place in
-            if let place = place {
+        .onChange(of: placeViewModel.selectedPlace) { oldValue, newValue in
+            if let place = newValue {
                 viewModel.updateRegion(latitude: place.latitude, longitude: place.longitude)
                 Task {
                     await viewModel.fetchRoute(destinationLat: place.latitude, destinationLng: place.longitude)
                 }
             }
         }
-        .onChange(of: locationManager.location) { location in
-            if let location = location, placeViewModel.selectedPlace == nil {
+        .onChange(of: locationManager.location) { oldValue, newValue in
+            if let location = newValue, placeViewModel.selectedPlace == nil {
                 viewModel.updateRegion(
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude
@@ -192,62 +204,6 @@ struct MapView: View {
                 )
             } else {
                 viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng)
-            }
-        }
-    }
-    
-    private var annotations: [MapAnnotation] {
-        if let place = placeViewModel.selectedPlace {
-            return [MapAnnotation(coordinate: place.coordinate)]
-        }
-        return []
-    }
-}
-
-struct MapAnnotation: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
-}
-
-// Note: For proper polyline rendering, use MKMapView with MKPolyline
-// This is a placeholder - full implementation would require UIViewRepresentable
-
-struct UserLocationIndicator: View {
-    let coordinate: CLLocationCoordinate2D
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let centerX = geometry.size.width / 2
-            let centerY = geometry.size.height / 2
-            
-            ZStack {
-                // Outer ring
-                Circle()
-                    .fill(Theme.Colors.gradientStart.opacity(0.35))
-                    .frame(width: 80, height: 80)
-                    .position(x: centerX, y: centerY)
-                
-                // Middle ring
-                Circle()
-                    .stroke(Theme.Colors.gradientStart.opacity(0.3), lineWidth: 2)
-                    .frame(width: 64, height: 64)
-                    .position(x: centerX, y: centerY)
-                
-                // Center dot
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.Colors.gradientStart, Theme.Colors.gradientEnd],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 20, height: 20)
-                    .overlay(
-                        Circle()
-                            .stroke(Theme.Colors.textPrimary, lineWidth: 4)
-                    )
-                    .position(x: centerX, y: centerY)
             }
         }
     }

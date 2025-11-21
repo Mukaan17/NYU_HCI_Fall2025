@@ -5,9 +5,11 @@
 
 import Foundation
 import SwiftUI
+import Observation
 
-class PlaceViewModel: ObservableObject {
-    @Published var selectedPlace: SelectedPlace?
+@Observable
+final class PlaceViewModel {
+    var selectedPlace: SelectedPlace?
     
     func setSelectedPlace(_ place: SelectedPlace) {
         selectedPlace = place

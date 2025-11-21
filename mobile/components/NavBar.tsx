@@ -1,37 +1,14 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
-  Dimensions,
   Platform,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withDelay,
-  withSequence,
-  FadeInUp,
-} from "react-native-reanimated";
-import SvgIcon from "./SvgIcon";
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  shadows,
-} from "../constants/theme";
-
-const { width } = Dimensions.get("window");
-
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
-const AnimatedView = Animated.createAnimatedComponent(View);
-const AnimatedText = Animated.createAnimatedComponent(Text);
+import { SymbolView } from "expo-symbols";
+import { BlurView } from "expo-blur";
 
 interface NavBarProps {
   activeTab: string;
@@ -39,288 +16,138 @@ interface NavBarProps {
   style?: any;
 }
 
+const tabs = [
+  { id: "dashboard", label: "Home", sfSymbol: "house.fill" },
+  { id: "chat", label: "Chat", sfSymbol: "message.fill" },
+  { id: "map", label: "Map", sfSymbol: "map.fill" },
+  { id: "safety", label: "Safety", sfSymbol: "shield.fill" },
+];
+
 export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {
-  const tabs = [
-    { id: "dashboard", label: "Home", icon: "home" },
-    { id: "chat", label: "Chat", icon: "chat" },
-    { id: "map", label: "Map", icon: "map" },
-    { id: "safety", label: "Safety", icon: "safety" },
-  ];
-
-  const containerScale = useSharedValue(1);
-  const containerOpacity = useSharedValue(1);
-
-  const highlightPosition = useSharedValue(0);
-  const highlightWidth = useSharedValue(0);
-  const highlightScale = useSharedValue(1);
-  const highlightBorderRadius = useSharedValue(borderRadius.full);
-  const highlightRotation = useSharedValue(0);
-  const blobOffsetX = useSharedValue(0);
-  const blobOffsetY = useSharedValue(0);
-
-  const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
-  const hasAnimated = useRef(false);
-
-  // Entrance animation (unchanged)
-  useEffect(() => {
-    if (!hasAnimated.current) {
-      containerScale.value = 0.95;
-      containerOpacity.value = 0;
-
-      containerScale.value = withDelay(
-        200,
-        withSpring(1, { damping: 15, stiffness: 150 })
-      );
-
-      containerOpacity.value = withDelay(
-        200,
-        withTiming(1, { duration: 300 })
-      );
-
-      hasAnimated.current = true;
+  const handleTabPress = (tabId: string) => {
+    if (Platform.OS === "ios") {
+      Haptics.selectionAsync();
     }
-
-    const activeIndex = tabs.findIndex((tab) => tab.id === activeTab);
-    if (activeIndex !== -1) {
-      const containerPadding = spacing.md * 2;
-      const totalGap = spacing.md * (tabs.length - 1);
-      const availableWidth = width - containerPadding;
-      const tabWidthValue = (availableWidth - totalGap) / tabs.length;
-      const initialPosition =
-        activeIndex * (tabWidthValue + spacing.md) + spacing.md;
-
-      if (highlightPosition.value === 0 && highlightWidth.value === 0) {
-        highlightPosition.value = initialPosition;
-        highlightWidth.value = tabWidthValue;
-      }
-    }
-  }, []);
-
-  // Animate highlight (unchanged)
-  useEffect(() => {
-    const animateHighlight = () => {
-      const activeLayout = tabLayouts.current[activeTab];
-
-      if (activeLayout) {
-        highlightPosition.value = withSpring(activeLayout.x, {
-          damping: 15,
-          stiffness: 200,
-        });
-        highlightWidth.value = withSpring(activeLayout.width, {
-          damping: 15,
-          stiffness: 200,
-        });
-
-        highlightScale.value = withSequence(withSpring(1.08), withSpring(1));
-
-        highlightBorderRadius.value = withSequence(
-          withSpring(borderRadius.full * 0.6),
-          withSpring(borderRadius.full)
-        );
-
-        const rot = (Math.random() - 0.5) * 3;
-        highlightRotation.value = withSequence(withSpring(rot), withSpring(0));
-
-        const offX = (Math.random() - 0.5) * 6;
-        const offY = (Math.random() - 0.5) * 3;
-        blobOffsetX.value = withSequence(withSpring(offX), withSpring(0));
-        blobOffsetY.value = withSequence(withSpring(offY), withSpring(0));
-      }
-    };
-
-    requestAnimationFrame(() => animateHighlight());
-  }, [activeTab]);
-
-  const containerAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: containerScale.value }],
-    opacity: containerOpacity.value,
-  }));
-
-  const highlightAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: highlightPosition.value + blobOffsetX.value },
-      { translateY: blobOffsetY.value },
-      { scale: highlightScale.value },
-      { rotate: `${highlightRotation.value}deg` },
-    ],
-    width: highlightWidth.value,
-    borderRadius: highlightBorderRadius.value,
-  }));
-
-  const handleTabPressInternal = (tabId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onTabPress(tabId);
   };
 
   return (
-    <AnimatedView
-      entering={FadeInUp.delay(300).springify()}
-      style={[styles.wrapper, style, containerAnimatedStyle]}
-    >
+    <View style={[styles.wrapper, style]}>
+      {/* Top separator line - native iOS tab bar style */}
+      <View style={styles.topSeparator} />
+      
+      {/* Native iOS tab bar blur background */}
       <BlurView
-        intensity={Platform.OS === "ios" ? 80 : 60}
-        tint="dark"
-        style={styles.blurContainer}
+        intensity={100}
+        tint="systemChromeMaterialDark"
+        style={styles.background}
       >
-        <View style={styles.glassOverlay} />
-      </BlurView>
-
-      <View style={styles.container}>
-        {/* Highlight blob */}
-        <Animated.View
-          style={[styles.slidingHighlight, highlightAnimatedStyle]}
-        >
-          <View style={styles.highlightGlass}>
-            <View style={styles.glassBubble} />
-            <View style={styles.innerGlow} />
-          </View>
-        </Animated.View>
-
-        {/* Tabs */}
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const scale = useSharedValue(1);
-          const opacity = useSharedValue(isActive ? 1 : 0.7);
-
-          const buttonAnimatedStyle = useAnimatedStyle(() => ({
-            transform: [{ scale: scale.value }],
-          }));
-          const textAnimatedStyle = useAnimatedStyle(() => ({
-            opacity: opacity.value,
-          }));
-
-          return (
-            <AnimatedTouchable
-              key={tab.id}
-              onPress={() => handleTabPressInternal(tab.id)}
-              onPressIn={() =>
-                (scale.value = withSpring(0.95, {
-                  damping: 12,
-                  stiffness: 400,
-                }))
-              }
-              onPressOut={() =>
-                (scale.value = withSpring(1, {
-                  damping: 12,
-                  stiffness: 400,
-                }))
-              }
-              style={[styles.tabButton, buttonAnimatedStyle]}
-              activeOpacity={0.8}
-              onLayout={(e) => {
-                const { x, width } = e.nativeEvent.layout;
-                tabLayouts.current[tab.id] = { x, width };
-              }}
-            >
-              <View style={styles.button}>
-                <SvgIcon
-                  name={tab.icon}
-                  size={20}
-                  color={isActive ? colors.textPrimary : colors.textSecondary}
-                />
-
-                <AnimatedText
-                  style={[
+        <View style={styles.container}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <Pressable
+                key={tab.id}
+                onPress={() => handleTabPress(tab.id)}
+                style={styles.tabButton}
+              >
+                <View style={styles.buttonContent}>
+                  {Platform.OS === "ios" ? (
+                    <SymbolView
+                      name={tab.sfSymbol}
+                      size={25}
+                      type="hierarchical"
+                      tintColor={isActive ? "#007AFF" : "rgba(255, 255, 255, 0.4)"}
+                      style={styles.icon}
+                    />
+                  ) : (
+                    <Text style={[styles.iconFallback, !isActive && styles.iconInactive]}>
+                      {tab.label.charAt(0)}
+                    </Text>
+                  )}
+                  
+                  <Text style={[
                     styles.buttonText,
-                    isActive
-                      ? styles.activeButtonText
-                      : styles.inactiveButtonText,
-                    textAnimatedStyle,
-                  ]}
-                >
-                  {tab.label}
-                </AnimatedText>
-              </View>
-            </AnimatedTouchable>
-          );
-        })}
-      </View>
-    </AnimatedView>
+                    isActive ? styles.textActive : styles.textInactive
+                  ]}>
+                    {tab.label}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    borderRadius: borderRadius.full,
+    position: "relative",
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.18)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-      },
-      android: { elevation: 8 },
-    }),
   },
-  blurContainer: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: borderRadius.full,
+  topSeparator: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 0.5,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    zIndex: 10,
   },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(28, 37, 65, 0.4)",
+  background: {
+    width: "100%",
+    paddingTop: 8,
+    paddingBottom: 8,
+    height: 49,
   },
   container: {
     flexDirection: "row",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.md,
     alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-    position: "relative",
-  },
-  slidingHighlight: {
-    position: "absolute",
+    justifyContent: "space-around",
     height: "100%",
-    borderRadius: borderRadius.full,
-    overflow: "hidden",
-    zIndex: 0,
-  },
-  highlightGlass: {
-    width: "100%",
-    height: "100%",
-    borderRadius: borderRadius.full,
-    backgroundColor: "rgba(108, 99, 255, 0.35)",
-  },
-  glassBubble: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: borderRadius.full,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    opacity: 0.25,
-  },
-  innerGlow: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: borderRadius.full,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    opacity: 0.5,
+    paddingHorizontal: 8,
   },
   tabButton: {
     flex: 1,
-    minHeight: 44,
-    zIndex: 1,
-  },
-  button: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "column",
-    gap: spacing.xs,
-    minHeight: 44,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    minHeight: 49,
+  },
+  buttonContent: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  icon: {
+    width: 25,
+    height: 25,
+  },
+  iconInactive: {
+    opacity: 0.4,
+  },
+  iconFallback: {
+    fontSize: 22,
+    fontWeight: "500",
+    color: "#FFFFFF",
+    opacity: 0.4,
   },
   buttonText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semiBold,
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: -0.24,
+    fontFamily: Platform.select({
+      ios: "System",
+      android: "Roboto",
+    }),
   },
-  activeButtonText: {
-    color: colors.textPrimary,
+  textActive: {
+    color: "#007AFF",
   },
-  inactiveButtonText: {
-    color: colors.textSecondary,
+  textInactive: {
+    color: "rgba(255, 255, 255, 0.4)",
   },
 });

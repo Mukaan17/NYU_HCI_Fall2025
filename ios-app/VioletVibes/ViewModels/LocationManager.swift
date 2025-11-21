@@ -6,11 +6,13 @@
 import Foundation
 import CoreLocation
 import SwiftUI
+import Observation
 
-class LocationManager: ObservableObject {
-    @Published var location: CLLocation?
-    @Published var loading: Bool = true
-    @Published var error: String?
+@Observable
+final class LocationManager {
+    var location: CLLocation?
+    var loading: Bool = true
+    var error: String?
     
     private let locationService = LocationService.shared
     
@@ -19,28 +21,28 @@ class LocationManager: ObservableObject {
     }
     
     private func setupLocationUpdates() {
-        // Observe location service updates
-        Task {
-            for await location in locationService.$location.values {
-                await MainActor.run {
-                    self.location = location
-                    if location != nil {
-                        self.loading = false
-                    }
-                }
-            }
-        }
-        
         // Request permission and start updates
-        Task {
+        Task { @MainActor in
             let authorized = await locationService.requestPermission()
             if authorized {
                 locationService.startLocationUpdates()
+                // Poll for location updates
+                Task {
+                    while !Task.isCancelled {
+                        await MainActor.run {
+                            if let newLocation = locationService.location {
+                                self.location = newLocation
+                                if self.loading {
+                                    self.loading = false
+                                }
+                            }
+                        }
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                    }
+                }
             } else {
-                await MainActor.run {
                     self.error = "Location permission not granted"
                     self.loading = false
-                }
             }
         }
     }

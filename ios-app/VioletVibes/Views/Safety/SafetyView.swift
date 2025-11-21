@@ -227,6 +227,7 @@ struct SafetyView: View {
                     .padding(.bottom, 180)
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 }

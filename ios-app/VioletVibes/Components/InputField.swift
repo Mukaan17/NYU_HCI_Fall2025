@@ -11,6 +11,7 @@ struct InputField: View {
     
     @State private var text: String = ""
     @State private var sendButtonScale: CGFloat = 1.0
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         HStack(spacing: Theme.Spacing.`2xl`) {
@@ -19,6 +20,7 @@ struct InputField: View {
                 .themeFont(size: .lg)
                 .foregroundColor(Theme.Colors.textPrimary)
                 .submitLabel(.send)
+                .focused($isFocused)
                 .onSubmit {
                     sendMessage()
                 }
@@ -72,13 +74,20 @@ struct InputField: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
-        withAnimation(.spring(response: 0.2)) {
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
             sendButtonScale = 0.9
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.2)) {
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            await MainActor.run {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                 sendButtonScale = 1.0
+                }
             }
         }
         

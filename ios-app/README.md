@@ -98,7 +98,7 @@ Create a `Config.plist` file in the project root with:
 <plist version="1.0">
 <dict>
     <key>API_URL</key>
-    <string>http://localhost:5000</string>
+    <string>http://localhost:5001</string>
     <key>OPENWEATHER_KEY</key>
     <string>YOUR_OPENWEATHER_API_KEY</string>
 </dict>

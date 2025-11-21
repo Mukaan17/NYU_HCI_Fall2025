@@ -27,7 +27,7 @@ const { width } = Dimensions.get("window");
 const NAV_BAR_OFFSET = 75;
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000";
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5001";
 
 export default function Chat() {
   const insets = useSafeAreaInsets();
@@ -313,8 +313,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing["2xl"],
     paddingBottom: spacing["2xl"],
     paddingHorizontal: spacing["2xl"],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.separator || colors.borderLight,
     position: "relative",
   },
   headerGradient: {
@@ -345,9 +345,11 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semiBold,
     color: colors.textBlue,
+    fontFamily: typography.fontFamily,
   },
   scheduleBadge: {
     flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.glassBackground,
     borderColor: colors.border,
     borderWidth: 1,
@@ -360,6 +362,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.textPrimary,
     fontWeight: typography.fontWeight.semiBold,
+    fontFamily: typography.fontFamily,
   },
   moodBadge: {
     backgroundColor: colors.whiteOverlay,
@@ -373,6 +376,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.textSecondary,
     fontWeight: typography.fontWeight.semiBold,
+    fontFamily: typography.fontFamily,
   },
 
   scrollContent: {
@@ -404,11 +408,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     color: colors.textPrimary,
     marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
   },
   timestamp: {
     fontSize: typography.fontSize.xs,
     opacity: 0.6,
     color: colors.textSecondary,
+    fontFamily: typography.fontFamily,
   },
 
   recommendationsContainer: {

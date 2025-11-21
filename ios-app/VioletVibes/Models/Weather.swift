@@ -5,12 +5,13 @@
 
 import Foundation
 
-struct Weather: Codable {
+struct Weather: Codable, Sendable {
     let temp: Int
     let emoji: String
     
     enum CodingKeys: String, CodingKey {
         case temp, emoji
+        case temp_f, desc, icon
         case main, weather
     }
     
@@ -22,16 +23,40 @@ struct Weather: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // Handle OpenWeather API response
-        if let mainDict = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .main),
+        // Handle server format: temp_f (from weather service)
+        if let tempF = try? container.decodeIfPresent(Double.self, forKey: .temp_f) {
+            temp = Int(round(tempF))
+        }
+        // Handle OpenWeather API response format: main.temp
+        else if let mainDict = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .main),
            let tempDouble = try? mainDict.decode(Double.self, forKey: .temp) {
             temp = Int(round(tempDouble))
+        }
+        // Handle direct temp field
+        else if let tempInt = try? container.decodeIfPresent(Int.self, forKey: .temp) {
+            temp = tempInt
         } else {
-            temp = try container.decode(Int.self, forKey: .temp)
+            // Default if no temperature found
+            temp = 0
         }
         
-        // Handle weather condition
-        if let weatherArray = try? container.decode([[String: String]].self, forKey: .weather),
+        // Handle server format: desc/icon (from weather service)
+        if let desc = try? container.decodeIfPresent(String.self, forKey: .desc) {
+            let descLower = desc.lowercased()
+            if descLower.contains("cloud") {
+                emoji = "☁️"
+            } else if descLower.contains("rain") {
+                emoji = "🌧️"
+            } else if descLower.contains("snow") {
+                emoji = "❄️"
+            } else if descLower.contains("storm") {
+                emoji = "⛈️"
+            } else {
+                emoji = "☀️"
+            }
+        }
+        // Handle OpenWeather API response format: weather array
+        else if let weatherArray = try? container.decode([[String: String]].self, forKey: .weather),
            let condition = weatherArray.first?["main"]?.lowercased() {
             switch condition {
             case let c where c.contains("cloud"):
@@ -45,9 +70,20 @@ struct Weather: Codable {
             default:
                 emoji = "☀️"
             }
-        } else {
-            emoji = try container.decode(String.self, forKey: .emoji)
         }
+        // Handle direct emoji field
+        else if let emojiValue = try? container.decodeIfPresent(String.self, forKey: .emoji) {
+            emoji = emojiValue
+        } else {
+            // Default emoji
+            emoji = "☀️"
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(temp, forKey: .temp)
+        try container.encode(emoji, forKey: .emoji)
     }
 }
 

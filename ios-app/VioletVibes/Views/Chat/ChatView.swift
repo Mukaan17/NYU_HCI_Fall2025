@@ -11,239 +11,239 @@ struct ChatView: View {
     @Environment(ChatViewModel.self) private var chatViewModel
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(LocationManager.self) private var locationManager
+    @Environment(WeatherManager.self) private var weatherManager
     
-    @State private var weather: Weather?
+    @FocusState private var isInputFocused: Bool
+    
+    private var backgroundGradient: some View {
+        LinearGradient(
+            colors: [
+                Theme.Colors.background,
+                Theme.Colors.backgroundSecondary,
+                Theme.Colors.background
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+    
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            headerSection
+            messagesSection
+            inputSection
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: Theme.Spacing.`2xl`) {
+            HStack(spacing: Theme.Spacing.lg) {
+                weatherBadge
+                scheduleBadge
+                moodBadge
+            }
+        }
+        .padding(.top, Theme.Spacing.`2xl`)
+        .padding(.bottom, Theme.Spacing.`2xl`)
+        .padding(.horizontal, Theme.Spacing.`2xl`)
+        .background(headerBackground)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Theme.Colors.borderLight),
+            alignment: .bottom
+        )
+    }
+    
+    private var weatherBadge: some View {
+        Group {
+            if let weather = weatherManager.weather {
+                Text("\(weather.emoji) \(weather.temp)°F")
+                    .themeFont(size: .base, weight: .semiBold)
+                    .foregroundColor(Theme.Colors.textBlue)
+                    .padding(.horizontal, Theme.Spacing.xl)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .background(Theme.Colors.accentBlue)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                            .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
+                    )
+                    .cornerRadius(Theme.BorderRadius.md)
+            } else {
+                HStack(spacing: Theme.Spacing.xs) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(Theme.Colors.textBlue)
+                    Text("Loading...")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textBlue)
+                }
+                .padding(.horizontal, Theme.Spacing.xl)
+                .padding(.vertical, Theme.Spacing.sm)
+                .background(Theme.Colors.accentBlue)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                        .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
+                )
+                .cornerRadius(Theme.BorderRadius.md)
+            }
+        }
+    }
+    
+    private var scheduleBadge: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: "clock")
+                .font(.system(size: 18))
+                .foregroundColor(Theme.Colors.textPrimary)
+            Text("Free until 6:30 PM")
+                .themeFont(size: .base, weight: .semiBold)
+                .foregroundColor(Theme.Colors.textPrimary)
+        }
+        .padding(.horizontal, Theme.Spacing.xl)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Theme.Colors.glassBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .cornerRadius(Theme.BorderRadius.md)
+    }
+    
+    private var moodBadge: some View {
+        Text("Chill ✨")
+            .themeFont(size: .base, weight: .semiBold)
+            .foregroundColor(Theme.Colors.textSecondary)
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.vertical, Theme.Spacing.sm)
+            .background(Theme.Colors.whiteOverlay)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .stroke(Theme.Colors.border, lineWidth: 1)
+            )
+            .cornerRadius(Theme.BorderRadius.md)
+    }
+    
+    private var headerBackground: some View {
+        LinearGradient(
+            colors: [
+                Theme.Colors.accentPurple,
+                Theme.Colors.accentBlue,
+                Color.clear
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .opacity(0.4)
+    }
+    
+    private var messagesSection: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: Theme.Spacing.xl) {
+                    ForEach(chatViewModel.messages) { message in
+                        messageView(for: message)
+                    }
+                    
+                    if chatViewModel.isTyping {
+                        typingIndicator
+                    }
+                }
+                .padding(.top, Theme.Spacing.`3xl`)
+                .padding(.bottom, 120)
+            }
+            .scrollIndicators(.hidden)
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded { _ in
+                        isInputFocused = false
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { _ in
+                        isInputFocused = false
+                    }
+            )
+            .onChange(of: chatViewModel.messages.count) { oldValue, newValue in
+                if newValue > oldValue, let lastMessage = chatViewModel.messages.last {
+                    withAnimation(.spring(response: 0.3)) {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func messageView(for message: ChatMessage) -> some View {
+        if message.type == .recommendations, let recommendations = message.recommendations {
+            VStack(spacing: Theme.Spacing.`2xl`) {
+                ForEach(recommendations) { recommendation in
+                    RecommendationCard(recommendation: recommendation) {
+                        let place = SelectedPlace(
+                            name: recommendation.title,
+                            latitude: recommendation.lat ?? 40.693393,
+                            longitude: recommendation.lng ?? -73.98555,
+                            walkTime: recommendation.walkTime,
+                            distance: recommendation.distance,
+                            address: recommendation.description,
+                            image: recommendation.image
+                        )
+                        placeViewModel.setSelectedPlace(place)
+                    }
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.`2xl`)
+            .padding(.top, Theme.Spacing.`2xl`)
+        } else if let content = message.content {
+            MessageBubble(message: message, content: content)
+                .padding(.horizontal, Theme.Spacing.`2xl`)
+        }
+    }
+    
+    private var typingIndicator: some View {
+        MessageBubble(
+            message: ChatMessage(
+                id: 999,
+                type: .text,
+                role: .ai,
+                content: "Violet is thinking…",
+                timestamp: Date()
+            ),
+            content: "Violet is thinking…"
+        )
+        .padding(.horizontal, Theme.Spacing.`2xl`)
+    }
+    
+    private var inputSection: some View {
+        InputField(placeholder: "Ask VioletVibes...", isFocused: $isInputFocused) { text in
+            Task {
+                await chatViewModel.sendMessage(
+                    text,
+                    latitude: locationManager.location?.coordinate.latitude,
+                    longitude: locationManager.location?.coordinate.longitude
+                )
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.`2xl`)
+        .padding(.bottom, Theme.Spacing.`2xl`)
+    }
     
     var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                colors: [
-                    Theme.Colors.background,
-                    Theme.Colors.backgroundSecondary,
-                    Theme.Colors.background
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: Theme.Spacing.`2xl`) {
-                    HStack(spacing: Theme.Spacing.lg) {
-                        // Weather Badge - Always show, with loading state
-                        if let weather = weather {
-                            Text("\(weather.emoji) \(weather.temp)°F")
-                                .themeFont(size: .base, weight: .semiBold)
-                                .foregroundColor(Theme.Colors.textBlue)
-                                .padding(.horizontal, Theme.Spacing.xl)
-                                .padding(.vertical, Theme.Spacing.sm)
-                                .background(Theme.Colors.accentBlue)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                        .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
-                                )
-                                .cornerRadius(Theme.BorderRadius.md)
-                        } else {
-                            // Show loading/placeholder while weather is being fetched
-                            HStack(spacing: Theme.Spacing.xs) {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(Theme.Colors.textBlue)
-                                Text("Loading...")
-                                    .themeFont(size: .base, weight: .semiBold)
-                                    .foregroundColor(Theme.Colors.textBlue)
-                            }
-                            .padding(.horizontal, Theme.Spacing.xl)
-                            .padding(.vertical, Theme.Spacing.sm)
-                            .background(Theme.Colors.accentBlue)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                    .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
-                            )
-                            .cornerRadius(Theme.BorderRadius.md)
-                        }
-                        
-                        // Schedule Badge
-                        HStack(spacing: Theme.Spacing.sm) {
-                            Image(systemName: "clock")
-                                .font(.system(size: 18))
-                                .foregroundColor(Theme.Colors.textPrimary)
-                            Text("Free until 6:30 PM")
-                                .themeFont(size: .base, weight: .semiBold)
-                                .foregroundColor(Theme.Colors.textPrimary)
-                        }
-                        .padding(.horizontal, Theme.Spacing.xl)
-                        .padding(.vertical, Theme.Spacing.sm)
-                        .background(Theme.Colors.glassBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                .stroke(Theme.Colors.border, lineWidth: 1)
-                        )
-                        .cornerRadius(Theme.BorderRadius.md)
-                        
-                        // Mood Badge
-                        Text("Chill ✨")
-                            .themeFont(size: .base, weight: .semiBold)
-                            .foregroundColor(Theme.Colors.textSecondary)
-                            .padding(.horizontal, Theme.Spacing.xl)
-                            .padding(.vertical, Theme.Spacing.sm)
-                            .background(Theme.Colors.whiteOverlay)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                .stroke(Theme.Colors.border, lineWidth: 1)
-                        )
-                        .cornerRadius(Theme.BorderRadius.md)
-                    }
-                }
-                .padding(.top, Theme.Spacing.`2xl`)
-                .padding(.bottom, Theme.Spacing.`2xl`)
-                .padding(.horizontal, Theme.Spacing.`2xl`)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            Theme.Colors.accentPurple,
-                            Theme.Colors.accentBlue,
-                            Color.clear
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .opacity(0.4)
-                )
-                .overlay(
-                    Rectangle()
-                        .frame(height: 1)
-                        .foregroundColor(Theme.Colors.borderLight),
-                    alignment: .bottom
-                )
-                
-                // Messages
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: Theme.Spacing.xl) {
-                            ForEach(chatViewModel.messages) { message in
-                                if message.type == .recommendations, let recommendations = message.recommendations {
-                                    VStack(spacing: Theme.Spacing.`2xl`) {
-                                        ForEach(recommendations) { recommendation in
-                                    RecommendationCard(recommendation: recommendation) {
-                                        let place = SelectedPlace(
-                                            name: recommendation.title,
-                                            latitude: recommendation.lat ?? 40.693393,
-                                            longitude: recommendation.lng ?? -73.98555,
-                                            walkTime: recommendation.walkTime,
-                                            distance: recommendation.distance,
-                                            address: recommendation.description,
-                                            image: recommendation.image
-                                        )
-                                        placeViewModel.setSelectedPlace(place)
-                                    }
-                                        }
-                                    }
-                                    .padding(.horizontal, Theme.Spacing.`2xl`)
-                                    .padding(.top, Theme.Spacing.`2xl`)
-                                } else if let content = message.content {
-                                    MessageBubble(message: message, content: content)
-                                        .padding(.horizontal, Theme.Spacing.`2xl`)
-                                }
-                            }
-                            
-                            if chatViewModel.isTyping {
-                                MessageBubble(
-                                    message: ChatMessage(
-                                        id: 999,
-                                        type: .text,
-                                        role: .ai,
-                                        content: "Violet is thinking…",
-                                        timestamp: Date()
-                                    ),
-                                    content: "Violet is thinking…"
-                                )
-                                .padding(.horizontal, Theme.Spacing.`2xl`)
-                            }
-                        }
-                        .padding(.top, Theme.Spacing.`3xl`)
-                        .padding(.bottom, 120)
-                    }
-                    .scrollIndicators(.hidden)
-                    .onChange(of: chatViewModel.messages.count) { oldValue, newValue in
-                        if newValue > oldValue, let lastMessage = chatViewModel.messages.last {
-                            withAnimation(.spring(response: 0.3)) {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                }
-                
-                // Input
-                InputField(placeholder: "Ask VioletVibes...") { text in
-                    Task {
-                        await chatViewModel.sendMessage(
-                            text,
-                            latitude: locationManager.location?.coordinate.latitude,
-                            longitude: locationManager.location?.coordinate.longitude
-                        )
-                    }
-                }
-                .padding(.horizontal, Theme.Spacing.`2xl`)
-                .padding(.bottom, 75)
-            }
+            backgroundGradient
+            mainContent
         }
             .task {
-                // Load weather - use user location or fallback to Brooklyn
-                if let location = locationManager.location {
-                    if let w = await WeatherService.shared.getWeather(
-                        lat: location.coordinate.latitude,
-                        lon: location.coordinate.longitude
-                    ) {
-                        weather = w
-                    }
-                } else {
-                    // Fallback to Brooklyn coordinates (2 MetroTech Center)
-                    if let w = await WeatherService.shared.getWeather(
-                        lat: 40.693393,
-                        lon: -73.98555
-                    ) {
-                        weather = w
-                    }
-                }
+                // Load weather on task start (app launch/restart)
+                await weatherManager.loadWeather(locationManager: locationManager)
             }
             .onChange(of: locationManager.location) { oldValue, newValue in
                 // Reload weather when location changes
-                if let location = newValue {
+                if newValue != nil {
                     Task {
-                        if let w = await WeatherService.shared.getWeather(
-                            lat: location.coordinate.latitude,
-                            lon: location.coordinate.longitude
-                        ) {
-                            weather = w
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                // Try to load weather on appear if not already loaded
-                if weather == nil {
-                    if let location = locationManager.location {
-                        Task {
-                            if let w = await WeatherService.shared.getWeather(
-                                lat: location.coordinate.latitude,
-                                lon: location.coordinate.longitude
-                            ) {
-                                weather = w
-                            }
-                        }
-                    } else {
-                        // Fallback to Brooklyn if no location
-                        Task {
-                            if let w = await WeatherService.shared.getWeather(
-                                lat: 40.693393,
-                                lon: -73.98555
-                            ) {
-                                weather = w
-                            }
-                        }
+                        await weatherManager.loadWeather(locationManager: locationManager)
                     }
                 }
             }

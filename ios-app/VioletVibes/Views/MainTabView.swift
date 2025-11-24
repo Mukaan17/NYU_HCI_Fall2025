@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Observation
 
 enum AppTab: String, CaseIterable {
     case dashboard = "dashboard"
@@ -30,14 +31,19 @@ enum AppTab: String, CaseIterable {
     }
 }
 
+@Observable
+final class TabCoordinator {
+    var selectedTab: AppTab = .dashboard
+}
+
 struct MainTabView: View {
-    @State private var selectedTab: AppTab = .dashboard
+    @State private var tabCoordinator = TabCoordinator()
     @Environment(ChatViewModel.self) private var chatViewModel
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(LocationManager.self) private var locationManager
     
     var body: some View {
-            TabView(selection: $selectedTab) {
+            TabView(selection: $tabCoordinator.selectedTab) {
                 DashboardView()
                 .tag(AppTab.dashboard)
                     .tabItem {
@@ -63,6 +69,7 @@ struct MainTabView: View {
                     }
             }
         .tint(Theme.Colors.gradientStart) // Apply accent color to active tab
+        .environment(tabCoordinator)
     }
 }
 

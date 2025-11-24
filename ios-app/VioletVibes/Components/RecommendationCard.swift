@@ -9,8 +9,6 @@ struct RecommendationCard: View {
     let recommendation: Recommendation
     let onPress: (() -> Void)?
     
-    @State private var isPressed = false
-    
     init(recommendation: Recommendation, onPress: (() -> Void)? = nil) {
         self.recommendation = recommendation
         self.onPress = onPress
@@ -105,23 +103,17 @@ struct RecommendationCard: View {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                     .stroke(Theme.Colors.border, lineWidth: 1)
             )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .opacity(isPressed ? 0.9 : 1.0)
         }
-        .buttonStyle(PlainButtonStyle())
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.spring(response: 0.2)) {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.2)) {
-                        isPressed = false
-                    }
-                }
-        )
+        .buttonStyle(CardButtonStyle())
     }
 }
 
+// Custom button style that provides visual feedback without interfering with scrolling
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}

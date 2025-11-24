@@ -9,28 +9,9 @@ import Observation
 
 @Observable
 final class DashboardViewModel {
-    var weather: Weather?
     var recommendations: [Recommendation] = []
     
-    private let weatherService = WeatherService.shared
     private let apiService = APIService.shared
-    
-    func loadWeather(latitude: Double, longitude: Double) async {
-        print("🌤️ Loading weather for location: \(latitude), \(longitude)")
-        do {
-            if let weather = await weatherService.getWeather(lat: latitude, lon: longitude) {
-                await MainActor.run {
-                    self.weather = weather
-                    print("✅ Weather loaded successfully: \(weather.temp)°F \(weather.emoji)")
-                }
-            } else {
-                print("⚠️ Weather service returned nil - check API key and network connection")
-            }
-        } catch {
-            print("❌ Weather loading error: \(error.localizedDescription)")
-        }
-    }
-    
     
     // Sample recommendations for dashboard
     func loadSampleRecommendations() {

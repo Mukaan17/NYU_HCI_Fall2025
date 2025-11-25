@@ -7,6 +7,7 @@ import SwiftUI
 import CoreLocation
 import EventKit
 import UserNotifications
+import UIKit
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -266,6 +267,7 @@ struct AccountSettingsView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Account Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -279,6 +281,11 @@ struct AccountSettingsView: View {
             .task {
                 await checkPermissions()
                 await loadHomeAddress()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // Dismiss keyboard when tapping outside text fields
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
         }
     }

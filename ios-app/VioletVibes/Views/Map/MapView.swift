@@ -15,6 +15,10 @@ struct MapView: View {
     @State private var isGeocoding = false
     @State private var lastProcessedLocation: CLLocation? = nil
     @State private var currentDeviceLocation: CLLocation? = nil
+    @State private var locationPollingTask: Task<Void, Never>? = nil
+    @State private var geocodingTask: Task<Void, Never>? = nil
+    @State private var lastGeocodeTime: Date? = nil
+    private let geocodeThrottle: TimeInterval = 5.0 // Only geocode every 5 seconds
     
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
@@ -25,10 +29,11 @@ struct MapView: View {
             // Map using modern iOS 17+ API
             Map(position: $viewModel.cameraPosition) {
                 // User location - dynamic blip (uses latest location from either source)
+                // Use stable ID to prevent unnecessary annotation recreation
                 if let location = currentDeviceLocation ?? LocationService.shared.location ?? locationManager.location {
                     Annotation("My Location", coordinate: location.coordinate) {
                         LocationBlipView()
-                            .id("\(location.coordinate.latitude)_\(location.coordinate.longitude)_\(location.timestamp.timeIntervalSince1970)")
+                            .id("user_location") // Stable ID to prevent recreation
                     }
                 }
                 
@@ -305,17 +310,24 @@ struct MapView: View {
                 viewModel.clearRoute()
                 // Geocode current location when place is deselected
                 if let location = locationManager.location {
-                    Task {
+                    geocodingTask?.cancel()
+                    geocodingTask = Task {
                         await geocodeLocation(location)
                     }
                 }
             }
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Update current device location state for blip
-            if let newLocation = newValue {
-                currentDeviceLocation = newLocation
+            // Only update if location changed significantly (50m threshold)
+            guard let newLocation = newValue else { return }
+            
+            if let oldLocation = oldValue {
+                let distance = newLocation.distance(from: oldLocation)
+                guard distance > 50 else { return } // Only update if moved 50+ meters
             }
+            
+            // Update current device location state for blip
+            currentDeviceLocation = newLocation
             handleLocationUpdate(oldLocation: oldValue, newLocation: newValue)
         }
         .onAppear {
@@ -327,8 +339,9 @@ struct MapView: View {
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude
                 )
-                // Geocode initial location
-                Task {
+                // Geocode initial location (only once)
+                geocodingTask?.cancel()
+                geocodingTask = Task {
                     await geocodeLocation(location)
                 }
                 lastProcessedLocation = location
@@ -336,23 +349,25 @@ struct MapView: View {
                 viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng)
             }
             
-            // Start periodic check for LocationService updates (more immediate than LocationManager)
-            Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            // Start periodic check for LocationService updates
+            // Use longer interval to reduce battery and memory usage
+            // Note: This is mainly for initial location, as onChange handlers will catch updates
+            locationPollingTask = Task {
+                // Only run a few times, then rely on onChange handlers
+                var iterations = 0
+                let maxIterations = 3 // Only check 3 times (30 seconds total)
+                
+                while !Task.isCancelled && iterations < maxIterations {
+                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
                     
                     let latestLocation = LocationService.shared.location ?? locationManager.location
                     if let location = latestLocation {
-                        // Update current device location state for blip
-                        await MainActor.run {
-                            currentDeviceLocation = location
-                        }
-                        
-                        // Only process if location changed significantly or is new
+                        // Only update if we don't have a location yet or it changed significantly
                         if let lastLocation = lastProcessedLocation {
                             let distance = location.distance(from: lastLocation)
-                            if distance > 20 {
+                            if distance > 100 { // Only update if moved 100+ meters
                                 await MainActor.run {
+                                    currentDeviceLocation = location
                                     handleLocationUpdate(oldLocation: lastProcessedLocation, newLocation: location)
                                     lastProcessedLocation = location
                                 }
@@ -360,11 +375,13 @@ struct MapView: View {
                         } else {
                             // First location
                             await MainActor.run {
+                                currentDeviceLocation = location
                                 handleLocationUpdate(oldLocation: nil, newLocation: location)
                                 lastProcessedLocation = location
                             }
                         }
                     }
+                    iterations += 1
                 }
             }
         }
@@ -374,15 +391,33 @@ struct MapView: View {
                 await geocodeLocation(location)
             }
         }
+        .onDisappear {
+            // Cancel all tasks to prevent memory leaks
+            locationPollingTask?.cancel()
+            locationPollingTask = nil
+            geocodingTask?.cancel()
+            geocodingTask = nil
+        }
     }
     
     // Handle location updates for automatic map centering
     private func handleLocationUpdate(oldLocation: CLLocation?, newLocation: CLLocation?) {
         guard let newLocation = newLocation else { return }
         
-        // Always geocode the new location for the badge (if no place is selected)
-        if placeViewModel.selectedPlace == nil {
-            Task {
+        // Throttle geocoding to reduce API calls and memory usage
+        let shouldGeocode: Bool
+        if let lastGeocode = lastGeocodeTime {
+            shouldGeocode = Date().timeIntervalSince(lastGeocode) >= geocodeThrottle
+        } else {
+            shouldGeocode = true
+        }
+        
+        // Geocode the new location for the badge (if no place is selected and throttled)
+        if placeViewModel.selectedPlace == nil && shouldGeocode {
+            lastGeocodeTime = Date()
+            // Cancel any existing geocoding task
+            geocodingTask?.cancel()
+            geocodingTask = Task {
                 await geocodeLocation(newLocation)
             }
         }
@@ -392,15 +427,14 @@ struct MapView: View {
         guard placeViewModel.selectedPlace == nil else { return }
         
         // Update map automatically when location changes
-        // Use a smaller threshold (20 meters) for more responsive updates
-        // or update immediately if this is the first location
+        // Use a larger threshold (100 meters) to reduce map updates and improve performance
         if let oldLocation = oldLocation {
             let distance = newLocation.distance(from: oldLocation)
-            // Update if moved more than 20m (more responsive than 50m)
-            guard distance > 20 else { return }
+            // Update if moved more than 100m to reduce unnecessary map updates
+            guard distance > 100 else { return }
         }
         
-        // Update map region to follow user location
+        // Update map region to follow user location (throttled by MapViewModel)
         viewModel.updateRegion(
             latitude: newLocation.coordinate.latitude,
             longitude: newLocation.coordinate.longitude,
@@ -410,12 +444,24 @@ struct MapView: View {
     
     // Reverse geocode location to get address
     private func geocodeLocation(_ location: CLLocation) async {
+        // Check if task was cancelled before starting
+        guard !Task.isCancelled else { return }
+        
         await MainActor.run {
             isGeocoding = true
         }
         
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            
+            // Check again after async operation
+            guard !Task.isCancelled else {
+                await MainActor.run {
+                    isGeocoding = false
+                }
+                return
+            }
+            
             await MainActor.run {
                 if let placemark = placemarks.first {
                     // Build address string from placemark
@@ -444,8 +490,14 @@ struct MapView: View {
                 isGeocoding = false
             }
         } catch {
+            // Don't update UI if task was cancelled
+            guard !Task.isCancelled else { return }
+            
             await MainActor.run {
-                print("Geocoding error: \(error.localizedDescription)")
+                // Only log non-cancellation errors
+                if !(error is CancellationError) {
+                    print("Geocoding error: \(error.localizedDescription)")
+                }
                 currentLocationAddress = "Current Location"
                 isGeocoding = false
             }

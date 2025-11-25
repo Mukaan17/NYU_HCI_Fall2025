@@ -137,7 +137,7 @@ final class LocationManager {
                         }
                     }
                     
-                    // Poll for location updates
+                    // Poll for location updates (reduced frequency to save battery)
                     while !Task.isCancelled && attempts < maxAttempts {
                         if let newLocation = self.locationService.location {
                             // Always update if we don't have a location yet
@@ -149,10 +149,10 @@ final class LocationManager {
                                 timeoutTask.cancel()
                                 return
                             } else {
-                                // Only update if location changed significantly
+                                // Only update if location changed significantly (increased threshold)
                                 let currentLocation = self.location!
                                 let distance = newLocation.distance(from: currentLocation)
-                                if distance > 10 {
+                                if distance > 50 { // Increased from 10m to 50m to reduce updates
                                     print("📍 LocationManager: Location updated (moved \(Int(distance))m)")
                                     self.location = newLocation
                                 }
@@ -170,8 +170,8 @@ final class LocationManager {
                             return
                         }
                         
-                        // Poll interval
-                        try? await Task.sleep(nanoseconds: pollInterval)
+                        // Poll interval (increased to reduce CPU usage)
+                        try? await Task.sleep(nanoseconds: pollInterval * 2) // Doubled from 0.5s to 1s
                     }
                     
                     // If we exit the loop, cancel timeout task

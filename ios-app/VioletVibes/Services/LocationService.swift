@@ -28,8 +28,9 @@ final class LocationService: NSObject {
     
     private func setupLocationManager() {
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.pausesLocationUpdatesAutomatically = false // Don't pause when app is backgrounded
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters // Reduced from Best to save battery
+        locationManager.pausesLocationUpdatesAutomatically = true // Allow pausing to save battery
+        locationManager.distanceFilter = 50 // Only update if moved 50+ meters
         authorizationStatus = locationManager.authorizationStatus
     }
     
@@ -135,9 +136,9 @@ final class LocationService: NSObject {
         print("📍 LocationService: Requesting location...")
         locationManager.requestLocation()
         
-        // Start continuous updates
+        // Start continuous updates with distance filter (already set in setupLocationManager)
         locationManager.startUpdatingLocation()
-        print("📍 LocationService: Location updates started")
+        print("📍 LocationService: Location updates started (distance filter: 50m, accuracy: 100m)")
     }
     
     // Force a fresh location request (useful when app restarts)

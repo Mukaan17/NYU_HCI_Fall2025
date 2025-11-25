@@ -153,13 +153,8 @@ struct ChatView: View {
                 .padding(.bottom, 120)
             }
             .scrollIndicators(.hidden)
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded { _ in
-                        isInputFocused = false
-                    }
-            )
-            .simultaneousGesture(
+            .scrollDismissesKeyboard(.interactively)
+            .gesture(
                 DragGesture(minimumDistance: 10)
                     .onChanged { _ in
                         isInputFocused = false
@@ -233,6 +228,11 @@ struct ChatView: View {
     var body: some View {
         ZStack {
             backgroundGradient
+                .onTapGesture {
+                    // Dismiss keyboard when tapping background
+                    isInputFocused = false
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             mainContent
         }
             .task {

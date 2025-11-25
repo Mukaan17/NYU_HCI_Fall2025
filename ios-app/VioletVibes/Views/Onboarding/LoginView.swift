@@ -206,6 +206,12 @@ struct LoginView: View {
                 .padding(.horizontal, Theme.Spacing.`2xl`)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Dismiss keyboard when tapping outside text fields
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .alert("Login Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }

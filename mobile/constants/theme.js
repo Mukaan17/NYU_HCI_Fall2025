@@ -1,48 +1,54 @@
+<<<<<<< HEAD:mobile/constants/theme.ts
 // =======================
 // COLORS
 // =======================
 import { PlatformColor } from 'react-native';
 
+=======
+>>>>>>> main:mobile/constants/theme.js
 export const colors = {
+  // Background colors
   background: '#0b132b',
   backgroundSecondary: '#0d1630',
   backgroundCard: '#1c2541',
   backgroundCardDark: '#151e38',
   backgroundOverlay: 'rgba(11,19,43,0.95)',
-
-  // REQUIRED ALIAS (fixes permissions.tsx error)
-  backgroundPrimary: '#0b132b',
-
+  
+  // Gradient colors
   gradientStart: '#6c63ff',
   gradientEnd: '#8b7fff',
   gradientBlueStart: '#38c4fc',
   gradientBlueEnd: '#76caf5',
-
+  
+  // Text colors
   textPrimary: '#ffffff',
   textSecondary: '#a9b4d1',
   textAccent: '#cbb8ff',
   textBlue: '#68d4ff',
   textError: '#ff3b30',
-
+  
+  // UI colors
   border: 'rgba(255,255,255,0.1)',
   borderLight: 'rgba(255,255,255,0.05)',
   borderMedium: 'rgba(255,255,255,0.2)',
-
+  
+  // Accent colors
   accentPurple: 'rgba(108,99,255,0.1)',
   accentPurpleMedium: 'rgba(108,99,255,0.2)',
   accentBlue: 'rgba(104,212,255,0.1)',
   accentBlueMedium: 'rgba(104,212,255,0.2)',
   accentPurpleText: 'rgba(203,184,255,0.1)',
-
   accentError: 'rgba(255,59,48,0.1)',
   accentErrorMedium: 'rgba(255,59,48,0.2)',
   accentErrorBorder: 'rgba(255,59,48,0.5)',
-
+  
+  // Glass effect
   glassBackground: 'rgba(28,37,65,0.6)',
   glassBackgroundLight: 'rgba(28,37,65,0.8)',
   glassBackgroundDark: 'rgba(21,30,56,0.6)',
   glassBackgroundDarkLight: 'rgba(21,30,56,0.8)',
-
+  
+  // White overlays
   whiteOverlay: 'rgba(255,255,255,0.05)',
   whiteOverlayLight: 'rgba(255,255,255,0.1)',
   whiteOverlayMedium: 'rgba(255,255,255,0.2)',
@@ -66,19 +72,22 @@ export const colors = {
   tertiarySystemBackground: Platform.OS === 'ios' ? PlatformColor('tertiarySystemBackground') : '#FFFFFF',
 };
 
+<<<<<<< HEAD:mobile/constants/theme.ts
 // =======================
 // TYPOGRAPHY
 // =======================
 import type { TextStyle } from 'react-native';
 import { Platform } from 'react-native';
 
+=======
+>>>>>>> main:mobile/constants/theme.js
 export const typography = {
   fontWeight: {
-  regular: "400" as TextStyle["fontWeight"],
-  medium: "500" as TextStyle["fontWeight"],
-  semiBold: "600" as TextStyle["fontWeight"],
-  bold: "700" as TextStyle["fontWeight"],
-},
+    regular: '400',
+    medium: '500',
+    semiBold: '600',
+    bold: '700',
+  },
   fontSize: {
     xs: 12,
     sm: 13,
@@ -89,7 +98,6 @@ export const typography = {
     '2xl': 20,
     '3xl': 32,
   },
-
   lineHeight: {
     tight: 18,
     normal: 19.5,
@@ -99,6 +107,7 @@ export const typography = {
     '2xl': 26,
     '3xl': 38.4,
   },
+<<<<<<< HEAD:mobile/constants/theme.ts
 
   // REQUIRED FIXES
   heading: 32,
@@ -110,11 +119,10 @@ export const typography = {
     android: 'Roboto',
     default: 'System',
   }),
+=======
+>>>>>>> main:mobile/constants/theme.js
 };
 
-// =======================
-// SPACING
-// =======================
 export const spacing = {
   xs: 4,
   sm: 6,
@@ -128,21 +136,16 @@ export const spacing = {
   '6xl': 48,
 };
 
-// =======================
-// BORDERS
-// =======================
 export const borderRadius = {
   sm: 6.8,
   md: 16,
   lg: 24,
   xl: 48,
-  full: 1000,
+  full: 1000, // Pill shape
 };
 
-// =======================
-// SHADOWS
-// =======================
 export const shadows = {
+  // Primary button shadow
   primary: {
     shadowColor: '#6c63ff',
     shadowOffset: { width: 0, height: 10 },
@@ -150,6 +153,7 @@ export const shadows = {
     shadowRadius: 15,
     elevation: 10,
   },
+  // Card shadow
   card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -157,6 +161,7 @@ export const shadows = {
     shadowRadius: 12,
     elevation: 8,
   },
+  // Message bubble shadow
   message: {
     shadowColor: '#6c63ff',
     shadowOffset: { width: 0, height: 4 },
@@ -166,9 +171,6 @@ export const shadows = {
   },
 };
 
-// =======================
-// BLUR
-// =======================
 export const blur = {
   light: 20,
   medium: 80,

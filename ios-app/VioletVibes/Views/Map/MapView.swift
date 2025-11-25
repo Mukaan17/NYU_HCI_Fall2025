@@ -28,9 +28,9 @@ struct MapView: View {
         ZStack {
             // Map using modern iOS 17+ API
             Map(position: $viewModel.cameraPosition) {
-                // User location - dynamic blip (uses latest location from either source)
+                // User location - dynamic blip (uses cached location to avoid repeated checks)
                 // Use stable ID to prevent unnecessary annotation recreation
-                if let location = currentDeviceLocation ?? LocationService.shared.location ?? locationManager.location {
+                if let location = currentDeviceLocation {
                     Annotation("My Location", coordinate: location.coordinate) {
                         LocationBlipView()
                             .id("user_location") // Stable ID to prevent recreation
@@ -117,47 +117,42 @@ struct MapView: View {
             }
             .padding(.top, Theme.Spacing.`2xl`)
             
-            // Bottom Sheet
+            // Bottom Sheet - Optimized with cached calculations and safety checks
             GeometryReader { geometry in
-                let safeAreaBottom = geometry.safeAreaInsets.bottom
-                let tabBarContentHeight: CGFloat = 49 // Standard iOS tab bar content height
-                let tabBarHeight = safeAreaBottom + tabBarContentHeight
+                // Safety check: ensure geometry has valid size before rendering
+                let geometryWidth = geometry.size.width
+                let geometryHeight = geometry.size.height
                 
-                // Card bottom padding
-                let cardBottomPadding = Theme.Spacing.`2xl` // 16 points
-                
-                // Estimate card height based on content
-                // Card padding (top + bottom): 2xl * 2 = 32 points
-                // Text content: ~60-80 points
-                // Image (if present): 160 points + spacing
-                // Spacing between elements: ~20 points
-                let hasImage = placeViewModel.selectedPlace?.image != nil
-                let cardContentHeight: CGFloat = hasImage ? 272 : 112 // Image adds ~160 points
-                let cardPadding = Theme.Spacing.`2xl` * 2 // Top and bottom padding
-                let estimatedCardHeight = cardContentHeight + cardPadding
-                
-                // Calculate gradient height: from bottom to card top
-                // Gradient should extend from bottom (tab bar start) to card top edge
-                let gradientHeight = tabBarHeight + cardBottomPadding + estimatedCardHeight
-                
-                return ZStack(alignment: .bottom) {
-                    // Gradient that starts from absolute bottom and ends at card top
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Theme.Colors.backgroundOverlay,
-                            Theme.Colors.background
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: gradientHeight)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .ignoresSafeArea(edges: .bottom)
-                    .allowsHitTesting(false)
+                // Only render if geometry is valid (prevents Metal rendering errors)
+                if geometryWidth > 0 && geometryHeight > 0 {
+                    let safeAreaBottom = geometry.safeAreaInsets.bottom
+                    let tabBarContentHeight: CGFloat = 49
+                    let tabBarHeight = safeAreaBottom + tabBarContentHeight
+                    let cardBottomPadding = Theme.Spacing.`2xl`
+                    let hasImage = placeViewModel.selectedPlace?.image != nil
+                    let cardContentHeight: CGFloat = hasImage ? 272 : 112
+                    let cardPadding = Theme.Spacing.`2xl` * 2
+                    let estimatedCardHeight = cardContentHeight + cardPadding
+                    let gradientHeight = max(tabBarHeight + cardBottomPadding + estimatedCardHeight, 200) // Ensure minimum height
                     
-                    // Card positioned at bottom
-                    VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                    ZStack(alignment: .bottom) {
+                        // Gradient that starts from absolute bottom and ends at card top
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                Theme.Colors.backgroundOverlay,
+                                Theme.Colors.background
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: max(gradientHeight, 200)) // Ensure minimum valid height
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .ignoresSafeArea(edges: .bottom)
+                        .allowsHitTesting(false)
+                        
+                        // Card positioned at bottom
+                        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                         if let place = placeViewModel.selectedPlace {
                             if let imageURL = place.image {
                                 AsyncImage(url: URL(string: imageURL)) { phase in
@@ -219,8 +214,12 @@ struct MapView: View {
                         RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                             .stroke(Theme.Colors.border, lineWidth: 1)
                     )
-                    .padding(.horizontal, Theme.Spacing.`2xl`)
-                    .padding(.bottom, Theme.Spacing.`2xl`)
+                        .padding(.horizontal, Theme.Spacing.`2xl`)
+                        .padding(.bottom, Theme.Spacing.`2xl`)
+                    }
+                } else {
+                    // Return empty view if geometry is invalid
+                    EmptyView()
                 }
             }
             
@@ -234,8 +233,8 @@ struct MapView: View {
                         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                         impactFeedback.impactOccurred()
                         
-                        // Get the latest location - try LocationService first, then LocationManager
-                        let latestLocation = LocationService.shared.location ?? locationManager.location
+                        // Get the latest location - use cached location first
+                        let latestLocation = currentDeviceLocation ?? LocationService.shared.location ?? locationManager.location
                         
                         if let location = latestLocation {
                             // Always center to the latest location, even if coordinates are similar
@@ -318,77 +317,97 @@ struct MapView: View {
             }
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Only update if location changed significantly (50m threshold)
+            // Only update if location changed significantly (100m threshold for better performance)
             guard let newLocation = newValue else { return }
             
+            // Update cached location immediately for annotation
+            currentDeviceLocation = newLocation
+            
+            // Throttle map updates - only update if moved significantly
             if let oldLocation = oldValue {
                 let distance = newLocation.distance(from: oldLocation)
-                guard distance > 50 else { return } // Only update if moved 50+ meters
+                guard distance > 100 else { return } // Increased from 50m to 100m to reduce updates
             }
             
-            // Update current device location state for blip
-            currentDeviceLocation = newLocation
+            // Defer heavy operations
             handleLocationUpdate(oldLocation: oldValue, newLocation: newValue)
         }
         .onAppear {
-            // Check both LocationService and LocationManager for initial location
-            let initialLocation = LocationService.shared.location ?? locationManager.location
-            if let location = initialLocation {
-                currentDeviceLocation = location
-                viewModel.updateRegion(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude
-                )
-                // Geocode initial location (only once)
-                geocodingTask?.cancel()
-                geocodingTask = Task {
-                    await geocodeLocation(location)
-                }
-                lastProcessedLocation = location
-            } else {
-                viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng)
-            }
+            // Optimize initial load - set default region immediately, defer location updates
+            viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng, animated: false)
             
-            // Start periodic check for LocationService updates
-            // Use longer interval to reduce battery and memory usage
-            // Note: This is mainly for initial location, as onChange handlers will catch updates
-            locationPollingTask = Task {
-                // Only run a few times, then rely on onChange handlers
-                var iterations = 0
-                let maxIterations = 3 // Only check 3 times (30 seconds total)
+            // Defer all heavy operations to improve initial render performance
+            Task { @MainActor in
+                // Allow map to render first before doing location work
+                try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
                 
-                while !Task.isCancelled && iterations < maxIterations {
-                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                // Check both LocationService and LocationManager for initial location
+                let initialLocation = LocationService.shared.location ?? locationManager.location
+                if let location = initialLocation {
+                    currentDeviceLocation = location
+                    viewModel.updateRegion(
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude,
+                        animated: true // Animate after initial render
+                    )
+                    lastProcessedLocation = location
                     
-                    let latestLocation = LocationService.shared.location ?? locationManager.location
-                    if let location = latestLocation {
-                        // Only update if we don't have a location yet or it changed significantly
-                        if let lastLocation = lastProcessedLocation {
-                            let distance = location.distance(from: lastLocation)
-                            if distance > 100 { // Only update if moved 100+ meters
-                                await MainActor.run {
-                                    currentDeviceLocation = location
-                                    handleLocationUpdate(oldLocation: lastProcessedLocation, newLocation: location)
-                                    lastProcessedLocation = location
+                    // Defer geocoding significantly to prioritize map rendering
+                    geocodingTask?.cancel()
+                    geocodingTask = Task {
+                        // Wait longer before geocoding to ensure map is fully rendered
+                        try? await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
+                        await geocodeLocation(location)
+                    }
+                }
+                
+                // Start periodic check for LocationService updates (only if no location yet)
+                // Use longer interval to reduce battery and memory usage
+                if currentDeviceLocation == nil {
+                    locationPollingTask = Task {
+                        // Only run a few times, then rely on onChange handlers
+                        var iterations = 0
+                        let maxIterations = 2 // Reduced from 3 to 2 (20 seconds total)
+                        
+                        while !Task.isCancelled && iterations < maxIterations {
+                            try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                            
+                            let latestLocation = LocationService.shared.location ?? locationManager.location
+                            if let location = latestLocation {
+                                // Only update if we don't have a location yet or it changed significantly
+                                if let lastLocation = lastProcessedLocation {
+                                    let distance = location.distance(from: lastLocation)
+                                    if distance > 100 { // Only update if moved 100+ meters
+                                        await MainActor.run {
+                                            currentDeviceLocation = location
+                                            handleLocationUpdate(oldLocation: lastProcessedLocation, newLocation: location)
+                                            lastProcessedLocation = location
+                                        }
+                                    }
+                                } else {
+                                    // First location
+                                    await MainActor.run {
+                                        currentDeviceLocation = location
+                                        handleLocationUpdate(oldLocation: nil, newLocation: location)
+                                        lastProcessedLocation = location
+                                    }
                                 }
                             }
-                        } else {
-                            // First location
-                            await MainActor.run {
-                                currentDeviceLocation = location
-                                handleLocationUpdate(oldLocation: nil, newLocation: location)
-                                lastProcessedLocation = location
-                            }
+                            iterations += 1
                         }
                     }
-                    iterations += 1
                 }
             }
         }
         .task {
-            // Geocode location on task start if available
-            if placeViewModel.selectedPlace == nil, let location = locationManager.location {
-                await geocodeLocation(location)
+            // Defer geocoding to improve initial load - only if no location yet
+            if placeViewModel.selectedPlace == nil {
+                // Wait longer for map to fully render first
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                
+                if let location = locationManager.location ?? LocationService.shared.location {
+                    await geocodeLocation(location)
+                }
             }
         }
         .onDisappear {

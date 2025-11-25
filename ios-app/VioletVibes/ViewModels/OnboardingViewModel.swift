@@ -12,6 +12,7 @@ final class OnboardingViewModel {
     var hasSeenWelcome: Bool = false
     var hasCompletedPermissions: Bool = false
     var hasLoggedIn: Bool = false
+    var hasCompletedOnboardingSurvey: Bool = false
     
     private let storage = StorageService.shared
     
@@ -19,6 +20,7 @@ final class OnboardingViewModel {
         hasSeenWelcome = await storage.hasSeenWelcome
         hasCompletedPermissions = await storage.hasCompletedPermissions
         hasLoggedIn = await storage.hasLoggedIn
+        hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
     }
     
     func markWelcomeSeen() {
@@ -42,12 +44,20 @@ final class OnboardingViewModel {
         }
     }
     
+    func markOnboardingSurveyCompleted() {
+        Task { @MainActor in
+            await storage.setHasCompletedOnboardingSurvey(true)
+            hasCompletedOnboardingSurvey = true
+        }
+    }
+    
     func resetOnboarding() {
         Task { @MainActor in
             await storage.resetOnboarding()
             hasSeenWelcome = false
             hasCompletedPermissions = false
             hasLoggedIn = false
+            hasCompletedOnboardingSurvey = false
         }
     }
 }

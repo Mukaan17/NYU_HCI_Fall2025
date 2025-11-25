@@ -25,8 +25,11 @@ actor StorageService {
         static let hasSeenWelcome = "hasSeenWelcome"
         static let hasCompletedPermissions = "hasCompletedPermissions"
         static let hasLoggedIn = "hasLoggedIn"
+        static let hasCompletedOnboardingSurvey = "hasCompletedOnboardingSurvey"
         static let homeAddress = "homeAddress"
         static let trustedContacts = "trustedContacts"
+        static let userAccount = "userAccount"
+        static let userPreferences = "userPreferences"
     }
     
     nonisolated private init() {}
@@ -58,11 +61,23 @@ actor StorageService {
         userDefaults.set(value, forKey: Keys.hasLoggedIn)
     }
     
+    // MARK: - Onboarding Survey
+    var hasCompletedOnboardingSurvey: Bool {
+        get { userDefaults.bool(forKey: Keys.hasCompletedOnboardingSurvey) }
+    }
+    
+    func setHasCompletedOnboardingSurvey(_ value: Bool) {
+        userDefaults.set(value, forKey: Keys.hasCompletedOnboardingSurvey)
+    }
+    
     // MARK: - Reset Onboarding
     func resetOnboarding() {
         userDefaults.removeObject(forKey: Keys.hasSeenWelcome)
         userDefaults.removeObject(forKey: Keys.hasCompletedPermissions)
         userDefaults.removeObject(forKey: Keys.hasLoggedIn)
+        userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
+        userDefaults.removeObject(forKey: Keys.userAccount)
+        userDefaults.removeObject(forKey: Keys.userPreferences)
     }
     
     // MARK: - Home Address
@@ -145,6 +160,44 @@ actor StorageService {
         var contacts = trustedContacts
         contacts.removeAll { $0.id == id }
         setTrustedContacts(contacts)
+    }
+    
+    // MARK: - User Account
+    var userAccount: UserAccount? {
+        get {
+            guard let data = userDefaults.data(forKey: Keys.userAccount),
+                  let account = try? JSONDecoder().decode(UserAccount.self, from: data) else {
+                return nil
+            }
+            return account
+        }
+    }
+    
+    func saveUserAccount(_ account: UserAccount) {
+        if let data = try? JSONEncoder().encode(account) {
+            userDefaults.set(data, forKey: Keys.userAccount)
+        } else {
+            userDefaults.removeObject(forKey: Keys.userAccount)
+        }
+    }
+    
+    // MARK: - User Preferences
+    var userPreferences: UserPreferences {
+        get {
+            guard let data = userDefaults.data(forKey: Keys.userPreferences),
+                  let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) else {
+                return UserPreferences()
+            }
+            return preferences
+        }
+    }
+    
+    func saveUserPreferences(_ preferences: UserPreferences) {
+        if let data = try? JSONEncoder().encode(preferences) {
+            userDefaults.set(data, forKey: Keys.userPreferences)
+        } else {
+            userDefaults.removeObject(forKey: Keys.userPreferences)
+        }
     }
 }
 

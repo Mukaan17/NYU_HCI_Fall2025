@@ -19,6 +19,8 @@ struct AccountSettingsView: View {
     @State private var homeAddress: String = ""
     @State private var isCheckingPermissions = false
     @State private var trustedContactsCount: Int = 0
+    @State private var usePreferencesForPersonalization: Bool = true
+    @State private var showChangePassword = false
     
     private let locationService = LocationService.shared
     private let calendarService = CalendarService.shared
@@ -60,6 +62,17 @@ struct AccountSettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: Theme.Spacing.`4xl`) {
+                        // Account Settings Section
+                        AccountSettingsSectionView()
+                            .padding(.horizontal, Theme.Spacing.`2xl`)
+                            .padding(.top, Theme.Spacing.`3xl`)
+                        
+                        // Preferences Section
+                        NavigationLink(destination: PreferencesView()) {
+                            PreferencesSectionCardView()
+                        }
+                        .padding(.horizontal, Theme.Spacing.`2xl`)
+                        
                         // Permissions Section
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
                             Text("Permissions")
@@ -84,18 +97,22 @@ struct AccountSettingsView: View {
                                 }
                             )
                             
-                            // Calendar Permission
+                            // Google Calendar Permission
                             PermissionToggleRow(
                                 icon: "📅",
-                                title: "Calendar",
-                                description: "Find suggestions for your downtime",
+                                title: "Google Calendar",
+                                description: "Allow VioletVibes to read your free time from Google Calendar to recommend events when you're available?",
                                 isEnabled: $calendarPermission,
                                 onToggle: { enabled in
                                     if enabled {
                                         Task {
                                             await requestCalendarPermission()
+                                            await saveCalendarPreference(enabled)
                                         }
                                     } else {
+                                        Task {
+                                            await saveCalendarPreference(false)
+                                        }
                                         showSettingsAlert(for: "Calendar")
                                     }
                                 }
@@ -105,15 +122,32 @@ struct AccountSettingsView: View {
                             PermissionToggleRow(
                                 icon: "🔔",
                                 title: "Notifications",
-                                description: "Real-time alerts on events and deals",
+                                description: "Enable notifications for personalized recommendations?",
                                 isEnabled: $notificationPermission,
                                 onToggle: { enabled in
                                     if enabled {
                                         Task {
                                             await requestNotificationPermission()
+                                            await saveNotificationPreference(enabled)
                                         }
                                     } else {
+                                        Task {
+                                            await saveNotificationPreference(false)
+                                        }
                                         showSettingsAlert(for: "Notifications")
+                                    }
+                                }
+                            )
+                            
+                            // Use Preferences Toggle
+                            PermissionToggleRow(
+                                icon: "🎯",
+                                title: "Use Preferences",
+                                description: "Use preferences to personalize results",
+                                isEnabled: $usePreferencesForPersonalization,
+                                onToggle: { enabled in
+                                    Task {
+                                        await saveUsePreferencesPreference(enabled)
                                     }
                                 }
                             )
@@ -226,16 +260,7 @@ struct AccountSettingsView: View {
                                 .themeFont(size: .sm)
                                 .foregroundColor(Theme.Colors.textSecondary)
                             
-                            TextField("Enter your home address", text: $homeAddress)
-                                .themeFont(size: .base)
-                                .foregroundColor(Theme.Colors.textPrimary)
-                                .padding(Theme.Spacing.`2xl`)
-                                .background(Theme.Colors.whiteOverlay)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                        .stroke(Theme.Colors.border, lineWidth: 1)
-                                )
-                                .cornerRadius(Theme.BorderRadius.md)
+                            LocationPickerView(address: $homeAddress)
                             
                             Button(action: {
                                 saveHomeAddress()
@@ -281,6 +306,10 @@ struct AccountSettingsView: View {
             .task {
                 await checkPermissions()
                 await loadHomeAddress()
+                await loadPreferences()
+            }
+            .sheet(isPresented: $showChangePassword) {
+                ChangePasswordView()
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -366,6 +395,224 @@ struct AccountSettingsView: View {
         Task {
             await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
         }
+    }
+    
+    private func loadPreferences() async {
+        let preferences = await storage.userPreferences
+        await MainActor.run {
+            usePreferencesForPersonalization = preferences.usePreferencesForPersonalization
+        }
+    }
+    
+    private func saveCalendarPreference(_ enabled: Bool) async {
+        var preferences = await storage.userPreferences
+        preferences.googleCalendarEnabled = enabled
+        await storage.saveUserPreferences(preferences)
+    }
+    
+    private func saveNotificationPreference(_ enabled: Bool) async {
+        var preferences = await storage.userPreferences
+        preferences.notificationsEnabled = enabled
+        await storage.saveUserPreferences(preferences)
+    }
+    
+    private func saveUsePreferencesPreference(_ enabled: Bool) async {
+        var preferences = await storage.userPreferences
+        preferences.usePreferencesForPersonalization = enabled
+        await storage.saveUserPreferences(preferences)
+        await MainActor.run {
+            usePreferencesForPersonalization = enabled
+        }
+    }
+}
+
+// MARK: - Account Settings Section View
+struct AccountSettingsSectionView: View {
+    @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @State private var firstName: String = ""
+    @State private var showChangePassword = false
+    @State private var showLogoutAlert = false
+    private let storage = StorageService.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
+            Text("Account Settings")
+                .themeFont(size: .`2xl`, weight: .bold)
+                .foregroundColor(Theme.Colors.textPrimary)
+            
+            // First Name
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Text("First Name")
+                    .themeFont(size: .sm, weight: .semiBold)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                
+                TextField("Enter your first name", text: $firstName)
+                    .textContentType(.givenName)
+                    .autocapitalization(.words)
+                    .themeFont(size: .base)
+                    .foregroundColor(Theme.Colors.textPrimary)
+                    .padding(Theme.Spacing.`2xl`)
+                    .background(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                            .stroke(Theme.Colors.border, lineWidth: 1)
+                    )
+                    .cornerRadius(Theme.BorderRadius.md)
+                    .onChange(of: firstName) { oldValue, newValue in
+                        saveFirstName(newValue)
+                    }
+            }
+            
+            // Change Password Button
+            Button(action: {
+                showChangePassword = true
+            }) {
+                HStack {
+                    Text("Change Password")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.gradientStart)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(Theme.Spacing.`2xl`)
+                .background(.ultraThinMaterial)
+                .cornerRadius(Theme.BorderRadius.md)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                        .stroke(Theme.Colors.border, lineWidth: 1)
+                )
+            }
+            
+            // Logout Button
+            Button(action: {
+                showLogoutAlert = true
+            }) {
+                HStack {
+                    Text("Logout")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textError)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.right.square")
+                        .foregroundColor(Theme.Colors.textError)
+                }
+                .padding(Theme.Spacing.`2xl`)
+                .background(.ultraThinMaterial)
+                .cornerRadius(Theme.BorderRadius.md)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                        .stroke(Theme.Colors.accentErrorBorder, lineWidth: 1)
+                )
+            }
+        }
+        .padding(Theme.Spacing.`3xl`)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
+                    .fill(.regularMaterial)
+                
+                LinearGradient(
+                    colors: [
+                        Theme.Colors.gradientStart.opacity(0.1),
+                        Theme.Colors.gradientEnd.opacity(0.05)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .cornerRadius(Theme.BorderRadius.lg)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .task {
+            await loadAccountInfo()
+        }
+        .sheet(isPresented: $showChangePassword) {
+            ChangePasswordView()
+        }
+        .alert("Logout", isPresented: $showLogoutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Logout", role: .destructive) {
+                logout()
+            }
+        } message: {
+            Text("Are you sure you want to logout?")
+        }
+    }
+    
+    private func loadAccountInfo() async {
+        if let account = await storage.userAccount {
+            await MainActor.run {
+                firstName = account.firstName
+            }
+        }
+    }
+    
+    private func saveFirstName(_ name: String) {
+        Task {
+            if var account = await storage.userAccount {
+                account.firstName = name.trimmingCharacters(in: .whitespaces)
+                await storage.saveUserAccount(account)
+            }
+        }
+    }
+    
+    private func logout() {
+        Task {
+            await storage.setHasLoggedIn(false)
+            await MainActor.run {
+                onboardingViewModel.hasLoggedIn = false
+            }
+        }
+    }
+}
+
+// MARK: - Preferences Section Card View
+struct PreferencesSectionCardView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
+            HStack {
+                Text("Preferences")
+                    .themeFont(size: .`2xl`, weight: .bold)
+                    .foregroundColor(Theme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundColor(Theme.Colors.textSecondary)
+            }
+            
+            Text("Update your preferences for personalized recommendations")
+                .themeFont(size: .base)
+                .foregroundColor(Theme.Colors.textSecondary)
+        }
+        .padding(Theme.Spacing.`3xl`)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
+                    .fill(.regularMaterial)
+                
+                LinearGradient(
+                    colors: [
+                        Theme.Colors.gradientStart.opacity(0.1),
+                        Theme.Colors.gradientEnd.opacity(0.05)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .cornerRadius(Theme.BorderRadius.lg)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
     }
 }
 

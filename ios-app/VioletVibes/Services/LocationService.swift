@@ -124,19 +124,13 @@ final class LocationService: NSObject {
         // Stop any existing updates first to ensure clean restart
         locationManager.stopUpdatingLocation()
         
-        // Clear any stale location to force fresh fetch
-        location = nil
-        
         // Ensure delegate is set (in case it was lost)
         if locationManager.delegate !== self {
             locationManager.delegate = self
         }
         
-        // Get initial location
-        print("📍 LocationService: Requesting location...")
-        locationManager.requestLocation()
-        
-        // Start continuous updates with distance filter (already set in setupLocationManager)
+        // Only start continuous updates - don't call requestLocation() as it causes duplicate updates
+        // The distance filter (50m) will ensure we only get updates when moved significantly
         locationManager.startUpdatingLocation()
         print("📍 LocationService: Location updates started (distance filter: 50m, accuracy: 100m)")
     }
@@ -158,13 +152,9 @@ final class LocationService: NSObject {
         // Ensure delegate is set
         ensureDelegate()
         
-        // Stop any existing updates
-        locationManager.stopUpdatingLocation()
-        
-        // Request fresh location
-        print("📍 LocationService: Calling requestLocation() and startUpdatingLocation()")
+        // Only request a one-time location update - don't start continuous updates here
+        // This prevents duplicate location streams
         locationManager.requestLocation()
-        locationManager.startUpdatingLocation()
     }
     
     @MainActor
@@ -206,34 +196,41 @@ final class LocationService: NSObject {
 }
 
 extension LocationService: CLLocationManagerDelegate {
+    @MainActor
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        print("📍 LocationService: Received location update: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        // Update on main thread immediately
-        DispatchQueue.main.async { [weak self] in
-            self?.location = location
+        
+        // Throttle location updates - only update if location changed significantly
+        if let lastLocation = self.location {
+            let distance = location.distance(from: lastLocation)
+            // Only update if moved more than 25 meters (reduced from 50m to balance accuracy and performance)
+            guard distance > 25 else {
+                return
+            }
         }
+        
+        print("📍 LocationService: Received location update: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        // Direct assignment since we're already on MainActor
+        self.location = location
     }
     
+    @MainActor
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("❌ LocationService: Location error: \(error.localizedDescription)")
-        DispatchQueue.main.async { [weak self] in
-            self?.error = error
-        }
+        // Direct assignment since we're already on MainActor
+        self.error = error
     }
     
+    @MainActor
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let newStatus = manager.authorizationStatus
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.authorizationStatus = newStatus
-            
-            // Resume permission continuation if waiting (only if still set to prevent double resume)
-            if let continuation = self.permissionContinuation {
-                self.permissionContinuation = nil
-                let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
-                continuation.resume(returning: isAuthorized)
-            }
+        self.authorizationStatus = newStatus
+        
+        // Resume permission continuation if waiting (only if still set to prevent double resume)
+        if let continuation = self.permissionContinuation {
+            self.permissionContinuation = nil
+            let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
+            continuation.resume(returning: isAuthorized)
         }
     }
 }

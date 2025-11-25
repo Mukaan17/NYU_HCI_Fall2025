@@ -112,16 +112,16 @@ final class LocationManager {
             print("📍 LocationManager: Permission authorized: \(authorized)")
             
             if authorized {
-                // Start location updates
+                // Start location updates (this will handle continuous updates)
                 locationService.startLocationUpdates()
                 
-                // Also request fresh location
+                // Request initial location (one-time, doesn't start continuous updates)
                 await locationService.requestFreshLocation()
                 
-                // Swift 6.2: Use structured polling with timeout
+                // Swift 6.2: Use structured polling with timeout (reduced frequency)
                 locationUpdateTask = Task { @MainActor in
-                    let maxPollingTime: UInt64 = 5_000_000_000 // 5 seconds
-                    let pollInterval: UInt64 = 500_000_000 // 0.5 seconds
+                    let maxPollingTime: UInt64 = 10_000_000_000 // 10 seconds (increased timeout)
+                    let pollInterval: UInt64 = 1_000_000_000 // 1 second (reduced polling frequency)
                     var attempts = 0
                     let maxAttempts = Int(maxPollingTime / pollInterval) // 10 attempts
                     
@@ -137,7 +137,7 @@ final class LocationManager {
                         }
                     }
                     
-                    // Poll for location updates (reduced frequency to save battery)
+                    // Poll for location updates (reduced frequency to save battery and CPU)
                     while !Task.isCancelled && attempts < maxAttempts {
                         if let newLocation = self.locationService.location {
                             // Always update if we don't have a location yet
@@ -149,10 +149,10 @@ final class LocationManager {
                                 timeoutTask.cancel()
                                 return
                             } else {
-                                // Only update if location changed significantly (increased threshold)
+                                // Only update if location changed significantly (increased threshold to reduce view updates)
                                 let currentLocation = self.location!
                                 let distance = newLocation.distance(from: currentLocation)
-                                if distance > 50 { // Increased from 10m to 50m to reduce updates
+                                if distance > 100 { // Increased from 50m to 100m to reduce updates
                                     print("📍 LocationManager: Location updated (moved \(Int(distance))m)")
                                     self.location = newLocation
                                 }
@@ -171,7 +171,7 @@ final class LocationManager {
                         }
                         
                         // Poll interval (increased to reduce CPU usage)
-                        try? await Task.sleep(nanoseconds: pollInterval * 2) // Doubled from 0.5s to 1s
+                        try? await Task.sleep(nanoseconds: pollInterval)
                     }
                     
                     // If we exit the loop, cancel timeout task

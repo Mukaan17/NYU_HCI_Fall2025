@@ -47,6 +47,8 @@ struct RootView: View {
                 PermissionsView()
             } else if !onboardingViewModel.hasLoggedIn {
                 LoginView()
+            } else if !onboardingViewModel.hasCompletedOnboardingSurvey {
+                OnboardingSurveyView()
             } else {
                 MainTabView()
             }

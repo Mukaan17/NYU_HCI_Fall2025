@@ -9,13 +9,22 @@ import UIKit
 
 struct LoginView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @State private var isSignUpMode: Bool = false
     @State private var email: String = ""
+    @State private var firstName: String = ""
     @State private var password: String = ""
+    @State private var confirmPassword: String = ""
     @State private var isLoggingIn = false
+    @State private var isSigningUp = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isEmailValid: Bool = false
     @State private var isPasswordValid: Bool = false
+    @State private var isConfirmPasswordValid: Bool = false
+    @State private var welcomeTextOpacity: Double = 0
+    @State private var hasCheckedDefaultMode = false
+    
+    private let storage = StorageService.shared
     
     var body: some View {
         ZStack {
@@ -68,34 +77,67 @@ struct LoginView: View {
                             .frame(width: 120, height: 120)
                     }
                     
-                    // Title
+                    // Tab Selector
+                    TabSelectorView(isSignUpMode: $isSignUpMode)
+                        .padding(.horizontal, Theme.Spacing.`2xl`)
+                    
+                    // Animated Welcome Text
                     VStack(spacing: Theme.Spacing.sm) {
-                        Text("Welcome Back")
+                        Text(isSignUpMode ? "Welcome" : "Welcome Back")
                             .themeFont(size: .`3xl`, weight: .bold)
                             .foregroundColor(Theme.Colors.textPrimary)
+                            .opacity(welcomeTextOpacity)
+                            .animation(.smooth(duration: 0.5), value: welcomeTextOpacity)
+                            .animation(.smooth(duration: 0.3), value: isSignUpMode)
                         
-                        Text("Sign in to continue")
+                        Text(isSignUpMode ? "Create your account" : "Sign in to continue")
                             .themeFont(size: .lg)
                             .foregroundColor(Theme.Colors.textSecondary)
+                            .opacity(welcomeTextOpacity)
+                            .animation(.smooth(duration: 0.5).delay(0.1), value: welcomeTextOpacity)
+                            .animation(.smooth(duration: 0.3), value: isSignUpMode)
+                    }
+                    
+                    // First Name Field (Sign Up Only)
+                    if isSignUpMode {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            Text("First Name")
+                                .themeFont(size: .sm, weight: .semiBold)
+                                .foregroundColor(Theme.Colors.textSecondary)
+                            
+                            TextField("Enter your first name", text: $firstName)
+                                .textContentType(.givenName)
+                                .autocapitalization(.words)
+                                .themeFont(size: .base)
+                                .foregroundColor(Theme.Colors.textPrimary)
+                                .padding(Theme.Spacing.`2xl`)
+                                .background(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                        .stroke(!firstName.isEmpty ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
+                                )
+                                .cornerRadius(Theme.BorderRadius.md)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     
                     // Email Field
                     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        Text("Email")
+                        Text(isSignUpMode ? "NYU Email" : "Email")
                             .themeFont(size: .sm, weight: .semiBold)
                             .foregroundColor(Theme.Colors.textSecondary)
                         
-                        TextField("Enter your email", text: $email)
+                        TextField(isSignUpMode ? "Enter your NYU email" : "Enter your email", text: $email)
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
                             .themeFont(size: .base)
                             .foregroundColor(Theme.Colors.textPrimary)
                             .padding(Theme.Spacing.`2xl`)
-                            .background(Theme.Colors.glassBackground)
+                            .background(.ultraThinMaterial)
                             .overlay(
                                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                    .stroke(isEmailValid && !email.isEmpty ? Theme.Colors.gradientStart : Theme.Colors.border, lineWidth: 1)
+                                    .stroke(isEmailValid && !email.isEmpty ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
                             )
                             .cornerRadius(Theme.BorderRadius.md)
                             .onChange(of: email) { oldValue, newValue in
@@ -103,7 +145,11 @@ struct LoginView: View {
                                 if sanitized != newValue {
                                     email = sanitized
                                 }
-                                isEmailValid = validateEmail(sanitized)
+                                if isSignUpMode {
+                                    isEmailValid = validateNYUEmail(sanitized)
+                                } else {
+                                    isEmailValid = validateEmail(sanitized)
+                                }
                             }
                     }
                     
@@ -114,14 +160,14 @@ struct LoginView: View {
                             .foregroundColor(Theme.Colors.textSecondary)
                         
                         SecureField("Enter your password", text: $password)
-                            .textContentType(.password)
+                            .textContentType(isSignUpMode ? .newPassword : .password)
                             .themeFont(size: .base)
                             .foregroundColor(Theme.Colors.textPrimary)
                             .padding(Theme.Spacing.`2xl`)
-                            .background(Theme.Colors.glassBackground)
+                            .background(.ultraThinMaterial)
                             .overlay(
                                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                    .stroke(isPasswordValid && !password.isEmpty ? Theme.Colors.gradientStart : Theme.Colors.border, lineWidth: 1)
+                                    .stroke(isPasswordValid && !password.isEmpty ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
                             )
                             .cornerRadius(Theme.BorderRadius.md)
                             .onChange(of: password) { oldValue, newValue in
@@ -130,19 +176,55 @@ struct LoginView: View {
                                     password = sanitized
                                 }
                                 isPasswordValid = validatePassword(sanitized)
+                                if isSignUpMode {
+                                    isConfirmPasswordValid = validatePassword(confirmPassword) && sanitized == confirmPassword
+                                }
                             }
                     }
                     
-                    // Log In Button
+                    // Confirm Password Field (Sign Up Only)
+                    if isSignUpMode {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            Text("Confirm Password")
+                                .themeFont(size: .sm, weight: .semiBold)
+                                .foregroundColor(Theme.Colors.textSecondary)
+                            
+                            SecureField("Confirm your password", text: $confirmPassword)
+                                .textContentType(.newPassword)
+                                .themeFont(size: .base)
+                                .foregroundColor(Theme.Colors.textPrimary)
+                                .padding(Theme.Spacing.`2xl`)
+                                .background(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                        .stroke(isConfirmPasswordValid && !confirmPassword.isEmpty ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
+                                )
+                                .cornerRadius(Theme.BorderRadius.md)
+                                .onChange(of: confirmPassword) { oldValue, newValue in
+                                    let sanitized = sanitizePassword(newValue)
+                                    if sanitized != newValue {
+                                        confirmPassword = sanitized
+                                    }
+                                    isConfirmPasswordValid = validatePassword(sanitized) && sanitized == password
+                                }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
+                    // Action Button
                     Button(action: {
-                        handleEmailLogin()
+                        if isSignUpMode {
+                            handleSignUp()
+                        } else {
+                            handleEmailLogin()
+                        }
                     }) {
                         HStack {
-                            if isLoggingIn {
+                            if (isSignUpMode && isSigningUp) || (!isSignUpMode && isLoggingIn) {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Log In")
+                                Text(isSignUpMode ? "Sign Up" : "Log In")
                                     .themeFont(size: .lg, weight: .bold)
                                     .foregroundColor(Theme.Colors.textPrimary)
                             }
@@ -158,8 +240,15 @@ struct LoginView: View {
                         )
                         .cornerRadius(Theme.BorderRadius.md)
                     }
-                    .disabled(isLoggingIn || !isEmailValid || !isPasswordValid)
-                    .opacity((isLoggingIn || !isEmailValid || !isPasswordValid) ? 0.5 : 1.0)
+                    .disabled(
+                        (isSignUpMode && (isSigningUp || !isEmailValid || !isPasswordValid || !isConfirmPasswordValid || firstName.isEmpty)) ||
+                        (!isSignUpMode && (isLoggingIn || !isEmailValid || !isPasswordValid))
+                    )
+                    .opacity(
+                        (isSignUpMode && (isSigningUp || !isEmailValid || !isPasswordValid || !isConfirmPasswordValid || firstName.isEmpty)) ||
+                        (!isSignUpMode && (isLoggingIn || !isEmailValid || !isPasswordValid))
+                        ? 0.5 : 1.0
+                    )
                     
                     // Divider
                     HStack {
@@ -190,15 +279,15 @@ struct LoginView: View {
                     .signInWithAppleButtonStyle(.whiteOutline)
                     .frame(height: 50)
                     .cornerRadius(Theme.BorderRadius.md)
-                    .disabled(isLoggingIn)
-                    .opacity(isLoggingIn ? 0.5 : 1.0)
+                    .disabled(isLoggingIn || isSigningUp)
+                    .opacity((isLoggingIn || isSigningUp) ? 0.5 : 1.0)
                     
                     // Sign in with Google (Mock Native Button)
                     // Following Google Sign-In iOS documentation: https://developers.google.com/identity/sign-in/ios/sign-in#using-swiftui
                     // In production, replace with: GoogleSignInButton(action: handleGoogleSignIn)
                     GoogleSignInButtonMock(action: handleGoogleSignIn)
-                        .disabled(isLoggingIn)
-                        .opacity(isLoggingIn ? 0.5 : 1.0)
+                        .disabled(isLoggingIn || isSigningUp)
+                        .opacity((isLoggingIn || isSigningUp) ? 0.5 : 1.0)
                     
                     Spacer()
                         .frame(height: 40)
@@ -213,10 +302,32 @@ struct LoginView: View {
             // Dismiss keyboard when tapping outside text fields
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
-        .alert("Login Error", isPresented: $showError) {
+        .alert(isSignUpMode ? "Sign Up Error" : "Login Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .task {
+            // Set smart default based on hasLoggedIn
+            if !hasCheckedDefaultMode {
+                let hasLoggedIn = await storage.hasLoggedIn
+                await MainActor.run {
+                    isSignUpMode = !hasLoggedIn
+                    hasCheckedDefaultMode = true
+                    welcomeTextOpacity = 1.0
+                }
+            }
+        }
+        .onChange(of: isSignUpMode) { oldValue, newValue in
+            // Animate welcome text when switching modes
+            withAnimation(.smooth(duration: 0.3)) {
+                welcomeTextOpacity = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.smooth(duration: 0.3)) {
+                    welcomeTextOpacity = 1.0
+                }
+            }
         }
     }
     
@@ -267,6 +378,18 @@ struct LoginView: View {
         let emailPredicate = NSPredicate(format: "SELF MATCHES %@", emailPattern)
         
         return emailPredicate.evaluate(with: email)
+    }
+    
+    /// Validates NYU email format
+    private func validateNYUEmail(_ email: String) -> Bool {
+        // First validate as regular email
+        guard validateEmail(email) else { return false }
+        
+        // Check if it's an NYU domain
+        let nyuDomains = ["nyu.edu", "stern.nyu.edu", "poly.edu", "nyumc.org"]
+        let domain = email.lowercased().split(separator: "@").last.map(String.init) ?? ""
+        
+        return nyuDomains.contains { domain == $0 || domain.hasSuffix("." + $0) }
     }
     
     /// Sanitizes password input by removing dangerous characters
@@ -341,6 +464,60 @@ struct LoginView: View {
         }
     }
     
+    private func handleSignUp() {
+        // Validate all fields
+        guard !firstName.isEmpty else {
+            errorMessage = "Please enter your first name"
+            showError = true
+            return
+        }
+        
+        guard isEmailValid && isPasswordValid && isConfirmPasswordValid else {
+            errorMessage = "Please enter valid information"
+            showError = true
+            return
+        }
+        
+        // Sanitize inputs
+        let sanitizedEmail = sanitizeEmail(email)
+        let sanitizedPassword = sanitizePassword(password)
+        let sanitizedConfirmPassword = sanitizePassword(confirmPassword)
+        
+        guard validateNYUEmail(sanitizedEmail) && validatePassword(sanitizedPassword) else {
+            errorMessage = "Invalid NYU email or password format"
+            showError = true
+            return
+        }
+        
+        guard sanitizedPassword == sanitizedConfirmPassword else {
+            errorMessage = "Passwords do not match"
+            showError = true
+            return
+        }
+        
+        isSigningUp = true
+        
+        // Mock sign up - simulate API call
+        Task {
+            // Simulate network delay
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            
+            // Save user account
+            let userAccount = UserAccount(
+                email: sanitizedEmail,
+                firstName: firstName.trimmingCharacters(in: .whitespaces),
+                hasLoggedIn: true
+            )
+            await storage.saveUserAccount(userAccount)
+            await storage.setHasLoggedIn(true)
+            
+            await MainActor.run {
+                isSigningUp = false
+                onboardingViewModel.markLoggedIn()
+            }
+        }
+    }
+    
     private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let authorization):
@@ -408,6 +585,83 @@ struct LoginView: View {
                 onboardingViewModel.markLoggedIn()
             }
         }
+    }
+}
+
+// MARK: - Tab Selector View
+struct TabSelectorView: View {
+    @Binding var isSignUpMode: Bool
+    
+    var body: some View {
+        ZStack {
+            // Background
+            ZStack {
+                // Liquid glass background
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .fill(.thinMaterial)
+                
+                // Gradient tint overlay
+                LinearGradient(
+                    colors: [
+                        Theme.Colors.gradientStart.opacity(0.15),
+                        Theme.Colors.gradientEnd.opacity(0.1)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .cornerRadius(Theme.BorderRadius.md)
+            }
+            
+            // Animated selection indicator (behind text)
+            GeometryReader { geometry in
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md - 2)
+                    .fill(
+                        LinearGradient(
+                            colors: [Theme.Colors.gradientStart, Theme.Colors.gradientEnd],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geometry.size.width / 2)
+                    .offset(x: isSignUpMode ? geometry.size.width / 2 : 0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSignUpMode)
+            }
+            .padding(2)
+            
+            // Tab buttons (on top)
+            HStack(spacing: 0) {
+                // Login Tab
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isSignUpMode = false
+                    }
+                }) {
+                    Text("Log In")
+                        .themeFont(size: .lg, weight: .semiBold)
+                        .foregroundColor(isSignUpMode ? Theme.Colors.textSecondary : .white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Theme.Spacing.lg)
+                }
+                
+                // Sign Up Tab
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isSignUpMode = true
+                    }
+                }) {
+                    Text("Sign Up")
+                        .themeFont(size: .lg, weight: .semiBold)
+                        .foregroundColor(isSignUpMode ? .white : Theme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Theme.Spacing.lg)
+                }
+            }
+        }
+        .cornerRadius(Theme.BorderRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
     }
 }
 

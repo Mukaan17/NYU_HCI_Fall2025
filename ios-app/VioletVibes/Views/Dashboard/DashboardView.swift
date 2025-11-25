@@ -16,6 +16,7 @@ struct DashboardView: View {
     @State private var showLogoutAlert = false
     @State private var showAboutView = false
     @State private var showAccountSettings = false
+    @State private var selectedQuickAction: String?
     
     var body: some View {
         NavigationStack {
@@ -173,7 +174,9 @@ struct DashboardView: View {
                                 GridItem(.flexible(), spacing: Theme.Spacing.md)
                             ], spacing: Theme.Spacing.xl) {
                                 ForEach(QuickAction.allActions) { action in
-                                    QuickActionCard(action: action)
+                                    QuickActionCard(action: action) {
+                                        selectedQuickAction = action.prompt
+                                    }
                                 }
                             }
                         }
@@ -196,10 +199,10 @@ struct DashboardView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .scrollBounceBehavior(.basedOnSize)
             }
-            .navigationDestination(for: String.self) { category in
-                QuickResultsView(category: category)
-            }
             .navigationBarHidden(true)
+            .sheet(item: $selectedQuickAction) { category in
+                QuickResultsSheetView(category: category)
+            }
         }
         .alert("Log Out", isPresented: $showLogoutAlert) {
             Button("Cancel", role: .cancel) { }
@@ -230,11 +233,18 @@ struct DashboardView: View {
             await weatherManager.loadWeather(locationManager: locationManager)
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Reload weather when location changes
-            if newValue != nil {
-                Task {
-                    await weatherManager.loadWeather(locationManager: locationManager)
-                }
+            // Throttle weather reloads - only reload if location changed significantly
+            guard let newLocation = newValue else { return }
+            
+            if let oldLocation = oldValue {
+                let distance = newLocation.distance(from: oldLocation)
+                // Only reload weather if moved more than 200 meters to reduce API calls
+                guard distance > 200 else { return }
+            }
+            
+            // Reload weather when location changes significantly
+            Task {
+                await weatherManager.loadWeather(locationManager: locationManager)
             }
         }
         .onAppear {
@@ -260,9 +270,10 @@ struct DashboardView: View {
 
 struct QuickActionCard: View {
     let action: QuickAction
+    let onTap: () -> Void
     
     var body: some View {
-        NavigationLink(value: action.prompt) {
+        Button(action: onTap) {
             VStack(spacing: Theme.Spacing.xs) {
                 Text(action.icon)
                     .font(.system(size: 56))
@@ -325,7 +336,7 @@ struct QuickActionCard: View {
             .shadow(color: action.color.opacity(0.2), radius: 8, x: 0, y: 4)
             .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
 }
 

@@ -21,6 +21,7 @@ struct PermissionsView: View {
     private let notificationService = NotificationService.shared
     private let contactsService = ContactsService.shared
     private let remindersService = RemindersService.shared
+    private let storage = StorageService.shared
     
     var body: some View {
         ZStack {
@@ -68,15 +69,15 @@ struct PermissionsView: View {
                             
                             PermissionCard(
                                 icon: "📅",
-                                title: "Sync Calendar",
-                                description: "To find suggestions for your downtime.",
+                                title: "Google Calendar Access",
+                                description: "Allow VioletVibes to read your free time from Google Calendar to recommend events when you're available?",
                                 isEnabled: calendarPermission
                             )
                             
                             PermissionCard(
                                 icon: "🔔",
-                                title: "Enable Notifications",
-                                description: "For real-time alerts on events and deals.",
+                                title: "Push Notifications",
+                                description: "Enable notifications for personalized recommendations?",
                                 isEnabled: notificationPermission
                             )
                             
@@ -174,6 +175,12 @@ struct PermissionsView: View {
         let notification = await notificationService.requestPermission()
         let contacts = await contactsService.requestPermission()
         let reminders = await remindersService.requestPermission()
+        
+        // Save permission states to UserPreferences
+        var preferences = await storage.userPreferences
+        preferences.googleCalendarEnabled = calendar
+        preferences.notificationsEnabled = notification
+        await storage.saveUserPreferences(preferences)
         
         await MainActor.run {
             locationPermission = location

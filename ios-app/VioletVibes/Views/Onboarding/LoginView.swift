@@ -148,7 +148,7 @@ struct LoginView: View {
                                 if isSignUpMode {
                                     isEmailValid = validateNYUEmail(sanitized)
                                 } else {
-                                    isEmailValid = validateEmail(sanitized)
+                                isEmailValid = validateEmail(sanitized)
                                 }
                             }
                     }
@@ -216,7 +216,7 @@ struct LoginView: View {
                         if isSignUpMode {
                             handleSignUp()
                         } else {
-                            handleEmailLogin()
+                        handleEmailLogin()
                         }
                     }) {
                         HStack {

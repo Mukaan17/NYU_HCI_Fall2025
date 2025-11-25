@@ -11,12 +11,18 @@ export default function Index() {
   useEffect(() => {
     const check = async () => {
       const hasSeenWelcome = await AsyncStorage.getItem("hasSeenWelcome");
+      const hasLoggedIn = await AsyncStorage.getItem("hasLoggedIn");
+      const hasCompletedOnboardingSurvey = await AsyncStorage.getItem("hasCompletedOnboardingSurvey");
       const hasCompletedPermissions = await AsyncStorage.getItem("hasCompletedPermissions");
 
       if (!hasSeenWelcome) {
-        router.replace("/(onboarding)/welcome");
+        router.replace("/welcome");
+      } else if (!hasLoggedIn) {
+        router.replace("/(onboarding)/login");
+      } else if (!hasCompletedOnboardingSurvey) {
+        router.replace("/(onboarding)/survey");
       } else if (!hasCompletedPermissions) {
-        router.replace("/(onboarding)/permissions");
+        router.replace("/permissions");
       } else {
         router.replace("/(tabs)/dashboard");
       }

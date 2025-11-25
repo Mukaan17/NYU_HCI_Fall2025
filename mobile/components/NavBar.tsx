@@ -21,6 +21,7 @@ const tabs = [
   { id: "chat", label: "Chat", sfSymbol: "message.fill" },
   { id: "map", label: "Map", sfSymbol: "map.fill" },
   { id: "safety", label: "Safety", sfSymbol: "shield.fill" },
+  { id: "settings", label: "Settings", sfSymbol: "gearshape.fill" },
 ];
 
 export default function NavBar({ activeTab, onTabPress, style }: NavBarProps) {

@@ -32,7 +32,7 @@ export default function Welcome() {
     } catch (err) {
       console.warn("Error setting welcome flag:", err);
     }
-    router.replace("/permissions");
+    router.replace("/(onboarding)/login");
   };
 
   return (

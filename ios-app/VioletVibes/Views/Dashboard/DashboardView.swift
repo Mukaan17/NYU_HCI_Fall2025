@@ -243,8 +243,8 @@ struct DashboardView: View {
             }
             
             // Reload weather when location changes significantly
-            Task {
-                await weatherManager.loadWeather(locationManager: locationManager)
+                Task {
+                    await weatherManager.loadWeather(locationManager: locationManager)
             }
         }
         .onAppear {

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "react-native-screens": "^4.18.0"
+  }
+}

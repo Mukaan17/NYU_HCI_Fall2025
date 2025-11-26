@@ -7,12 +7,11 @@ import Foundation
 import CoreLocation
 import Observation
 
-@MainActor
 @Observable
 final class LocationService: NSObject {
     static let shared = LocationService()
     
-    private let locationManager = CLLocationManager()
+    private var locationManager: CLLocationManager
     
     var location: CLLocation?
     var authorizationStatus: CLAuthorizationStatus = .notDetermined
@@ -22,16 +21,67 @@ final class LocationService: NSObject {
     private var permissionContinuation: CheckedContinuation<Bool, Never>?
     
     override init() {
+        locationManager = CLLocationManager()
         super.init()
+        setupLocationManager()
+    }
+    
+    private func setupLocationManager() {
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters // Reduced from Best to save battery
+        locationManager.pausesLocationUpdatesAutomatically = true // Allow pausing to save battery
+        locationManager.distanceFilter = 50 // Only update if moved 50+ meters
         authorizationStatus = locationManager.authorizationStatus
     }
     
+    // Completely reset the location manager (useful when app restarts)
+    @MainActor
+    func resetLocationManager() {
+        print("🔄 LocationService: Resetting location manager...")
+        // Stop all updates
+        locationManager.stopUpdatingLocation()
+        locationManager.stopMonitoringSignificantLocationChanges()
+        
+        // Clear state
+        location = nil
+        error = nil
+        
+        // Recreate location manager to ensure clean state
+        locationManager = CLLocationManager()
+        setupLocationManager()
+        
+        // Re-check authorization status
+        authorizationStatus = locationManager.authorizationStatus
+        print("📍 LocationService: Location manager reset, authorization: \(authorizationStatus.rawValue)")
+    }
+    
+    // Ensure delegate is always set (called when app becomes active)
+    @MainActor
+    func ensureDelegate() {
+        if locationManager.delegate !== self {
+            locationManager.delegate = self
+        }
+    }
+    
+    // Ensure main actor access for location updates
+    @MainActor
+    func updateLocation(_ newLocation: CLLocation) {
+        self.location = newLocation
+    }
+    
+    @MainActor
+    func updateAuthorizationStatus(_ status: CLAuthorizationStatus) {
+        self.authorizationStatus = status
+    }
+    
     // MARK: - Permissions
+    @MainActor
     func requestPermission() async -> Bool {
+        // Always check current status from location manager (not cached)
+        let currentStatus = locationManager.authorizationStatus
+        authorizationStatus = currentStatus
+        
         // If already determined, return immediately
-        let currentStatus = authorizationStatus
         guard currentStatus == .notDetermined else {
             return currentStatus == .authorizedWhenInUse || currentStatus == .authorizedAlways
         }
@@ -63,23 +113,57 @@ final class LocationService: NSObject {
     }
     
     // MARK: - Location Updates
+    @MainActor
     func startLocationUpdates() {
+        print("📍 LocationService: Starting location updates, authorization status: \(authorizationStatus.rawValue)")
         guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+            print("⚠️ LocationService: Not authorized, cannot start updates")
             return
         }
         
-        // Get initial location
-        locationManager.requestLocation()
+        // Stop any existing updates first to ensure clean restart
+        locationManager.stopUpdatingLocation()
         
-        // Start continuous updates
+        // Ensure delegate is set (in case it was lost)
+        if locationManager.delegate !== self {
+            locationManager.delegate = self
+        }
+        
+        // Only start continuous updates - don't call requestLocation() as it causes duplicate updates
+        // The distance filter (50m) will ensure we only get updates when moved significantly
         locationManager.startUpdatingLocation()
+        print("📍 LocationService: Location updates started (distance filter: 50m, accuracy: 100m)")
     }
     
+    // Force a fresh location request (useful when app restarts)
+    @MainActor
+    func requestFreshLocation() {
+        print("📍 LocationService: Requesting fresh location...")
+        
+        // Check authorization status directly from location manager
+        let currentStatus = locationManager.authorizationStatus
+        authorizationStatus = currentStatus
+        
+        guard currentStatus == .authorizedWhenInUse || currentStatus == .authorizedAlways else {
+            print("⚠️ LocationService: Not authorized for fresh location request (status: \(currentStatus.rawValue))")
+            return
+        }
+        
+        // Ensure delegate is set
+        ensureDelegate()
+        
+        // Only request a one-time location update - don't start continuous updates here
+        // This prevents duplicate location streams
+        locationManager.requestLocation()
+    }
+    
+    @MainActor
     func stopLocationUpdates() {
         locationManager.stopUpdatingLocation()
         locationUpdateTask?.cancel()
     }
     
+    @MainActor
     func getCurrentLocation() async throws -> CLLocation {
         guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
             throw LocationError.notAuthorized
@@ -112,24 +196,41 @@ final class LocationService: NSObject {
 }
 
 extension LocationService: CLLocationManagerDelegate {
+    @MainActor
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        
+        // Throttle location updates - only update if location changed significantly
+        if let lastLocation = self.location {
+            let distance = location.distance(from: lastLocation)
+            // Only update if moved more than 25 meters (reduced from 50m to balance accuracy and performance)
+            guard distance > 25 else {
+                return
+            }
+        }
+        
+        print("📍 LocationService: Received location update: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        // Direct assignment since we're already on MainActor
         self.location = location
-    }
+        }
     
+    @MainActor
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("❌ LocationService: Location error: \(error.localizedDescription)")
+        // Direct assignment since we're already on MainActor
         self.error = error
     }
     
+    @MainActor
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let newStatus = manager.authorizationStatus
-        authorizationStatus = newStatus
-        
-        // Resume permission continuation if waiting (only if still set to prevent double resume)
-        if let continuation = permissionContinuation {
-            permissionContinuation = nil
-            let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
-            continuation.resume(returning: isAuthorized)
+            self.authorizationStatus = newStatus
+            
+            // Resume permission continuation if waiting (only if still set to prevent double resume)
+            if let continuation = self.permissionContinuation {
+                self.permissionContinuation = nil
+                let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
+                continuation.resume(returning: isAuthorized)
         }
     }
 }

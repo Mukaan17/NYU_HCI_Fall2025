@@ -4,8 +4,19 @@
 //
 
 import SwiftUI
+import CoreLocation
+import MapKit
 
 struct SafetyView: View {
+    @Environment(PlaceViewModel.self) private var placeViewModel
+    @Environment(LocationManager.self) private var locationManager
+    @Environment(TabCoordinator.self) private var tabCoordinator
+    @State private var isGeocodingHome = false
+    @State private var showNoAddressAlert = false
+    @State private var showShareLocationView = false
+    
+    private let storage = StorageService.shared
+    
     var body: some View {
         ZStack {
             // Background
@@ -29,7 +40,7 @@ struct SafetyView: View {
             }
             
             ScrollView {
-                VStack(spacing: Theme.Spacing.`6xl`) {
+                VStack(spacing: Theme.Spacing.`2xl`) {
                     // Header
                     VStack(spacing: Theme.Spacing.`2xl`) {
                         ZStack {
@@ -58,10 +69,10 @@ struct SafetyView: View {
                             .themeFont(size: .lg)
                             .foregroundColor(Theme.Colors.textSecondary)
                     }
-                    .padding(.top, Theme.Spacing.`6xl`)
+                    .padding(.top, Theme.Spacing.`3xl`)
                     
                     // Action Buttons
-                    VStack(spacing: Theme.Spacing.`2xl`) {
+                    VStack(spacing: Theme.Spacing.lg) {
                         // Call NYU Public Safety
                         Button(action: {
                             if let url = URL(string: "tel:2129982222") {
@@ -98,7 +109,7 @@ struct SafetyView: View {
                         
                         // Share Live Location
                         Button(action: {
-                            // TODO: Implement location sharing
+                            showShareLocationView = true
                         }) {
                             HStack {
                                 ZStack {
@@ -136,7 +147,9 @@ struct SafetyView: View {
                         
                         // Find Safe Route
                         Button(action: {
-                            // TODO: Implement safe route finding
+                            Task {
+                                await findSafeRouteHome()
+                            }
                         }) {
                             HStack {
                                 ZStack {
@@ -172,6 +185,7 @@ struct SafetyView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+                    .padding(.horizontal, Theme.Spacing.`2xl`)
                     
                     // Emergency Contacts
                     VStack(spacing: Theme.Spacing.`2xl`) {
@@ -224,10 +238,77 @@ struct SafetyView: View {
                     )
                     .cornerRadius(Theme.BorderRadius.lg)
                     .padding(.horizontal, Theme.Spacing.`2xl`)
-                    .padding(.bottom, 180)
+                    .padding(.bottom, Theme.Spacing.`2xl`)
                 }
             }
             .scrollIndicators(.hidden)
+        }
+        .alert("No Home Address", isPresented: $showNoAddressAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please set your home address in Account Settings first.")
+        }
+        .sheet(isPresented: $showShareLocationView) {
+            ShareLocationView()
+        }
+    }
+    
+    private func findSafeRouteHome() async {
+        // Get home address from storage
+        let homeAddress = storage.homeAddress
+        
+        guard let address = homeAddress, !address.isEmpty else {
+            await MainActor.run {
+                showNoAddressAlert = true
+            }
+            return
+        }
+        
+        await MainActor.run {
+            isGeocodingHome = true
+        }
+        
+        // Geocode the address using MapKit
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = address
+        
+        let search = MKLocalSearch(request: request)
+        
+        do {
+            let response = try await search.start()
+            
+            guard let mapItem = response.mapItems.first else {
+                await MainActor.run {
+                    isGeocodingHome = false
+                }
+                return
+            }
+            
+            // Get coordinate from mapItem
+            // Note: placemark is deprecated in iOS 26.0, but coordinate access still works
+            let coordinate = mapItem.placemark.coordinate
+            
+            // Create SelectedPlace for home
+            let homePlace = SelectedPlace(
+                name: "Home",
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                address: address
+            )
+            
+            // Set as selected place (this will trigger route in MapView)
+            placeViewModel.setSelectedPlace(homePlace)
+            
+            // Switch to Map tab
+            await MainActor.run {
+                tabCoordinator.selectedTab = .map
+                isGeocodingHome = false
+            }
+        } catch {
+            print("Geocoding error: \(error.localizedDescription)")
+            await MainActor.run {
+                isGeocodingHome = false
+            }
         }
     }
 }

@@ -8,8 +8,15 @@ import CoreLocation
 
 struct DashboardView: View {
     @Environment(LocationManager.self) private var locationManager
+    @Environment(WeatherManager.self) private var weatherManager
+    @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = DashboardViewModel()
     @State private var navigateToCategory: String?
+    @State private var showLogoutAlert = false
+    @State private var showAboutView = false
+    @State private var showAccountSettings = false
+    @State private var selectedQuickAction: String?
     
     var body: some View {
         NavigationStack {
@@ -61,13 +68,13 @@ struct DashboardView: View {
                             // Profile Button - Scrolls with content
                             Menu {
                                 Button(action: {
-                                    // Account Settings action
+                                    showAccountSettings = true
                                 }) {
                                     Label("Account Settings", systemImage: "gearshape.fill")
                                 }
                                 
                                 Button(action: {
-                                    // About action
+                                    showAboutView = true
                                 }) {
                                     Label("About", systemImage: "info.circle")
                                 }
@@ -75,7 +82,7 @@ struct DashboardView: View {
                                 Divider()
                                 
                                 Button(role: .destructive, action: {
-                                    // Logout action
+                                    showLogoutAlert = true
                                 }) {
                                     Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
                                 }
@@ -95,7 +102,7 @@ struct DashboardView: View {
                         // Badges - Centered horizontally
                         HStack(spacing: Theme.Spacing.lg) {
                             // Weather Badge - Always show, with fallback if weather not loaded
-                            if let weather = viewModel.weather {
+                            if let weather = weatherManager.weather {
                                 Text("\(weather.emoji) \(weather.temp)°F")
                                     .themeFont(size: .base, weight: .semiBold)
                                     .foregroundColor(Theme.Colors.textBlue)
@@ -163,11 +170,13 @@ struct DashboardView: View {
                                 .foregroundColor(Theme.Colors.textPrimary)
                             
                             LazyVGrid(columns: [
-                                GridItem(.flexible(), spacing: Theme.Spacing.`2xl`),
-                                GridItem(.flexible(), spacing: Theme.Spacing.`2xl`)
-                            ], spacing: Theme.Spacing.`2xl`) {
+                                GridItem(.flexible(), spacing: Theme.Spacing.md),
+                                GridItem(.flexible(), spacing: Theme.Spacing.md)
+                            ], spacing: Theme.Spacing.xl) {
                                 ForEach(QuickAction.allActions) { action in
-                                    QuickActionCard(action: action)
+                                    QuickActionCard(action: action) {
+                                        selectedQuickAction = action.prompt
+                                    }
                                 }
                             }
                         }
@@ -187,11 +196,31 @@ struct DashboardView: View {
                     .padding(.bottom, 120)
                 }
                 .scrollIndicators(.hidden)
-            }
-            .navigationDestination(for: String.self) { category in
-                QuickResultsView(category: category)
+                .scrollDismissesKeyboard(.interactively)
+                .scrollBounceBehavior(.basedOnSize)
             }
             .navigationBarHidden(true)
+            .sheet(item: $selectedQuickAction) { category in
+                QuickResultsSheetView(category: category)
+            }
+        }
+        .alert("Log Out", isPresented: $showLogoutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Log Out", role: .destructive) {
+                onboardingViewModel.resetOnboarding()
+            }
+        } message: {
+            Text("Are you sure you want to log out? You'll need to go through onboarding again.")
+        }
+        .sheet(isPresented: $showAboutView) {
+            AboutView()
+        }
+        .sheet(isPresented: $showAccountSettings) {
+            AccountSettingsView()
+        }
+        .refreshable {
+            // Pull to refresh - reload weather
+            await weatherManager.loadWeather(locationManager: locationManager)
         }
         .task {
             // Load sample recommendations first (doesn't require network)
@@ -200,22 +229,22 @@ struct DashboardView: View {
                 viewModel.loadSampleRecommendations()
             }
             
-            // Try to load weather - use user location or fallback to Brooklyn
-            if let location = locationManager.location {
-                await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
-            } else {
-                // Fallback to Brooklyn coordinates (2 MetroTech Center)
-                print("Dashboard: No location available, using default Brooklyn location for weather")
-                await viewModel.loadWeather(latitude: 40.693393, longitude: -73.98555)
-            }
-            
+            // Load weather on task start (app launch/restart)
+            await weatherManager.loadWeather(locationManager: locationManager)
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Reload weather when location changes
-            if let location = newValue {
+            // Throttle weather reloads - only reload if location changed significantly
+            guard let newLocation = newValue else { return }
+            
+            if let oldLocation = oldValue {
+                let distance = newLocation.distance(from: oldLocation)
+                // Only reload weather if moved more than 200 meters to reduce API calls
+                guard distance > 200 else { return }
+            }
+            
+            // Reload weather when location changes significantly
                 Task {
-                    await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
-                }
+                    await weatherManager.loadWeather(locationManager: locationManager)
             }
         }
         .onAppear {
@@ -223,16 +252,16 @@ struct DashboardView: View {
             if viewModel.recommendations.isEmpty {
                 viewModel.loadSampleRecommendations()
             }
-            
-            // Try to load weather on appear - use user location or fallback
-            if let location = locationManager.location {
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            // Reload weather when app comes to foreground
+            if newPhase == .active && oldPhase != .active {
+                print("🔄 Dashboard: App became active - reloading weather")
+                locationManager.restartLocationUpdates()
                 Task {
-                    await viewModel.loadWeather(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
-                }
-            } else if viewModel.weather == nil {
-                // Only load default if weather hasn't been loaded yet
-                Task {
-                    await viewModel.loadWeather(latitude: 40.693393, longitude: -73.98555)
+                    // Wait a bit for location to update, then load weather
+                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                    await weatherManager.loadWeather(locationManager: locationManager)
                 }
             }
         }
@@ -241,57 +270,73 @@ struct DashboardView: View {
 
 struct QuickActionCard: View {
     let action: QuickAction
-    @State private var isPressed = false
+    let onTap: () -> Void
     
     var body: some View {
-        NavigationLink(value: action.prompt) {
-        VStack(spacing: Theme.Spacing.`2xl`) {
-            Text(action.icon)
-                .font(.system(size: 32))
-            
-            Text(action.label)
-                .themeFont(size: .base, weight: .semiBold)
-                .foregroundColor(Theme.Colors.textPrimary)
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1.2, contentMode: .fit)
-        .padding(Theme.Spacing.`2xl`)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                    .fill(.ultraThinMaterial)
+        Button(action: onTap) {
+            VStack(spacing: Theme.Spacing.xs) {
+                Text(action.icon)
+                    .font(.system(size: 56))
                 
-                LinearGradient(
-                    colors: [
-                        action.color.opacity(0.4),
-                        action.color.opacity(0.2)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .cornerRadius(Theme.BorderRadius.md)
+                Text(action.label)
+                    .themeFont(size: .base, weight: .semiBold)
+                    .foregroundColor(Theme.Colors.textPrimary)
             }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                    .stroke(Theme.Colors.border.opacity(0.15), lineWidth: 1)
-        )
-            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .aspectRatio(1.0, contentMode: .fill)
+            .padding(Theme.Spacing.`4xl`)
+            .background {
+                ZStack {
+                    // Native liquid glass material - using regularMaterial for more pronounced blur
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                        .fill(.regularMaterial)
+                    
+                    // Subtle color tint gradient
+                    LinearGradient(
+                        colors: [
+                            action.color.opacity(0.3),
+                            action.color.opacity(0.15),
+                            action.color.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .cornerRadius(Theme.BorderRadius.md)
+                    
+                    // Inner glow effect
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    action.color.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .center
+                            )
+                        )
+                }
+            }
+            .overlay {
+                // Glass border with subtle highlight
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.25),
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+            .shadow(color: action.color.opacity(0.2), radius: 8, x: 0, y: 4)
+            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
-        .buttonStyle(PlainButtonStyle())
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.spring(response: 0.2)) {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.2)) {
-                        isPressed = false
-                    }
-                }
-        )
+        .buttonStyle(.plain)
     }
 }
 

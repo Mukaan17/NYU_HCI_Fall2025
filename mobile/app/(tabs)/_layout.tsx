@@ -11,15 +11,17 @@ export default function TabsLayout() {
   const pathname = usePathname();
 
   // Figure out which tab is active based on the current route
-  let activeTab: "dashboard" | "chat" | "map" | "safety";
+  let activeTab: "dashboard" | "chat" | "map" | "safety" | "settings";
 
   if (pathname === "/dashboard") activeTab = "dashboard";
   else if (pathname === "/chat") activeTab = "chat";
   else if (pathname === "/map") activeTab = "map";
-  else activeTab = "safety";
+  else if (pathname === "/safety") activeTab = "safety";
+  else if (pathname === "/settings") activeTab = "settings";
+  else activeTab = "dashboard";
 
   const handleTabPress = (id: string) => {
-  router.replace(`/${id}`);
+    router.replace(`/(tabs)/${id}`);
   };
 
   return (

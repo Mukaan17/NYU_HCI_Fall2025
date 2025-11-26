@@ -7,11 +7,11 @@ import SwiftUI
 
 struct InputField: View {
     let placeholder: String
+    @FocusState.Binding var isFocused: Bool
     let onSend: (String) -> Void
     
     @State private var text: String = ""
     @State private var sendButtonScale: CGFloat = 1.0
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         HStack(spacing: Theme.Spacing.`2xl`) {

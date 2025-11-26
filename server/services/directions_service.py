@@ -1,95 +1,93 @@
 # server/services/directions_service.py
-import os
-from typing import Dict, Optional
-from utils.helpers import decode_polyline
-import requests
 
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
- 
+import os
+from typing import Optional, Dict, Any
+import requests
+import urllib.parse
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 
 def get_walking_directions(
     origin_lat: float,
     origin_lng: float,
     dest_lat: float,
-    dest_lng: float,
-) -> Optional[Dict[str, str]]:
+    dest_lng: float
+) -> Optional[Dict[str, Any]]:
     """
-    Wrapper around Google Directions API (walking mode).
-    Returns dict with 'distance_text', 'duration_text', 'maps_link' or None on error.
+    FAST MODE: very short timeout.
+    If anything fails, return None (UI can still show place).
     """
-    if not GOOGLE_API_KEY:
-        print("WARNING: GOOGLE_API_KEY not set, skipping directions.")
-        return None
 
-    url = "https://maps.googleapis.com/maps/api/directions/json"
-    params = {
-        "origin": f"{origin_lat},{origin_lng}",
-        "destination": f"{dest_lat},{dest_lng}",
-        "mode": "walking",
-        "key": GOOGLE_API_KEY,
-    }
+    if not GOOGLE_API_KEY:
+        return None
 
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        data = resp.json()
-        if data.get("status") != "OK":
-            print("Directions API status:", data.get("status"))
+        base_url = "https://maps.googleapis.com/maps/api/directions/json"
+        params = {
+            "origin": f"{origin_lat},{origin_lng}",
+            "destination": f"{dest_lat},{dest_lng}",
+            "mode": "walking",
+            "key": GOOGLE_API_KEY,
+        }
+
+        r = requests.get(base_url, params=params, timeout=2)
+        r.raise_for_status()
+        data = r.json()
+
+        routes = data.get("routes", [])
+        if not routes:
             return None
 
-        leg = data["routes"][0]["legs"][0]
-        distance_text = leg["distance"]["text"]
-        duration_text = leg["duration"]["text"]
+        leg = routes[0].get("legs", [{}])[0]
+        duration_text = leg.get("duration", {}).get("text")
+        distance_text = leg.get("distance", {}).get("text")
 
-        maps_link = (
-            "https://www.google.com/maps/dir/?api=1"
-            f"&origin={origin_lat},{origin_lng}"
-            f"&destination={dest_lat},{dest_lng}"
-            "&travelmode=walking"
-        )
+        q = urllib.parse.urlencode({
+            "api": 1,
+            "origin": f"{origin_lat},{origin_lng}",
+            "destination": f"{dest_lat},{dest_lng}",
+            "travelmode": "walking"
+        })
+        maps_link = f"https://www.google.com/maps/dir/?{q}"
 
-        overview_poly = data["routes"][0].get("overview_polyline", {}).get("points")
-        
         return {
-            "distance_text": distance_text,
             "duration_text": duration_text,
+            "distance_text": distance_text,
             "maps_link": maps_link,
-            "polyline": decode_polyline(overview_poly)
         }
-    
-    except Exception as e:
-        print("Directions error:", e)
+
+    except Exception as ex:
+        print("Directions error:", ex)
         return None
 
 
-def walking_minutes(duration_text: str) -> int:
+def walking_minutes(walk_time: Optional[str]) -> Optional[int]:
     """
-    Extract minutes from a string like:
-      '7 min', '12 mins', '1 hour 5 mins'
-    Very simple parser; fallback is a big number.
+    Convert strings like '14 mins' or '1 hour 5 mins' into total minutes.
     """
-    if not duration_text:
-        return 999
 
-    text = duration_text.lower()
-    parts = text.split()
+    if not walk_time:
+        return None
+
+    text = walk_time.lower()
     total = 0
 
     try:
-        for i, token in enumerate(parts):
-            if token.startswith("hour"):
-                hrs = int(parts[i - 1])
-                total += hrs * 60
-            if token.startswith("min"):
-                mins = int(parts[i - 1])
-                total += mins
+        if "hour" in text:
+            parts = text.split("hour")[0].strip().split()
+            for p in parts:
+                if p.isdigit():
+                    total += int(p) * 60
+                    break
 
-        if total == 0:
-            # fallback: grab the first integer we see
-            for token in parts:
-                if token.isdigit():
-                    return int(token)
-            return 999
+        if "min" in text:
+            parts = text.split("min")[0].strip().split()
+            for p in reversed(parts):
+                if p.isdigit():
+                    total += int(p)
+                    break
 
-        return total
+        return total if total > 0 else None
     except Exception:
-        return 999
+        return None

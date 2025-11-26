@@ -4,30 +4,66 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
-from services.directions_service import get_walking_directions
-from utils.cache import init_requests_cache
-from services.recommendation_service import build_chat_response, get_quick_recommendations
-from services.nyc_events_service import events_near_bbox  # your existing file name
-from utils.chat_memory import ChatMemory
 
-# NYU Tandon-ish coordinates (for events bbox)
+from models.db import db, bcrypt
+
+# ROUTES
+from routes.auth_routes import auth_bp
+from routes.user_routes import user_bp
+
+# SERVICES
+from utils.cache import init_requests_cache
+from services.directions_service import get_walking_directions
+from services.recommendation.driver import build_chat_response
+from services.recommendation.quick_recommendations import get_quick_recommendations
+from services.scrapers.engage_events_service import fetch_engage_events
+from services.recommendation.context import ConversationContext
+from utils.auth import decode_token
+from models.users import User
+
+
+
+# NYU Tandon-ish coordinates
 TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
+
+
+# ─────────────────────────────────────────────────────────────
+# APP SETUP
+# ─────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Load env + configure external libs
 load_dotenv()
 init_requests_cache()
+
+# Secret key for JWT
+app.config["SECRET_KEY"] = os.getenv("JWT_SECRET", "dev-secret-change-me")
+
+# Database config
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///violetvibes.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Init extensions
+db.init_app(app)
+bcrypt.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+# Register blueprints
+app.register_blueprint(auth_bp, url_prefix="/api/auth")
+app.register_blueprint(user_bp, url_prefix="/api/user")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # ─────────────────────────────────────────────────────────────
-# CHAT
+# CHAT ROUTE
 # ─────────────────────────────────────────────────────────────
-memory = ChatMemory()
+
+memory = ConversationContext()
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -38,9 +74,31 @@ def chat():
         if not user_message:
             return jsonify({"error": "Missing 'message'"}), 400
 
-        # FIX: pass memory into build_chat_response
+        # Try to get user from JWT
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        user = None
+        profile_text = None
+
+        if token:
+            try:
+                payload = decode_token(token)
+                user = User.query.get(payload.get("sub"))
+                if user:
+                    # Build a text summary of user preferences
+                    profile_text = user.get_profile_text()
+            except Exception:
+                user = None
+                profile_text = None
+
         print("MEMORY STATE:", memory.history)
-        result = build_chat_response(user_message, memory)
+
+        # SAFE: profile_text is either a string or None
+        result = build_chat_response(
+            user_message,
+            memory,
+            user_profile_text=profile_text
+        )
+
         return jsonify(result)
 
     except Exception as e:
@@ -48,19 +106,11 @@ def chat():
         return jsonify({"error": "Internal server error"}), 500
 
 # ─────────────────────────────────────────────────────────────
-# QUICK ACTION RECOMMENDATIONS
+# QUICK RECOMMENDATIONS
 # ─────────────────────────────────────────────────────────────
+
 @app.route("/api/quick_recs", methods=["GET"])
 def quick_recs():
-    """
-    Lightweight, non-chat recommendations for Dashboard Quick Actions.
-
-    Example:
-      /api/quick_recs?category=quick_bites
-      /api/quick_recs?category=chill_cafes
-      /api/quick_recs?category=events
-      /api/quick_recs?category=explore
-    """
     try:
         category = (request.args.get("category") or "explore").lower()
         result = get_quick_recommendations(category, limit=10)
@@ -69,31 +119,25 @@ def quick_recs():
         print("QUICK_RECS ERROR:", e)
         return jsonify({"error": "Unable to fetch quick recommendations"}), 500
 
+
 # ─────────────────────────────────────────────────────────────
 # EVENTS
 # ─────────────────────────────────────────────────────────────
-
-@app.route("/api/events", methods=["GET"])
-def events():
-    """
-    Example: grab permitted events from NYC Open Data
-    within a bounding box around Downtown Brooklyn.
-    """
+@app.route("/api/nyu_engage_events", methods=["GET"])
+def nyu_engage_events():
     try:
-        lat_min = TANDON_LAT - 0.03
-        lat_max = TANDON_LAT + 0.03
-        lng_min = TANDON_LNG - 0.03
-        lng_max = TANDON_LNG + 0.03
-
-        data = events_near_bbox(lat_min, lat_max, lng_min, lng_max, limit=10)
-        return jsonify({"nyc_permitted": data})
+        days = int(request.args.get("days", 7))
+        data = fetch_engage_events(days_ahead=days)
+        return jsonify({"engage_events": data})
     except Exception as e:
-        print("EVENTS ERROR:", e)
-        return jsonify({"error": "Unable to fetch events"}), 500
-    
-#--------------------------------
-# Directions
-#--------------------------------
+        print("ENGAGE EVENTS ERROR:", e)
+        return jsonify({"error": "Unable to fetch NYU Engage events"}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+# DIRECTIONS
+# ─────────────────────────────────────────────────────────────
+
 @app.route("/api/directions", methods=["GET"])
 def directions():
     lat = float(request.args.get("lat"))
@@ -111,7 +155,7 @@ def directions():
 
 
 # ─────────────────────────────────────────────────────────────
-# HEALTH
+# HEALTH CHECK
 # ─────────────────────────────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
@@ -120,9 +164,8 @@ def health():
 
 
 # ─────────────────────────────────────────────────────────────
-# MAIN
+# MAIN ENTRY
 # ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # When running directly: python app.py
     app.run(host="0.0.0.0", port=5001, debug=True)

@@ -1,69 +1,42 @@
 # server/services/vibes.py
-from typing import List, Tuple
+from typing import Tuple
 
+
+# -------------------------------------------------------------
+# SIMPLE RULE-BASED VIBE CLASSIFIER
+# -------------------------------------------------------------
 
 def classify_vibe(message: str) -> str:
-    """
-    Very lightweight rule-based vibe classifier.
-    Returns one of:
-      - 'fast_bite'
-      - 'chill_drinks'
-      - 'party'
-      - 'study'
-      - 'food_general'
-      - 'bookstore'
-      - 'shopping'
-      - 'explore'
-      - 'generic'
-    """
-    msg = message.lower()
+    msg = message.lower().strip()
 
     fast_words = [
-        "quick", "rush", "in a hurry", "hurry",
-        "10 minutes", "ten minutes", "little time",
-        "short break", "fast", "grab something fast",
-        "between classes", "only have"
+        "quick", "rush", "in a hurry", "10 minutes", "little time",
+        "short break", "fast", "grab something fast", "between classes"
     ]
 
-    drink_words = [
-        "drink", "drinks", "bar", "beer", "cocktail",
-        "wine", "pub"
-    ]
+    drink_words = ["drink", "drinks", "bar", "beer", "cocktail", "wine", "pub"]
 
-    party_words = [
-        "party", "club", "clubbing", "dance", "dancing",
-        "turn up", "lit", "rager"
-    ]
+    party_words = ["party", "club", "clubbing", "dance", "turn up", "lit", "rager"]
 
     study_words = [
-        "study", "study break", "homework", "assignment",
-        "chill cafe", "coffee shop", "coffee", "laptop friendly",
-        "study spot"
+        "study", "homework", "assignment", "quiet", "coffee",
+        "study spot", "chill cafe", "laptop friendly"
     ]
 
     food_words = [
-        "eat", "dinner", "lunch", "food",
-        "grab a bite", "grab food", "restaurant"
+        "eat", "dinner", "lunch", "food", "grab a bite", "restaurant"
     ]
 
-    book_words = [
-        "bookstore", "book store", "books", "comic shop",
-        "manga", "library"
-    ]
+    book_words = ["bookstore", "books", "comic shop", "manga", "library"]
 
     shopping_words = [
-        "shopping", "shop", "stores", "store",
-        "mall", "clothes", "clothing", "shoe store",
-        "sneakers", "jewelry"
+        "shopping", "shop", "stores", "mall", "clothes", "shoes", "jewelry"
     ]
 
     explore_words = [
-        "explore", "walk around", "sightseeing", "sight seeing",
-        "landmark", "viewpoint", "view point", "view",
-        "photos", "pictures", "instagram", "insta", "lookout",
-        "bridge", "things to do", "something to do",
-        "kill time", "killing time", "free time", "for 30 minutes",
-        "for half an hour"
+        "explore", "walk around", "sightseeing", "landmark", "viewpoint",
+        "photos", "pictures", "instagram", "lookout",
+        "things to do", "kill time", "something to do"
     ]
 
     if any(w in msg for w in fast_words):
@@ -86,51 +59,59 @@ def classify_vibe(message: str) -> str:
     return "generic"
 
 
+# -------------------------------------------------------------
+# MAPPING VIBE → GOOGLE PLACE TYPES + RADIUS
+# -------------------------------------------------------------
+
 def vibe_to_place_types(vibe: str) -> Tuple[list, int]:
-    """
-    Map a vibe to:
-      - a list of Google Places types
-      - search radius in meters
-    """
     if vibe == "fast_bite":
-        # Very close to campus
         return ["meal_takeaway", "fast_food", "restaurant"], 600
 
     if vibe == "chill_drinks":
-        # Chill bars / pubs, walkable
         return ["bar"], 1500
 
     if vibe == "party":
-        # Louder nightlife
         return ["night_club", "bar"], 2000
 
     if vibe == "study":
-        # Cafés that are laptop-friendly-ish
-        return ["cafe"], 1200
+        return ["cafe", "library"], 1200
 
     if vibe == "food_general":
         return ["restaurant", "cafe"], 1500
 
     if vibe == "bookstore":
-        # Book shops and similar
-        return ["book_store"], 2000
+        return ["book_store", "library"], 2000
 
     if vibe == "shopping":
-        # General shopping cluster near Fulton/Downtown Brooklyn
         return [
-            "shopping_mall",
-            "clothing_store",
-            "department_store",
-            "shoe_store",
-            "jewelry_store",
+            "shopping_mall", "clothing_store", "department_store",
+            "shoe_store", "jewelry_store"
         ], 2000
 
     if vibe == "explore":
-        # Landmarks, viewpoints, photo spots, “things to do”
-        return [
-            "tourist_attraction",
-            "point_of_interest",
-        ], 2500
+        return ["tourist_attraction", "point_of_interest"], 2500
 
-    # generic – lean towards a mix
     return ["restaurant", "cafe", "tourist_attraction"], 1800
+
+
+# -------------------------------------------------------------
+# NEW — EVENT FILTERING LOGIC
+# -------------------------------------------------------------
+
+# These vibes should NOT show events:
+PLACE_ONLY_VIBES = {
+    "study",
+    "fast_bite",
+    "chill_drinks",
+    "food_general",
+    "bookstore",
+    "shopping",
+    "generic",
+}
+
+# These vibes SHOULD include events:
+PLACE_AND_EVENT_VIBES = {
+    "explore",
+    "party",
+}
+

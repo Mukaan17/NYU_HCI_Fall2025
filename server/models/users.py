@@ -50,3 +50,31 @@ class User(db.Model):
         # keep last 100 actions max
         log = log[-100:]
         self.recent_activity = json.dumps(log)
+
+    def get_profile_text(self):
+        """
+        Converts stored preferences into a natural-language blurb
+        used to influence embeddings.
+        """
+        prefs = self.get_preferences()
+
+        parts = []
+
+        vibes = prefs.get("preferred_vibes", [])
+        if vibes:
+            parts.append("User enjoys: " + ", ".join(vibes))
+
+        diets = prefs.get("dietary_restrictions", [])
+        if diets:
+            parts.append("Diet: " + ", ".join(diets))
+
+        dist = prefs.get("max_walk_minutes_default")
+        if dist:
+            parts.append(f"Prefers walking under {dist} minutes")
+
+        interests = prefs.get("interests")
+        if interests:
+            parts.append(f"Interests include: {interests}")
+
+        return ". ".join(parts)
+

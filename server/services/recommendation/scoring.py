@@ -1,13 +1,13 @@
 # services/recommendation/scoring.py
-
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
-import math
 
 import google.generativeai as genai
 
 from services.directions_service import walking_minutes
 from services.recommendation.embeddings import get_embedding, cosine_similarity
+from services.recommendation.profile_boosts import apply_profile_boosts
+from services.vibes import classify_vibe
 
 
 def _distance_score(walk_time: Optional[str]) -> float:
@@ -31,7 +31,6 @@ def _semantic_tag_adjustment(item, vibe_text):
     adjustment = 0.0
     name = (item.get("name") or "").lower()
 
-    # auto-detected tags
     tags = []
     if "cafe" in name or "coffee" in name or "espresso" in name:
         tags.append("coffee shop")
@@ -48,22 +47,26 @@ def _semantic_tag_adjustment(item, vibe_text):
             continue
 
         sim = cosine_similarity(vibe_emb, tag_emb)
-        # + for good match, - for mismatch
-        adjustment += (sim - 0.5) * 0.3  # mild but effective
+        adjustment += (sim - 0.5) * 0.3  # mild boost
 
     return adjustment
 
 
+# --------------------------------------------------------------
+# NEW FINAL VERSION: embedding score + preference boosts
+# --------------------------------------------------------------
 def score_items_with_embeddings(
     query_text: str,
     items: List[Dict[str, Any]],
-    user_profile_text: Optional[str] = None,
-    vibe_text: Optional[str] = None,
+    profile: Optional[dict] = None,
 ) -> None:
 
     query_emb = get_embedding(query_text) if query_text else []
-    profile_emb = get_embedding(user_profile_text) if user_profile_text else []
+    vibe = classify_vibe(query_text)
 
+    # -------------------------------
+    # 1. Embedding-based scoring
+    # -------------------------------
     for item in items:
         item_text = (
             (item.get("name") or "") + " "
@@ -72,18 +75,20 @@ def score_items_with_embeddings(
         )
 
         item_emb = get_embedding(item_text)
-
         sim_query = cosine_similarity(query_emb, item_emb)
-        sim_profile = cosine_similarity(profile_emb, item_emb)
         dist = _distance_score(item.get("walk_time"))
-
-        semantic_adj = _semantic_tag_adjustment(item, vibe_text)
+        semantic_adj = _semantic_tag_adjustment(item, vibe)
 
         score = (
-            0.65 * sim_query +
-            0.20 * sim_profile +
-            0.10 * dist +
-            0.05 * semantic_adj
+            0.75 * sim_query +   # increased emphasis
+            0.15 * dist +
+            0.10 * semantic_adj
         )
 
         item["score"] = float(score)
+
+    # -------------------------------
+    # 2. Preference boosts
+    # -------------------------------
+    if profile:
+        apply_profile_boosts(items, vibe, profile)

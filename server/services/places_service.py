@@ -5,7 +5,10 @@ import requests
 from utils.retry import retry_api_call
 
 logger = logging.getLogger(__name__)
+
+# Use ONE key name consistently everywhere
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+
 
 def build_photo_url(photo_reference: str | None, max_width: int = 400) -> str | None:
     if not photo_reference:
@@ -20,9 +23,23 @@ def build_photo_url(photo_reference: str | None, max_width: int = 400) -> str | 
 
 
 @retry_api_call(max_attempts=3, min_wait=1, max_wait=5)
-def nearby_places(lat, lng, place_type="cafe", radius=1500, min_rating=3.8, limit=10):
+def nearby_places(
+    lat,
+    lng,
+    place_type: str = "cafe",
+    radius: int = 1500,
+    open_now: bool = False,
+    min_rating: float = 3.8,
+    limit: int = 10,
+):
     """
     Fetch nearby places from Google Places API with retry logic and timeout.
+
+    This version:
+    - Supports `open_now` flag
+    - Applies a basic min_rating filter
+    - Limits number of results
+    - Attaches `photo_url` when possible
     """
     if not GOOGLE_API_KEY:
         logger.warning("GOOGLE_API_KEY not set, cannot fetch places")
@@ -34,11 +51,13 @@ def nearby_places(lat, lng, place_type="cafe", radius=1500, min_rating=3.8, limi
         "location": f"{lat},{lng}",
         "radius": radius,
         "type": place_type,
-        "opennow": True,
         "key": GOOGLE_API_KEY,
     }
 
-    # ★ STUDY FIX: keyword=coffee improves Google accuracy
+    if open_now:
+        params["opennow"] = "true"
+
+    # Small tweak: for cafes, bias to coffee terms
     if place_type == "cafe":
         params["keyword"] = "coffee"
 
@@ -58,10 +77,12 @@ def nearby_places(lat, lng, place_type="cafe", radius=1500, min_rating=3.8, limi
         for p in filtered:
             photos = p.get("photos", [])
             if photos:
-                p["photo_url"] = build_photo_url(photos[0].get("photo_reference"))
+                ref = photos[0].get("photo_reference")
+                p["photo_url"] = build_photo_url(ref)
 
         logger.debug(f"Found {len(filtered)} places for {place_type}")
         return filtered[:limit]
+
     except requests.Timeout:
         logger.error(f"Timeout fetching places for {place_type}")
         raise

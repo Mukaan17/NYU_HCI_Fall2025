@@ -1,109 +1,150 @@
-# server/services/recommendation/driver.py
-
+# services/recommendation/driver.py
 from __future__ import annotations
-from typing import List, Dict, Any, Optional
 import time
 import logging
 
-from services.vibes import classify_vibe, vibe_to_place_types, PLACE_ONLY_VIBES, PLACE_AND_EVENT_VIBES
-from services.recommendation.events import fetch_all_external_events
+from services.vibes import classify_vibe, vibe_to_place_types
 from services.recommendation.scoring import score_items_with_embeddings
-from services.recommendation.llm_reply import generate_list_reply
-from services.directions_service import walking_minutes
-from services.places_service import nearby_places
+from services.recommendation.event_filter import filter_events
+from services.recommendation.events import fetch_all_external_events
 from services.recommendation.context import ConversationContext
+from services.recommendation.places import normalize_place
+from services.recommendation.event_normalizer import normalize_event
+
+from services.places_service import nearby_places
+from services.directions_service import get_walking_directions
+from services.weather_service import current_weather
 
 logger = logging.getLogger(__name__)
 
+TANDON_LAT = 40.6942
+TANDON_LNG = -73.9866
 
-# -------------------------------------------------------------
-# MAIN CHAT PIPELINE
-# -------------------------------------------------------------
 
+# ---------------------------------------------------------------------
+# MAIN RESPONSE ENTRY
+# ---------------------------------------------------------------------
 def build_chat_response(
     message: str,
     memory: ConversationContext,
-    user_profile_text: Optional[str] = None
-) -> Dict[str, Any]:
+    user_profile=None,
+):
+    user_profile = user_profile or {}
+    t0 = time.time()
 
-    start_t = time.time()
-
-    # ---------------------------------------------------------
-    # 1. Detect vibe from the message
-    # ---------------------------------------------------------
+    # STEP 1 — classify user vibe
     vibe = classify_vibe(message)
-    memory.context = vibe
-
-    # ---------------------------------------------------------
-    # 2. Get place types + radius for this vibe
-    # ---------------------------------------------------------
     place_types, radius = vibe_to_place_types(vibe)
 
-    # ---------------------------------------------------------
-    # 3. Fetch Google Places
-    # ---------------------------------------------------------
-    items: List[Dict[str, Any]] = []
-    lat, lng = 40.6942, -73.9866  # Tandon
+    # STEP 2 — Load static events (safe if file missing)
+    events = fetch_all_external_events()
 
+    # STEP 3 — Filter appropriate events based on vibe + message
+    filtered_events = filter_events(vibe, message, events)
+
+    # STEP 4 — Query nearby places (OPEN NOW)
+    raw_places = []
     for t in place_types:
         try:
-            results = nearby_places(lat, lng, place_type=t, radius=radius, limit=12)
-            for r in results:
-                r["type"] = "place"
-                r["source"] = "google_places"
-                items.append(r)
+            raw_places.extend(
+                nearby_places(
+                    lat=TANDON_LAT,
+                    lng=TANDON_LNG,
+                    place_type=t,
+                    radius=radius,
+                    open_now=True,
+                )
+            )
         except Exception as e:
             logger.warning(f"Error fetching nearby places for type {t}: {e}")
 
-    # ---------------------------------------------------------
-    # 4. Add events ONLY if vibe supports events
-    # ---------------------------------------------------------
-    if vibe in PLACE_AND_EVENT_VIBES:
-        try:
-            events = fetch_all_external_events(limit=25)
-            for ev in events:
-                ev["type"] = "event"
-                items.append(ev)
-        except Exception as e:
-            logger.warning(f"Error fetching events: {e}")
+    # STEP 5 — Normalize places into unified cards
+    seen = set()
+    final_places = []
 
-    # Safety fallback
+    for p in raw_places:
+        key = p.get("place_id") or p.get("name")
+        if key in seen:
+            continue
+        seen.add(key)
+
+        loc = p.get("geometry", {}).get("location", {})
+        lat = loc.get("lat")
+        lng = loc.get("lng")
+        if lat is None or lng is None:
+            continue
+
+        try:
+            directions = get_walking_directions(TANDON_LAT, TANDON_LNG, lat, lng)
+        except Exception:
+            directions = None
+
+        final_places.append(normalize_place(p, directions))
+
+    # STEP 6 — Normalize events
+    normalized_events = []
+    for e in filtered_events:
+        try:
+            normalized_events.append(normalize_event(e))
+        except Exception as ex:
+            logger.warning(f"EVENT NORMALIZATION ERROR: {ex}")
+
+    # STEP 7 — Combine places + events
+    items = final_places + normalized_events
+
     if not items:
         return {
-            "reply": "I’m having trouble finding places right now — try again!",
+            "debug_vibe": vibe,
+            "latency": round(time.time() - t0, 2),
             "places": [],
+            "reply": "Sorry, I couldn't find anything nearby right now.",
+            "weather": current_weather(),
         }
 
-    # ---------------------------------------------------------
-    # 5. Score + rerank items
-    # ---------------------------------------------------------
+    # STEP 8 — Score with query + profile + vibe
     score_items_with_embeddings(
         query_text=message,
         items=items,
-        user_profile_text=user_profile_text
+        profile=user_profile,
     )
 
+    # STEP 9 — Sort
     items.sort(key=lambda x: x.get("score", 0), reverse=True)
-    top_items = items[:3]
 
-    # ---------------------------------------------------------
-    # 6. Build LLM reply
-    # ---------------------------------------------------------
-    reply = generate_list_reply(message, top_items)
-
-    # ---------------------------------------------------------
-    # 7. Update memory
-    # ---------------------------------------------------------
-    memory.set_places(top_items)
+    # Update memory with top results (for future follow-ups if needed)
+    memory.set_places(items[:3])
     memory.set_results(items)
 
-    # --------------------------------------------
-    # 8. Return response
-    # --------------------------------------------
+    # STEP 10 — Build surface reply
+    reply = build_surface_reply(message, items)
+
     return {
-        "reply": reply,
-        "places": top_items,
-        "weather": memory.latest_weather if hasattr(memory, "latest_weather") else None,
         "debug_vibe": vibe,
-        "latency": round(time.time() - start_t, 2)
+        "latency": round(time.time() - t0, 2),
+        "places": items[:3],
+        "reply": reply,
+        "weather": current_weather(),
     }
+
+
+# ---------------------------------------------------------------------
+# SURFACE REPLY
+# ---------------------------------------------------------------------
+def build_surface_reply(user_msg: str, items: list):
+    if not items:
+        return "Sorry, I couldn't find anything nearby right now."
+
+    top = items[:2]
+
+    lines = ["Hey there!"]
+    for p in top:
+        name = p.get("name", "Unknown")
+        dist = p.get("distance") or ""
+        walk = p.get("walk_time") or ""
+
+        if dist and walk:
+            lines.append(f"You might like **{name}** ({dist}, {walk}).")
+        else:
+            lines.append(f"You might like **{name}**.")
+
+    return "\n".join(lines)

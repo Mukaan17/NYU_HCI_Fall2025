@@ -2,6 +2,14 @@
 //  UserPreferences.swift
 //  VioletVibes
 //
+//  Created by Mukhil Sundararaj on 11/25/25.
+//
+
+
+//
+//  UserPreferences.swift
+//  VioletVibes
+//
 
 import Foundation
 

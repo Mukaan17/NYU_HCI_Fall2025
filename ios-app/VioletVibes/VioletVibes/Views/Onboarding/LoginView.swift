@@ -148,7 +148,7 @@ struct LoginView: View {
                                 if isSignUpMode {
                                     isEmailValid = validateNYUEmail(sanitized)
                                 } else {
-                                isEmailValid = validateEmail(sanitized)
+                                    isEmailValid = validateEmail(sanitized)
                                 }
                             }
                     }
@@ -216,7 +216,7 @@ struct LoginView: View {
                         if isSignUpMode {
                             handleSignUp()
                         } else {
-                        handleEmailLogin()
+                            handleEmailLogin()
                         }
                     }) {
                         HStack {
@@ -407,7 +407,7 @@ struct LoginView: View {
         return input.unicodeScalars
             .filter { scalar in
                 // Check if it's in allowed set and not a control character
-                allowedChars.contains(scalar) && 
+                allowedChars.contains(scalar) &&
                 !CharacterSet.controlCharacters.contains(scalar)
             }
             .reduce("") { $0 + String($1) }

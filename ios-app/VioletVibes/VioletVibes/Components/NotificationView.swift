@@ -18,7 +18,7 @@ struct NotificationView: View {
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3)) {
-                        onDismiss()
+                            onDismiss()
                         }
                     }
                 

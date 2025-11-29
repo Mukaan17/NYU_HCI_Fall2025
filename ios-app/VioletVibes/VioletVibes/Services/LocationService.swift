@@ -212,7 +212,7 @@ extension LocationService: CLLocationManagerDelegate {
         print("📍 LocationService: Received location update: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         // Direct assignment since we're already on MainActor
         self.location = location
-        }
+    }
     
     @MainActor
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -224,13 +224,13 @@ extension LocationService: CLLocationManagerDelegate {
     @MainActor
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let newStatus = manager.authorizationStatus
-            self.authorizationStatus = newStatus
-            
-            // Resume permission continuation if waiting (only if still set to prevent double resume)
-            if let continuation = self.permissionContinuation {
-                self.permissionContinuation = nil
-                let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
-                continuation.resume(returning: isAuthorized)
+        self.authorizationStatus = newStatus
+        
+        // Resume permission continuation if waiting (only if still set to prevent double resume)
+        if let continuation = self.permissionContinuation {
+            self.permissionContinuation = nil
+            let isAuthorized = newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways
+            continuation.resume(returning: isAuthorized)
         }
     }
 }

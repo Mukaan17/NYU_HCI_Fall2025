@@ -40,77 +40,69 @@ final class ChatViewModel {
             timestamp: Date()
         )
         
-            messages.append(userMessage)
-            isTyping = true
+        messages.append(userMessage)
+        isTyping = true
         
         do {
             let response = try await apiService.sendChatMessage(trimmed, latitude: latitude, longitude: longitude)
             
             await MainActor.run {
-            // Add AI text reply
-            let aiMessage = ChatMessage(
-                id: Int(Date().timeIntervalSince1970) + 1,
-                type: .text,
-                role: .ai,
-                    content: response.replyText,
-                timestamp: Date()
-            )
-            
-                messages.append(aiMessage)
-            
-            // Add recommendations if present
-            if let places = response.places, !places.isEmpty {
-                    let baseTimestamp = Int(Date().timeIntervalSince1970 * 1000)
-                let recommendations = places.enumerated().map { index, place in
-                        // Generate truly unique ID: use place.id if valid, otherwise use hash of title+location+index
-                        let uniqueId: Int
-                        if place.id != 0 {
-                            uniqueId = place.id
-                        } else {
-                            // Create unique ID from place data to avoid duplicates
-                            let idString = "\(place.title)\(place.lat ?? 0)\(place.lng ?? 0)\(index)"
-                            uniqueId = abs(idString.hashValue) + baseTimestamp + index
-                        }
-                        return Recommendation(
-                            id: uniqueId,
-                        title: place.title,
-                        description: place.description,
-                            distance: place.distance,
-                        walkTime: place.walkTime,
-                        lat: place.lat,
-                        lng: place.lng,
-                        popularity: place.popularity,
-                        image: place.image
-                    )
-                }
-                
-                let recommendationsMessage = ChatMessage(
-                    id: Int(Date().timeIntervalSince1970) + 2,
-                    type: .recommendations,
+                // Add AI text reply
+                let aiMessage = ChatMessage(
+                    id: Int(Date().timeIntervalSince1970) + 1,
+                    type: .text,
                     role: .ai,
-                    content: nil,
-                    recommendations: recommendations,
+                    content: response.replyText,
                     timestamp: Date()
                 )
                 
+                messages.append(aiMessage)
+                
+                // Add recommendations if present
+                if let places = response.places, !places.isEmpty {
+                    let recommendations = places.enumerated().map { index, place in
+                        // Use a unique ID based on timestamp and index to avoid duplicates
+                        let uniqueId = Int(Date().timeIntervalSince1970 * 1000) + index
+                        return Recommendation(
+                            id: place.id != 0 ? place.id : uniqueId,
+                            title: place.title,
+                            description: place.description,
+                            distance: place.distance,
+                            walkTime: place.walkTime,
+                            lat: place.lat,
+                            lng: place.lng,
+                            popularity: place.popularity,
+                            image: place.image
+                        )
+                    }
+                    
+                    let recommendationsMessage = ChatMessage(
+                        id: Int(Date().timeIntervalSince1970) + 2,
+                        type: .recommendations,
+                        role: .ai,
+                        content: nil,
+                        recommendations: recommendations,
+                        timestamp: Date()
+                    )
+                    
                     messages.append(recommendationsMessage)
                 }
                 
-                    isTyping = false
+                isTyping = false
             }
         } catch {
             print("Chat error: \(error)")
             print("Error details: \(error.localizedDescription)")
             
             await MainActor.run {
-            let errorMessage = ChatMessage(
-                id: Int(Date().timeIntervalSince1970) + 1,
-                type: .text,
-                role: .ai,
-                content: "I'm having trouble connecting right now. Please try again!",
-                timestamp: Date()
-            )
-            
+                let errorMessage = ChatMessage(
+                    id: Int(Date().timeIntervalSince1970) + 1,
+                    type: .text,
+                    role: .ai,
+                    content: "I'm having trouble connecting right now. Please try again!",
+                    timestamp: Date()
+                )
+                
                 messages.append(errorMessage)
                 isTyping = false
             }

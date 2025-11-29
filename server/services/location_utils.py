@@ -1,7 +1,9 @@
 import os
+import logging
 import requests
 import math
 
+logger = logging.getLogger(__name__)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def haversine(lat1, lng1, lat2, lng2):
@@ -65,7 +67,7 @@ def geocode_address(address: str):
         return None
 
     if not GOOGLE_API_KEY:
-        print("[GEOCODE] Missing GOOGLE_API_KEY")
+        logger.warning("[GEOCODE] Missing GOOGLE_API_KEY")
         return None
 
     url = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -80,7 +82,7 @@ def geocode_address(address: str):
         data = r.json()
 
         if data.get("status") != "OK":
-            print("[GEOCODE] Failed:", data.get("status"))
+            logger.warning(f"[GEOCODE] Failed: {data.get('status')}")
             return None
 
         loc = data["results"][0]["geometry"]["location"]
@@ -90,5 +92,5 @@ def geocode_address(address: str):
         }
 
     except Exception as e:
-        print("[GEOCODE ERROR]", e)
+        logger.error(f"[GEOCODE ERROR] {e}", exc_info=True)
         return None

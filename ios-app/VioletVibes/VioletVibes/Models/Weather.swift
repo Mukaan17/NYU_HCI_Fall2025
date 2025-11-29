@@ -5,11 +5,6 @@
 
 import Foundation
 
-struct WeatherCondition: Codable, Sendable {
-    let main: String
-    let description: String?
-}
-
 struct Weather: Codable, Sendable {
     let temp: Int
     let emoji: String
@@ -34,7 +29,7 @@ struct Weather: Codable, Sendable {
         }
         // Handle OpenWeather API response format: main.temp
         else if let mainDict = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .main),
-           let tempDouble = try? mainDict.decode(Double.self, forKey: .temp) {
+                let tempDouble = try? mainDict.decode(Double.self, forKey: .temp) {
             temp = Int(round(tempDouble))
         }
         // Handle direct temp field
@@ -61,8 +56,8 @@ struct Weather: Codable, Sendable {
             }
         }
         // Handle OpenWeather API response format: weather array
-        else if let weatherList = try? container.decode([WeatherCondition].self, forKey: .weather),
-                let condition = weatherList.first?.main.lowercased() {
+        else if let weatherArray = try? container.decode([[String: String]].self, forKey: .weather),
+                let condition = weatherArray.first?["main"]?.lowercased() {
             switch condition {
             case let c where c.contains("cloud"):
                 emoji = "☁️"

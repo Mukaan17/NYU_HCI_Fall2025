@@ -3,9 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>API_URL</key>
-	<string>http://localhost:5001</string>
+	<string>https://your-app-name.ondigitalocean.app</string>
+	<!-- 
+		For local development, use: http://localhost:5001
+		For production, replace with your DigitalOcean App Platform URL
+		Example: https://violetvibes-backend.ondigitalocean.app
+	-->
 	<key>OPENWEATHER_KEY</key>
-	<string>YOUR_OPENWEATHER_API_KEY_HERE</string>
+	<string>dbb5ec5c928fa184644c1d33f2d9b396</string>
 </dict>
 </plist>
-

@@ -3,6 +3,7 @@
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
 import time
+import logging
 
 from services.vibes import classify_vibe, vibe_to_place_types, PLACE_ONLY_VIBES, PLACE_AND_EVENT_VIBES
 from services.recommendation.events import fetch_all_external_events
@@ -11,6 +12,8 @@ from services.recommendation.llm_reply import generate_list_reply
 from services.directions_service import walking_minutes
 from services.places_service import nearby_places
 from services.recommendation.context import ConversationContext
+
+logger = logging.getLogger(__name__)
 
 
 # -------------------------------------------------------------
@@ -50,7 +53,7 @@ def build_chat_response(
                 r["source"] = "google_places"
                 items.append(r)
         except Exception as e:
-            print("Nearby error:", e)
+            logger.warning(f"Error fetching nearby places for type {t}: {e}")
 
     # ---------------------------------------------------------
     # 4. Add events ONLY if vibe supports events
@@ -62,7 +65,7 @@ def build_chat_response(
                 ev["type"] = "event"
                 items.append(ev)
         except Exception as e:
-            print("Events fetch error:", e)
+            logger.warning(f"Error fetching events: {e}")
 
     # Safety fallback
     if not items:

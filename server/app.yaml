@@ -1,0 +1,60 @@
+name: violetvibes-backend
+region: nyc
+
+services:
+  - name: api
+    github:
+      repo: your-username/your-repo
+      branch: main
+      deploy_on_push: true
+    
+    build_command: pip install -r requirements.txt
+    
+    run_command: gunicorn --worker-tmp-dir /dev/shm --workers 2 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    
+    http_port: 8080
+    
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    
+    envs:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: ${PORT}
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: GEMINI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: REDIS_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: OPENWEATHER_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: ALLOWED_ORIGINS
+        scope: RUN_TIME
+        type: SECRET
+      - key: LOG_LEVEL
+        value: INFO
+
+databases:
+  - name: violetvibes-db
+    engine: PG
+    version: "15"
+    production: false
+    cluster_name: violetvibes-db-cluster
+

@@ -1,7 +1,11 @@
 # services/recommendation/llm_reply.py
 
+import logging
 from typing import List, Dict, Any
 import google.generativeai as genai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+logger = logging.getLogger(__name__)
 
 
 def format_items_for_prompt(items: List[Dict[str, Any]]) -> str:
@@ -20,6 +24,12 @@ def format_items_for_prompt(items: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+@retry(
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=1, max=3),
+    retry=retry_if_exception_type((Exception,)),
+    reraise=False
+)
 def generate_list_reply(user_message: str, items: List[Dict[str, Any]]) -> str:
     """
     Use Gemini to generate a friendly reply describing only the provided items.
@@ -47,14 +57,15 @@ Rules:
 
     try:
         model = genai.GenerativeModel("models/gemini-2.5-flash")
-        resp = model.generate_content(prompt)
+        resp = model.generate_content(prompt, request_options={"timeout": 10})
         text = getattr(resp, "text", None)
         if not text:
+            logger.warning("Gemini returned empty response")
             return "Here are some options nearby!"
         return text.strip()
 
     except Exception as e:
-        print("LLM_REPLY ERROR:", e)
+        logger.error(f"LLM reply error: {e}", exc_info=True)
         # Always fall back to a simple deterministic reply
         fallback = "Here are some nearby options:\n" + items_text
         return fallback

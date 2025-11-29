@@ -6,35 +6,186 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		BC12B9352ECFC2FF00485C4C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BC12B91D2ECFC2FE00485C4C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BC12B9242ECFC2FE00485C4C;
+			remoteInfo = VioletVibes;
+		};
+		BC12B93F2ECFC2FF00485C4C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BC12B91D2ECFC2FE00485C4C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BC12B9242ECFC2FE00485C4C;
+			remoteInfo = VioletVibes;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		96ECD8962ED28BD900503D83 /* VioletVibes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VioletVibes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC12B9252ECFC2FE00485C4C /* VioletVibes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VioletVibes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC12B9342ECFC2FF00485C4C /* VioletVibesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VioletVibesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC12B93E2ECFC2FF00485C4C /* VioletVibesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VioletVibesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		96ECD8FB2ED28E2800503D83 /* Exceptions for "VioletVibes" folder in "VioletVibes" target */ = {
+		BC12B9F82ECFC34F00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibesTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Assets.xcassets,
-				Config.plist,
+				Components/InputField.swift,
+				Components/LocationPickerView.swift,
+				Components/NavBar.swift,
+				Components/NotificationView.swift,
+				Components/PrimaryButton.swift,
+				Components/RecommendationCard.swift,
+				Info.plist,
+				Models/APIResponse.swift,
+				Models/ChatMessage.swift,
+				Models/QuickAction.swift,
+				Models/Recommendation.swift,
+				Models/SelectedPlace.swift,
+				Models/TrustedContact.swift,
+				Models/UserAccount.swift,
+				Models/UserPreferences.swift,
+				Models/Weather.swift,
+				Resources/Theme.swift,
+				Services/APIService.swift,
+				Services/CalendarService.swift,
+				Services/ContactsServices.swift,
+				Services/LocationService.swift,
+				Services/LocationSharingService.swift,
+				Services/NotificationService.swift,
+				Services/RemindersService.swift,
+				Services/StorageService.swift,
+				Services/WeatherService.swift,
+				"Utilities/Extensions/Color+Hex.swift",
+				Utilities/Helpers/PolylineDecoder.swift,
+				ViewModels/ChatViewModel.swift,
+				ViewModels/DashboardViewModel.swift,
+				ViewModels/LocationManager.swift,
+				ViewModels/MapViewModel.swift,
+				ViewModels/OnboardingViewModel.swift,
+				ViewModels/PlaceViewModel.swift,
+				ViewModels/WeatherManager.swift,
+				Views/Chat/ChatView.swift,
+				Views/Dashboard/DashboardView.swift,
+				Views/MainTabView.swift,
+				Views/Map/MapView.swift,
+				Views/Onboarding/LoginView.swift,
+				Views/Onboarding/OnboardingSurveyView.swift,
+				Views/Onboarding/PermissionCard.swift,
+				Views/Onboarding/PermissionsView.swift,
+				Views/Onboarding/WelcomeView.swift,
+				Views/Quick/QuickResultsSheetView.swift,
+				Views/Safety/SafetyView.swift,
+				Views/Safety/ShareLocationView.swift,
+				VioletVibesApp.swift,
+			);
+			target = BC12B9332ECFC2FF00485C4C /* VioletVibesTests */;
+		};
+		BC12B9F92ECFC34F00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibesUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Components/InputField.swift,
+				Components/LocationPickerView.swift,
+				Components/NavBar.swift,
+				Components/NotificationView.swift,
+				Components/PrimaryButton.swift,
+				Components/RecommendationCard.swift,
+				Info.plist,
+				Models/APIResponse.swift,
+				Models/ChatMessage.swift,
+				Models/QuickAction.swift,
+				Models/Recommendation.swift,
+				Models/SelectedPlace.swift,
+				Models/TrustedContact.swift,
+				Models/UserAccount.swift,
+				Models/UserPreferences.swift,
+				Models/Weather.swift,
+				Resources/Theme.swift,
+				Services/APIService.swift,
+				Services/CalendarService.swift,
+				Services/ContactsServices.swift,
+				Services/LocationService.swift,
+				Services/LocationSharingService.swift,
+				Services/NotificationService.swift,
+				Services/RemindersService.swift,
+				Services/StorageService.swift,
+				Services/WeatherService.swift,
+				"Utilities/Extensions/Color+Hex.swift",
+				Utilities/Helpers/PolylineDecoder.swift,
+				ViewModels/ChatViewModel.swift,
+				ViewModels/DashboardViewModel.swift,
+				ViewModels/LocationManager.swift,
+				ViewModels/MapViewModel.swift,
+				ViewModels/OnboardingViewModel.swift,
+				ViewModels/PlaceViewModel.swift,
+				ViewModels/WeatherManager.swift,
+				Views/Chat/ChatView.swift,
+				Views/Dashboard/DashboardView.swift,
+				Views/MainTabView.swift,
+				Views/Map/MapView.swift,
+				Views/Onboarding/LoginView.swift,
+				Views/Onboarding/OnboardingSurveyView.swift,
+				Views/Onboarding/PermissionCard.swift,
+				Views/Onboarding/PermissionsView.swift,
+				Views/Onboarding/WelcomeView.swift,
+				Views/Quick/QuickResultsSheetView.swift,
+				Views/Safety/SafetyView.swift,
+				Views/Safety/ShareLocationView.swift,
+				VioletVibesApp.swift,
+			);
+			target = BC12B93D2ECFC2FF00485C4C /* VioletVibesUITests */;
+		};
+		BC12B9FF2ECFC60A00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
 				Info.plist,
 			);
-			target = 96ECD8952ED28BD900503D83 /* VioletVibes */;
+			target = BC12B9242ECFC2FE00485C4C /* VioletVibes */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		96ECD8982ED28BD900503D83 /* VioletVibes */ = {
+		BC12B9272ECFC2FE00485C4C /* VioletVibes */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				96ECD8FB2ED28E2800503D83 /* Exceptions for "VioletVibes" folder in "VioletVibes" target */,
+				BC12B9FF2ECFC60A00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibes" target */,
+				BC12B9F82ECFC34F00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibesTests" target */,
+				BC12B9F92ECFC34F00485C4C /* Exceptions for "VioletVibes" folder in "VioletVibesUITests" target */,
 			);
 			path = VioletVibes;
+			sourceTree = "<group>";
+		};
+		BC12B9372ECFC2FF00485C4C /* VioletVibesTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VioletVibesTests;
+			sourceTree = "<group>";
+		};
+		BC12B9412ECFC2FF00485C4C /* VioletVibesUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VioletVibesUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		96ECD8932ED28BD900503D83 /* Frameworks */ = {
+		BC12B9222ECFC2FE00485C4C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B9312ECFC2FF00485C4C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B93B2ECFC2FF00485C4C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -44,18 +195,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		96ECD88D2ED28BD900503D83 = {
+		BC12B91C2ECFC2FE00485C4C = {
 			isa = PBXGroup;
 			children = (
-				96ECD8982ED28BD900503D83 /* VioletVibes */,
-				96ECD8972ED28BD900503D83 /* Products */,
+				BC12B9272ECFC2FE00485C4C /* VioletVibes */,
+				BC12B9372ECFC2FF00485C4C /* VioletVibesTests */,
+				BC12B9412ECFC2FF00485C4C /* VioletVibesUITests */,
+				BC12B9262ECFC2FE00485C4C /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		96ECD8972ED28BD900503D83 /* Products */ = {
+		BC12B9262ECFC2FE00485C4C /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				96ECD8962ED28BD900503D83 /* VioletVibes.app */,
+				BC12B9252ECFC2FE00485C4C /* VioletVibes.app */,
+				BC12B9342ECFC2FF00485C4C /* VioletVibesTests.xctest */,
+				BC12B93E2ECFC2FF00485C4C /* VioletVibesUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -63,64 +218,134 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		96ECD8952ED28BD900503D83 /* VioletVibes */ = {
+		BC12B9242ECFC2FE00485C4C /* VioletVibes */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 96ECD8A12ED28BDA00503D83 /* Build configuration list for PBXNativeTarget "VioletVibes" */;
+			buildConfigurationList = BC12B9482ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibes" */;
 			buildPhases = (
-				96ECD8922ED28BD900503D83 /* Sources */,
-				96ECD8932ED28BD900503D83 /* Frameworks */,
-				96ECD8942ED28BD900503D83 /* Resources */,
+				BC12B9212ECFC2FE00485C4C /* Sources */,
+				BC12B9222ECFC2FE00485C4C /* Frameworks */,
+				BC12B9232ECFC2FE00485C4C /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				96ECD8982ED28BD900503D83 /* VioletVibes */,
+				BC12B9272ECFC2FE00485C4C /* VioletVibes */,
 			);
 			name = VioletVibes;
 			packageProductDependencies = (
 			);
 			productName = VioletVibes;
-			productReference = 96ECD8962ED28BD900503D83 /* VioletVibes.app */;
+			productReference = BC12B9252ECFC2FE00485C4C /* VioletVibes.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BC12B9332ECFC2FF00485C4C /* VioletVibesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC12B94B2ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibesTests" */;
+			buildPhases = (
+				BC12B9302ECFC2FF00485C4C /* Sources */,
+				BC12B9312ECFC2FF00485C4C /* Frameworks */,
+				BC12B9322ECFC2FF00485C4C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BC12B9362ECFC2FF00485C4C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BC12B9372ECFC2FF00485C4C /* VioletVibesTests */,
+			);
+			name = VioletVibesTests;
+			packageProductDependencies = (
+			);
+			productName = VioletVibesTests;
+			productReference = BC12B9342ECFC2FF00485C4C /* VioletVibesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BC12B93D2ECFC2FF00485C4C /* VioletVibesUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC12B94E2ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibesUITests" */;
+			buildPhases = (
+				BC12B93A2ECFC2FF00485C4C /* Sources */,
+				BC12B93B2ECFC2FF00485C4C /* Frameworks */,
+				BC12B93C2ECFC2FF00485C4C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BC12B9402ECFC2FF00485C4C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BC12B9412ECFC2FF00485C4C /* VioletVibesUITests */,
+			);
+			name = VioletVibesUITests;
+			packageProductDependencies = (
+			);
+			productName = VioletVibesUITests;
+			productReference = BC12B93E2ECFC2FF00485C4C /* VioletVibesUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		96ECD88E2ED28BD900503D83 /* Project object */ = {
+		BC12B91D2ECFC2FE00485C4C /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
-					96ECD8952ED28BD900503D83 = {
+					BC12B9242ECFC2FE00485C4C = {
 						CreatedOnToolsVersion = 26.1.1;
+					};
+					BC12B9332ECFC2FF00485C4C = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = BC12B9242ECFC2FE00485C4C;
+					};
+					BC12B93D2ECFC2FF00485C4C = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = BC12B9242ECFC2FE00485C4C;
 					};
 				};
 			};
-			buildConfigurationList = 96ECD8912ED28BD900503D83 /* Build configuration list for PBXProject "VioletVibes" */;
+			buildConfigurationList = BC12B9202ECFC2FE00485C4C /* Build configuration list for PBXProject "VioletVibes" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = 96ECD88D2ED28BD900503D83;
+			mainGroup = BC12B91C2ECFC2FE00485C4C;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 96ECD8972ED28BD900503D83 /* Products */;
+			productRefGroup = BC12B9262ECFC2FE00485C4C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				96ECD8952ED28BD900503D83 /* VioletVibes */,
+				BC12B9242ECFC2FE00485C4C /* VioletVibes */,
+				BC12B9332ECFC2FF00485C4C /* VioletVibesTests */,
+				BC12B93D2ECFC2FF00485C4C /* VioletVibesUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		96ECD8942ED28BD900503D83 /* Resources */ = {
+		BC12B9232ECFC2FE00485C4C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B9322ECFC2FF00485C4C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B93C2ECFC2FF00485C4C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -130,7 +355,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		96ECD8922ED28BD900503D83 /* Sources */ = {
+		BC12B9212ECFC2FE00485C4C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B9302ECFC2FF00485C4C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC12B93A2ECFC2FF00485C4C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -139,8 +378,21 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		BC12B9362ECFC2FF00485C4C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BC12B9242ECFC2FE00485C4C /* VioletVibes */;
+			targetProxy = BC12B9352ECFC2FF00485C4C /* PBXContainerItemProxy */;
+		};
+		BC12B9402ECFC2FF00485C4C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BC12B9242ECFC2FE00485C4C /* VioletVibes */;
+			targetProxy = BC12B93F2ECFC2FF00485C4C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		96ECD89F2ED28BDA00503D83 /* Debug */ = {
+		BC12B9462ECFC2FF00485C4C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -175,7 +427,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = PUU64PHZ9G;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -204,7 +456,7 @@
 			};
 			name = Debug;
 		};
-		96ECD8A02ED28BDA00503D83 /* Release */ = {
+		BC12B9472ECFC2FF00485C4C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -239,7 +491,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = PUU64PHZ9G;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -261,28 +513,33 @@
 			};
 			name = Release;
 		};
-		96ECD8A22ED28BDA00503D83 /* Debug */ = {
+		BC12B9492ECFC2FF00485C4C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VioletVibes/VioletVibes.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUU64PHZ9G;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VioletVibes/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Allow VioletVibes to access your calendars";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Allow VioletVibes to access your contacts";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Allow VioletVibes to use your location to find awesome spots near you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Allow VioletVibes to access your location";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Allow VioletVibes to access your reminders";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.violetvibes.VioletVibes;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -294,28 +551,33 @@
 			};
 			name = Debug;
 		};
-		96ECD8A32ED28BDA00503D83 /* Release */ = {
+		BC12B94A2ECFC2FF00485C4C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VioletVibes/VioletVibes.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUU64PHZ9G;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VioletVibes/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Allow VioletVibes to access your calendars";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Allow VioletVibes to access your contacts";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Allow VioletVibes to use your location to find awesome spots near you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Allow VioletVibes to access your location";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Allow VioletVibes to access your reminders";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.violetvibes.VioletVibes;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -327,28 +589,130 @@
 			};
 			name = Release;
 		};
+		BC12B94C2ECFC2FF00485C4C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VioletVibes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VioletVibes";
+			};
+			name = Debug;
+		};
+		BC12B94D2ECFC2FF00485C4C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VioletVibes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VioletVibes";
+			};
+			name = Release;
+		};
+		BC12B94F2ECFC2FF00485C4C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibesUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = VioletVibes;
+			};
+			name = Debug;
+		};
+		BC12B9502ECFC2FF00485C4C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3M9PQ9Y9H8;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.HCI.VioletVibesUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = VioletVibes;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		96ECD8912ED28BD900503D83 /* Build configuration list for PBXProject "VioletVibes" */ = {
+		BC12B9202ECFC2FE00485C4C /* Build configuration list for PBXProject "VioletVibes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				96ECD89F2ED28BDA00503D83 /* Debug */,
-				96ECD8A02ED28BDA00503D83 /* Release */,
+				BC12B9462ECFC2FF00485C4C /* Debug */,
+				BC12B9472ECFC2FF00485C4C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		96ECD8A12ED28BDA00503D83 /* Build configuration list for PBXNativeTarget "VioletVibes" */ = {
+		BC12B9482ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				96ECD8A22ED28BDA00503D83 /* Debug */,
-				96ECD8A32ED28BDA00503D83 /* Release */,
+				BC12B9492ECFC2FF00485C4C /* Debug */,
+				BC12B94A2ECFC2FF00485C4C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BC12B94B2ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC12B94C2ECFC2FF00485C4C /* Debug */,
+				BC12B94D2ECFC2FF00485C4C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BC12B94E2ECFC2FF00485C4C /* Build configuration list for PBXNativeTarget "VioletVibesUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC12B94F2ECFC2FF00485C4C /* Debug */,
+				BC12B9502ECFC2FF00485C4C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 96ECD88E2ED28BD900503D83 /* Project object */;
+	rootObject = BC12B91D2ECFC2FE00485C4C /* Project object */;
 }

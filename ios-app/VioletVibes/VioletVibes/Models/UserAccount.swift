@@ -2,6 +2,14 @@
 //  UserAccount.swift
 //  VioletVibes
 //
+//  Created by Mukhil Sundararaj on 11/25/25.
+//
+
+
+//
+//  UserAccount.swift
+//  VioletVibes
+//
 
 import Foundation
 

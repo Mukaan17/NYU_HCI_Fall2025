@@ -14,6 +14,8 @@ from services.recommendation.event_normalizer import normalize_event
 from services.places_service import nearby_places
 from services.directions_service import get_walking_directions
 from services.weather_service import current_weather
+from services.popularity_service import get_busyness
+
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +81,19 @@ def build_chat_response(
         except Exception:
             directions = None
 
-        final_places.append(normalize_place(p, directions))
+        normalized = normalize_place(p, directions)
+
+        # 🔥 Add busyness
+        normalized["busyness"] = get_busyness(
+            p.get("place_id"),
+            {
+                "rating": p.get("rating"),
+                "user_ratings_total": p.get("user_ratings_total")
+            }
+        )
+
+        final_places.append(normalized)
+
 
     # STEP 6 — Normalize events
     normalized_events = []

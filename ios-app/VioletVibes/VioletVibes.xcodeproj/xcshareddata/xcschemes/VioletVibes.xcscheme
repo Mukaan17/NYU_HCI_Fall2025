@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "BC12B9242ECFC2FE00485C4C"
+               BlueprintIdentifier = "96ECD8952ED28BD900503D83"
                BuildableName = "VioletVibes.app"
                BlueprintName = "VioletVibes"
                ReferencedContainer = "container:VioletVibes.xcodeproj">
@@ -68,7 +68,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BC12B9242ECFC2FE00485C4C"
+            BlueprintIdentifier = "96ECD8952ED28BD900503D83"
             BuildableName = "VioletVibes.app"
             BlueprintName = "VioletVibes"
             ReferencedContainer = "container:VioletVibes.xcodeproj">
@@ -92,7 +92,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BC12B9242ECFC2FE00485C4C"
+            BlueprintIdentifier = "96ECD8952ED28BD900503D83"
             BuildableName = "VioletVibes.app"
             BlueprintName = "VioletVibes"
             ReferencedContainer = "container:VioletVibes.xcodeproj">

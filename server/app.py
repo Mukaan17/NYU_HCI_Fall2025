@@ -11,6 +11,9 @@ from models.db import db, bcrypt
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.calendar_routes import calendar_bp
+from routes.calendar_oauth_routes import oauth_bp
+from routes.notification_routes import notifications_bp
+from routes.dashboard_routes import dashboard_bp     # <-- NEW
 
 # SERVICES
 from utils.cache import init_requests_cache
@@ -27,11 +30,9 @@ from models.users import User
 TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
 
-
 # ─────────────────────────────────────────────────────────────
 # APP SETUP
 # ─────────────────────────────────────────────────────────────
-
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -52,20 +53,32 @@ bcrypt.init_app(app)
 with app.app_context():
     db.create_all()
 
-# Register blueprints
+# ─────────────────────────────────────────────────────────────
+# REGISTER ROUTES
+# ─────────────────────────────────────────────────────────────
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(user_bp, url_prefix="/api/user")
 app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
+app.register_blueprint(oauth_bp, url_prefix="/api/calendar/oauth")
+app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+app.register_blueprint(dashboard_bp, url_prefix="/api")         # <-- NEW
+
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # ─────────────────────────────────────────────────────────────
+# STATIC UTILS
+# ─────────────────────────────────────────────────────────────
+@app.route("/set_token")
+def serve_set_token():
+    return app.send_static_file("set_token.html")
+
+
+# ─────────────────────────────────────────────────────────────
 # CHAT ROUTE
 # ─────────────────────────────────────────────────────────────
-
 memory = ConversationContext()
-
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -87,8 +100,6 @@ def chat():
             except Exception:
                 user = None
 
-        print("MEMORY STATE:", memory.history)
-
         prefs = user.get_preferences() if user else {}
 
         result = build_chat_response(
@@ -107,7 +118,6 @@ def chat():
 # ─────────────────────────────────────────────────────────────
 # QUICK RECOMMENDATIONS
 # ─────────────────────────────────────────────────────────────
-
 @app.route("/api/quick_recs", methods=["GET"])
 def quick_recs():
     try:
@@ -122,7 +132,6 @@ def quick_recs():
 # ─────────────────────────────────────────────────────────────
 # EVENTS
 # ─────────────────────────────────────────────────────────────
-
 @app.route("/api/nyu_engage_events", methods=["GET"])
 def nyu_engage_events():
     try:
@@ -137,7 +146,6 @@ def nyu_engage_events():
 # ─────────────────────────────────────────────────────────────
 # DIRECTIONS
 # ─────────────────────────────────────────────────────────────
-
 @app.route("/api/directions", methods=["GET"])
 def directions():
     lat = float(request.args.get("lat"))
@@ -157,7 +165,6 @@ def directions():
 # ─────────────────────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────────────────────
-
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
@@ -166,6 +173,5 @@ def health():
 # ─────────────────────────────────────────────────────────────
 # MAIN ENTRY
 # ─────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)

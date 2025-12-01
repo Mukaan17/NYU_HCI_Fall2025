@@ -8,26 +8,77 @@ import Foundation
 actor APIService {
     static let shared = APIService()
     
+    // Stored base URL
     nonisolated private let baseURL: String
     
+    // MARK: - Init
     nonisolated private init() {
-        // Get base URL from environment or use default
+        // Priority 1 — Xcode environment variable
         if let apiURL = ProcessInfo.processInfo.environment["API_URL"] {
             baseURL = apiURL
+        
+        // Priority 2 — Config.plist
         } else if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
                   let config = NSDictionary(contentsOfFile: path),
                   let url = config["API_URL"] as? String {
             baseURL = url
+        
+        // Fallback — localhost
         } else {
             baseURL = "http://localhost:5001"
         }
     }
+
+    // MARK: - Dashboard API Models
+    struct DashboardAPIResponse: Codable {
+        let weather: WeatherInfo?
+        let quick_bites: [PlaceResult]?
+        let cozy_cafes: [PlaceResult]?
+        let events: [EventResult]?
+        let explore: [PlaceResult]?
+        let next_free: FreeTimeBlock?
+        let free_time_recommendation: FreeTimeRecommendation?
+    }
+
+    struct WeatherInfo: Codable {
+        let condition: String?
+        let temperature: Double?
+        let feels_like: Double?
+    }
+
+    struct PlaceResult: Codable {
+        let name: String?
+        let rating: Double?
+        let walk_time: String?
+        let location: String?
+        let photo: String?
+    }
+
+    struct EventResult: Codable {
+        let name: String?
+        let start: String?
+        let location: String?
+        let url: String?
+    }
+
+    struct FreeTimeBlock: Codable {
+        let start: String?
+        let end: String?
+    }
+
+    struct FreeTimeRecommendation: Codable {
+        let type: String?
+        let title: String?
+        let subtitle: String?
+        let duration: Int?
+        let url: String?
+    }
     
     // MARK: - Chat
     nonisolated func sendChatMessage(_ message: String, latitude: Double? = nil, longitude: Double? = nil) async throws -> ChatAPIResponse {
-        var urlComponents = URLComponents(string: "\(baseURL)/api/chat")!
+        let url = URL(string: "\(baseURL)/api/chat")!
         
-        var request = URLRequest(url: urlComponents.url!)
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -41,81 +92,28 @@ actor APIService {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            print("❌ Invalid HTTP response: \(response)")
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            print("❌ Invalid HTTP response:", response)
             throw APIError.invalidResponse
-        }
-        
-        // Check if data is empty
-        guard !data.isEmpty else {
-            print("❌ Received empty response data")
-            throw APIError.decodingError("Empty response from server")
-        }
-        
-        // Log raw response for debugging
-        if let responseString = String(data: data, encoding: .utf8) {
-            print("📥 Raw API Response (\(data.count) bytes): \(responseString.prefix(500))")
-        } else {
-            print("❌ Could not convert response data to string")
-        }
-        
-        // Try to parse as JSON first to see structure
-        if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            print("📋 Parsed JSON keys: \(Array(jsonObject.keys))")
-        } else {
-            print("❌ Could not parse response as JSON")
         }
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         
         do {
-            let apiResponse = try decoder.decode(ChatAPIResponse.self, from: data)
-            print("✅ Successfully decoded response")
-            print("   - Reply: \(apiResponse.reply ?? "nil")")
-            print("   - Places count: \(apiResponse.places?.count ?? 0)")
-            return apiResponse
+            return try decoder.decode(ChatAPIResponse.self, from: data)
         } catch {
-            print("❌ Decoding error: \(error)")
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .keyNotFound(let key, let context):
-                    print("   Missing key: \(key.stringValue) at path: \(context.codingPath)")
-                case .typeMismatch(let type, let context):
-                    print("   Type mismatch: expected \(type) at path: \(context.codingPath)")
-                    if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        let pathString = context.codingPath.map { $0.stringValue }.joined(separator: ".")
-                        print("   Actual value at \(pathString): \(jsonObject[pathString] ?? "not found")")
-                    }
-                case .valueNotFound(let type, let context):
-                    print("   Value not found: \(type) at path: \(context.codingPath)")
-                case .dataCorrupted(let context):
-                    print("   Data corrupted at path: \(context.codingPath)")
-                    print("   Debug: \(context.debugDescription)")
-                @unknown default:
-                    print("   Unknown decoding error")
-                }
-            }
+            print("❌ Chat decode error:", error)
             
-            // Try to decode error message
-            if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMsg = errorDict["error"] as? String {
-                throw APIError.serverError(errorMsg)
-            }
-            
-            // If we can't decode, try to create a minimal response
-            if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                // Create fallback response without decoding places (to avoid nested decoding errors)
-                let fallbackResponse = ChatAPIResponse(
-                    reply: jsonObject["reply"] as? String,
-                    places: nil, // Don't try to decode places if main decode failed
-                    vibe: jsonObject["vibe"] as? String,
+            // Attempt minimal fallback decoding
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                return ChatAPIResponse(
+                    reply: json["reply"] as? String,
+                    places: nil,
+                    vibe: json["vibe"] as? String,
                     weather: nil,
-                    error: jsonObject["error"] as? String
+                    error: json["error"] as? String
                 )
-                print("⚠️ Using fallback response with reply: \(fallbackResponse.replyText)")
-                return fallbackResponse
             }
             
             throw APIError.decodingError(error.localizedDescription)
@@ -126,18 +124,13 @@ actor APIService {
     nonisolated func getQuickRecommendations(category: String, limit: Int = 10) async throws -> QuickRecsAPIResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/quick_recs")!
         urlComponents.queryItems = [
-            URLQueryItem(name: "category", value: category),
-            URLQueryItem(name: "limit", value: String(limit))
+            URLQueryItem(name: "category", value: category.lowercased()),
+            URLQueryItem(name: "limit", value: "\(limit)")
         ]
         
-        guard let url = urlComponents.url else {
-            throw APIError.invalidURL
-        }
+        let (data, response) = try await URLSession.shared.data(from: urlComponents.url!)
         
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw APIError.invalidResponse
         }
         
@@ -147,23 +140,15 @@ actor APIService {
     
     // MARK: - Directions
     nonisolated func getDirections(lat: Double, lng: Double) async throws -> DirectionsAPIResponse {
-        let originLat = 40.693393  // 2 MetroTech
-        let originLng = -73.98555
-        
         var urlComponents = URLComponents(string: "\(baseURL)/api/directions")!
         urlComponents.queryItems = [
-            URLQueryItem(name: "lat", value: String(lat)),
-            URLQueryItem(name: "lng", value: String(lng))
+            URLQueryItem(name: "lat", value: "\(lat)"),
+            URLQueryItem(name: "lng", value: "\(lng)")
         ]
         
-        guard let url = urlComponents.url else {
-            throw APIError.invalidURL
-        }
+        let (data, response) = try await URLSession.shared.data(from: urlComponents.url!)
         
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw APIError.invalidResponse
         }
         
@@ -179,16 +164,48 @@ actor APIService {
         
         let (data, response) = try await URLSession.shared.data(from: url)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw APIError.invalidResponse
         }
         
         let decoder = JSONDecoder()
         return try decoder.decode(EventsAPIResponse.self, from: data)
     }
+
+    // MARK: - Push Notifications
+    nonisolated func registerPushToken(_ token: String, jwt: String) async throws {
+        guard let url = URL(string: "\(baseURL)/api/notifications/register_token") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+
+        // MUST match backend: { "device_token": "..." }
+        let body = ["device_token": token]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if http.statusCode != 200 {
+            if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = errorDict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+
+        print("✅ Push token saved to backend!")
+    }
 }
 
+// MARK: - API Error Types
 enum APIError: LocalizedError {
     case invalidURL
     case invalidResponse
@@ -198,9 +215,9 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid URL"
+            return "Invalid API URL"
         case .invalidResponse:
-            return "Invalid response from server"
+            return "Server returned invalid response"
         case .decodingError(let message):
             return "Decoding error: \(message)"
         case .serverError(let message):
@@ -208,4 +225,3 @@ enum APIError: LocalizedError {
         }
     }
 }
-

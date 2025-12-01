@@ -3,6 +3,7 @@ import os
 import logging
 import requests
 from utils.retry import retry_api_call
+from services.popularity_service import get_busyness
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,12 @@ def nearby_places(
             if photos:
                 ref = photos[0].get("photo_reference")
                 p["photo_url"] = build_photo_url(ref)
+
+            # 🔥 Add live/heuristic busyness score
+            p["busyness"] = get_busyness(p.get("place_id"), {
+                "rating": p.get("rating"),
+                "user_ratings_total": p.get("user_ratings_total")
+            })
 
         logger.debug(f"Found {len(filtered)} places for {place_type}")
         return filtered[:limit]

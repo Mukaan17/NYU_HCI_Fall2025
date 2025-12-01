@@ -6,12 +6,7 @@ import time
 
 API_URL = "http://127.0.0.1:5001/api/chat"
 
-TOKEN = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJzdWIiOjEsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIs"
-    "ImV4cCI6MTc2NDcwNzgwMCwiaWF0IjoxNzY0MTAzMDAwfQ."
-    "FvyTgvKsybHxNfdfCgX9PpGGa2Nj2GZ_o5299OeD3SM"
-)
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZW1haWwiOiJ0ZXN0QHRlc3QuY29tIiwiZXhwIjoxNzY1MTUzNzI4LCJpYXQiOjE3NjQ1NDg5Mjh9.p6c-DulU67JTywCdIEAgCjoyjdWpfT1B8RN5XZE0rS0"
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",

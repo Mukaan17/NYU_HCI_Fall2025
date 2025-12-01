@@ -6,6 +6,7 @@ from datetime import datetime
 
 from services.places_service import nearby_places, build_photo_url
 from services.directions_service import get_walking_directions, walking_minutes
+from services.popularity_service import get_busyness
 
 # Event scrapers
 from services.scrapers.brooklyn_bridge_park_scraper import fetch_brooklyn_bridge_park_events
@@ -29,7 +30,7 @@ CATEGORY_CONFIG = {
         "radius": 800,
     },
     "cozy_cafes": {
-        "types": ["cafe", "library"],  # can tweak
+        "types": ["cafe", "library"],
         "radius": 1200,
     },
     "explore": {
@@ -38,7 +39,6 @@ CATEGORY_CONFIG = {
     },
 }
 
-# These will be merged with Engage events automatically
 EVENT_SOURCES = [
     fetch_brooklyn_bridge_park_events,
     fetch_downtown_bk_events,
@@ -62,7 +62,6 @@ def _normalize_rating(r: float | None) -> float:
     return min(max(r / 5.0, 0.0), 1.0)
 
 
-# For events: the sooner the better
 def _normalize_event_time(start_str: str | None) -> float:
     if not start_str:
         return 0.3
@@ -73,45 +72,50 @@ def _normalize_event_time(start_str: str | None) -> float:
         delta = (event_time - now).total_seconds()
 
         if delta < 0:
-            return 0.2  # already happened
+            return 0.2
 
-        # 0 sec → 1.0, 48h → ~0.0
         return max(0.0, min(1.0, 1 - (delta / (48 * 3600))))
     except Exception:
         return 0.3
 
 
 # -----------------------------------------------------------
-# QUICK SCORES
+# QUICK SCORES — UPDATED WITH REAL BUSYNESS
 # -----------------------------------------------------------
 
 def _score_quick_bite(place: Dict[str, Any]) -> float:
     mins = walking_minutes(place.get("walk_time"))
     dist = _normalize_distance_minutes(mins)
     rating = _normalize_rating(place.get("rating"))
-    busy = 1.0  # temporary placeholder
-    return 0.55 * dist + 0.30 * busy + 0.15 * rating
+
+    busy = place.get("busyness") or 0.5
+    busy_score = 1.0 - busy  # less busy = better for grabbing food fast
+
+    return 0.55 * dist + 0.30 * busy_score + 0.15 * rating
 
 
 def _score_cozy_cafe(place: Dict[str, Any]) -> float:
     mins = walking_minutes(place.get("walk_time"))
     dist = _normalize_distance_minutes(mins)
     rating = _normalize_rating(place.get("rating"))
-    quiet = 1.0  # TODO: noise/busyness later
-    return 0.45 * dist + 0.40 * quiet + 0.15 * rating
+
+    quiet_score = 1.0 - (place.get("busyness") or 0.5)
+
+    return 0.45 * dist + 0.40 * quiet_score + 0.15 * rating
 
 
 def _score_explore(place: Dict[str, Any]) -> float:
     mins = walking_minutes(place.get("walk_time"))
     dist = _normalize_distance_minutes(mins)
     rating = _normalize_rating(place.get("rating"))
-    landmark = 1.0  # later: weight museums/parks higher
-    return 0.50 * dist + 0.20 * rating + 0.30 * landmark
+
+    busy = place.get("busyness") or 0.5  # busier = more lively for exploring
+
+    return 0.50 * dist + 0.20 * rating + 0.30 * busy
 
 
 def _score_event(ev: Dict[str, Any]) -> float:
-    time_score = _normalize_event_time(ev.get("start"))
-    return time_score
+    return _normalize_event_time(ev.get("start"))
 
 
 # -----------------------------------------------------------
@@ -131,11 +135,11 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"QuickRecs {category} error:", e)
 
-    # Deduplicate by place_id or name
     dedup = {(p.get("place_id") or p.get("name")): p for p in raw}
     candidates = list(dedup.values())
 
     enriched: List[Dict[str, Any]] = []
+
     for p in candidates:
         geom = p.get("geometry", {}).get("location", {})
         lat = geom.get("lat")
@@ -144,11 +148,21 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
             continue
 
         d = get_walking_directions(TANDON_LAT, TANDON_LNG, lat, lng)
+
         photos = p.get("photos", [])
         ref = photos[0].get("photo_reference") if photos else None
         photo_url = build_photo_url(ref)
 
-        enriched.append({
+        # 🔥 Call busyness service
+        busy_data = get_busyness(
+            p.get("place_id"),
+            {
+                "rating": p.get("rating"),
+                "user_ratings_total": p.get("user_ratings_total")
+            }
+        )
+
+        item = {
             "name": p.get("name"),
             "rating": p.get("rating", 0),
             "address": p.get("vicinity"),
@@ -159,7 +173,13 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
             "photo_url": photo_url,
             "type": "place",
             "source": "google_places",
-        })
+
+            # 👍 corrected fields
+            "busyness": busy_data.get("busyness"),
+            "busyness_label": busy_data.get("label"),
+        }
+
+        enriched.append(item)
 
     return enriched
 
@@ -167,14 +187,12 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
 def _load_events() -> List[Dict[str, Any]]:
     events = []
 
-    # External scrapers
     for fn in EVENT_SOURCES:
         try:
             events.extend(fn(limit=30))
         except Exception as e:
             print("QuickRecs event scraper error:", e)
 
-    # Engage events (only future ones)
     try:
         engage = fetch_engage_events(days_ahead=7, limit=50)
         for e in engage:
@@ -201,17 +219,8 @@ def _load_events() -> List[Dict[str, Any]]:
 # -----------------------------------------------------------
 
 def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        "category": str,
-        "places": [ ... ]  # or events
-      }
-    """
-
     category = category.lower()
 
-    # ----------- Quick Bites -----------
     if category == "quick_bites":
         places = _search_places_for_category("quick_bites")
         for p in places:
@@ -219,7 +228,6 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
         places.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": places[:limit]}
 
-    # ----------- Cozy Cafes -----------
     if category == "cozy_cafes":
         places = _search_places_for_category("cozy_cafes")
         for p in places:
@@ -227,7 +235,6 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
         places.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": places[:limit]}
 
-    # ----------- Explore -----------
     if category == "explore":
         places = _search_places_for_category("explore")
         for p in places:
@@ -235,7 +242,6 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
         places.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": places[:limit]}
 
-    # ----------- Events -----------
     if category == "events":
         events = _load_events()
         for ev in events:
@@ -243,5 +249,4 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
         events.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": events[:limit]}
 
-    # ----------- Unknown category -----------
     return {"category": category, "places": []}

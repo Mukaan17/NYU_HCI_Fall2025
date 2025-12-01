@@ -1,6 +1,7 @@
 # services/recommendation/places.py
 from typing import Dict, Any
 from services.places_service import build_photo_url
+from services.popularity_service import get_busyness 
 
 
 def normalize_place(p: Dict[str, Any], directions: Dict[str, Any] | None):
@@ -9,9 +10,13 @@ def normalize_place(p: Dict[str, Any], directions: Dict[str, Any] | None):
     """
 
     loc = p.get("geometry", {}).get("location", {})
+
     photo_ref = None
     if p.get("photos"):
         photo_ref = p["photos"][0].get("photo_reference")
+
+    # NEW: compute busyness
+    busyness = get_busyness(p.get("place_id"), p)   # ✅
 
     return {
         "type": "place",
@@ -35,4 +40,8 @@ def normalize_place(p: Dict[str, Any], directions: Dict[str, Any] | None):
         "rating": p.get("rating", 0),
         "start": None,
         "end": None,
+
+        # NEW FIELDS
+        "place_id": p.get("place_id"),   
+        "busyness": busyness,           
     }

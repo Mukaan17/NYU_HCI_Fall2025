@@ -17,18 +17,19 @@ JWT_EXP_DAYS = 7
 
 def generate_token(user: User) -> str:
     payload = {
-        "sub": user.id,
+        "sub": str(user.id),
         "email": user.email,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(days=JWT_EXP_DAYS),
         "iat": datetime.datetime.utcnow(),
     }
+
     jwt_secret = get_jwt_secret()
     token = jwt.encode(payload, jwt_secret, algorithm=JWT_ALGORITHM)
-    # In PyJWT>=2, this is already a string
+
     if isinstance(token, bytes):
         token = token.decode("utf-8")
-    return token
 
+    return token
 
 def decode_token(token: str):
     jwt_secret = get_jwt_secret()
@@ -59,7 +60,7 @@ def require_auth(fn):
             logger.warning(f"Request {request_id}: Invalid token payload")
             return jsonify({"error": "Invalid token payload"}), 401
 
-        user = User.query.get(user_id)
+        user = User.query.get(int(user_id))
         if not user:
             logger.warning(f"Request {request_id}: User {user_id} not found")
             return jsonify({"error": "User not found"}), 401

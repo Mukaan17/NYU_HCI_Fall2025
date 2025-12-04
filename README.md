@@ -1,368 +1,435 @@
-# VioletVibes - NYU Nightlife & Events Discovery App
+🌙 VioletVibes – NYU Nightlife & Events Discovery App
 
-A multi-platform application for discovering nightlife, events, and places around NYU campus, built with native iOS (Swift/SwiftUI) and React Native/Expo, backed by a Python Flask API server.
+VioletVibes is your personal NYU nightlife and campus discovery concierge — powered by SwiftUI, Expo/React Native, Python Flask, Google APIs, and the Gemini AI model.
+It helps NYU students instantly find the best places, events, vibes, and routes, with a friendly conversational interface.
 
----
+🏗️ Project Architecture
 
-## 🏗️ Project Architecture
+VioletVibes is a multi-platform, AI-powered system with three major components:
 
-### Overview
+📱 Native iOS App — Swift 6.2, SwiftUI, MapKit, MVVM
 
-VioletVibes is a **multi-platform project** with three main components:
+📱 React Native / Expo App — Expo SDK 54, TypeScript
 
-1. **iOS Native App** (`ios-app/`) - Primary implementation using Swift 6.2 & SwiftUI
-2. **React Native/Expo App** (`mobile/`) - Cross-platform implementation using Expo SDK 54
-3. **Python Flask Backend** (`server/`) - RESTful API server for recommendations, events, and chat
+🖥️ Python Flask Backend — Gemini LLM, Google Places, Directions, Weather, NYC Events
 
----
+Everything works together via a unified API layer.
 
-### 📱 iOS Native App Architecture (Primary)
+📱 iOS Native App Architecture (Primary)
 
-The iOS app follows a **MVVM (Model-View-ViewModel) architecture** with Swift 6.2's modern concurrency and observation patterns.
+The iOS app uses MVVM, Swift 6.2’s @Observable model, and async/await concurrency.
 
-#### **Technology Stack**
-- **Language**: Swift 6.2
-- **UI Framework**: SwiftUI
-- **State Management**: `@Observable` macro (Swift 6.2)
-- **Concurrency**: `async/await`, `actor`, `Task`
-- **Design System**: iOS 18 HIG with "Liquid Glass" aesthetic
+Technology Stack
 
-#### **Project Structure**
+Language: Swift 6.2
 
-```
+UI Framework: SwiftUI
+
+State Management: @Observable macro
+
+Concurrency: async/await, actors
+
+Design: iOS 18 Liquid Glass aesthetic
+
+Map: MapKit + MapCameraPosition
+
+Networking: URLSession + structured concurrency
+
+📁 Project Structure (ios-app/)
 ios-app/VioletVibes/
-├── VioletVibesApp.swift          # App entry point & root navigation
-├── Models/                        # Data models
-│   ├── UserAccount.swift         # User authentication data
-│   ├── UserPreferences.swift     # User preferences & settings
-│   ├── Recommendation.swift      # Place/event recommendations
-│   ├── ChatMessage.swift         # Chat conversation data
-│   ├── Weather.swift             # Weather data model
+├── VioletVibesApp.swift          
+├── Models/
+│   ├── UserAccount.swift        
+│   ├── UserPreferences.swift    
+│   ├── Recommendation.swift     
+│   ├── ChatMessage.swift        
+│   ├── Weather.swift            
 │   └── ...
-├── ViewModels/                    # Business logic & state management
-│   ├── OnboardingViewModel.swift # Onboarding flow state
-│   ├── ChatViewModel.swift       # Chat conversation state
-│   ├── DashboardViewModel.swift  # Dashboard recommendations
-│   ├── MapViewModel.swift        # Map & routing state
-│   ├── PlaceViewModel.swift      # Selected place state
-│   ├── LocationManager.swift     # Location tracking & updates
-│   └── WeatherManager.swift      # Weather data management
-├── Services/                       # Business logic & API integration
-│   ├── APIService.swift          # HTTP client for backend API
-│   ├── LocationService.swift     # CoreLocation wrapper (actor-based)
-│   ├── StorageService.swift      # UserDefaults persistence (actor-based)
-│   ├── WeatherService.swift      # Weather API integration
-│   ├── CalendarService.swift     # Google Calendar integration
-│   ├── ContactsService.swift     # Trusted contacts management
-│   ├── NotificationService.swift # Push notifications
+│
+├── ViewModels/
+│   ├── OnboardingViewModel.swift
+│   ├── ChatViewModel.swift      
+│   ├── DashboardViewModel.swift 
+│   ├── MapViewModel.swift       
+│   ├── PlaceViewModel.swift     
+│   ├── LocationManager.swift    
+│   └── WeatherManager.swift     
+│
+├── Services/
+│   ├── APIService.swift           
+│   ├── LocationService.swift      
+│   ├── StorageService.swift       
+│   ├── WeatherService.swift       
+│   ├── CalendarService.swift      
+│   ├── ContactsService.swift      
+│   ├── NotificationService.swift  
 │   └── ...
-├── Views/                         # SwiftUI views organized by feature
-│   ├── Onboarding/               # Welcome, Login, Sign-up, Survey, Permissions
-│   ├── Dashboard/                # Main dashboard with quick actions
-│   ├── Chat/                      # AI chat interface
-│   ├── Map/                       # Map view with location tracking
-│   ├── Quick/                     # Quick action results sheets
-│   ├── Safety/                    # Safety features & location sharing
-│   ├── Settings/                  # Account, preferences, trusted contacts
-│   └── MainTabView.swift          # Tab navigation container
-├── Components/                    # Reusable UI components
-│   ├── InputField.swift          # Text input with liquid glass styling
-│   ├── PrimaryButton.swift       # Primary action button
-│   ├── RecommendationCard.swift  # Place/event card component
-│   ├── LocationPickerView.swift  # MapKit autocomplete location picker
-│   └── ...
+│
+├── Views/
+│   ├── Onboarding/               
+│   ├── Dashboard/                
+│   ├── Chat/                     
+│   ├── Map/                      
+│   ├── Quick/                    
+│   ├── Safety/                   
+│   ├── Settings/                 
+│   └── MainTabView.swift         
+│
+├── Components/
+│   ├── InputField.swift          
+│   ├── PrimaryButton.swift       
+│   ├── RecommendationCard.swift  
+│   └── LocationPickerView.swift  
+│
 ├── Resources/
-│   └── Theme.swift                # Design system (colors, typography, spacing)
+│   └── Theme.swift               
+│
 └── Utilities/
-    ├── Extensions/                # Swift extensions
-    ├── Helpers/                   # Helper functions
-    └── ViewModifiers/             # Custom view modifiers
-```
+    ├── Extensions/               
+    ├── Helpers/                  
+    └── ViewModifiers/
 
-#### **Architecture Patterns**
+⚙️ Architecture Patterns
+1. MVVM with @Observable
 
-**1. MVVM with @Observable**
-- ViewModels use `@Observable` macro for automatic view updates
-- Views access ViewModels via `@Environment` for dependency injection
-- Clear separation: Views handle UI, ViewModels handle business logic
+ViewModels store business logic & state
 
-**2. Service Layer Pattern**
-- Services encapsulate business logic and external API calls
-- `LocationService` and `StorageService` use `actor` for thread-safe operations
-- Singleton pattern for shared services (e.g., `APIService.shared`)
+Views remain stateless
 
-**3. Dependency Injection**
-- ViewModels and Services injected via SwiftUI's `@Environment`
-- Centralized in `VioletVibesApp.swift` for app-wide availability
+Auto UI updates with Swift 6.2 observation system
 
-**4. State Management**
-- `@State` for local view state
-- `@Environment` for shared ViewModels
-- `@Observable` for reactive state updates
-- `Task` and `async/await` for asynchronous operations
+2. Service Layer
 
-**5. Navigation Flow**
-```
-RootView → Welcome → Permissions → Login/Sign-up → Onboarding Survey → MainTabView
-                                                                    ↓
-                                            Dashboard | Chat | Map | Safety | Settings
-```
+Encapsulated logic:
 
-#### **Key Features**
+API fetchers
 
-- **Smart Onboarding**: Tab-based login/sign-up with state memory, preferences survey, permissions flow
-- **Location Services**: Optimized location tracking with throttling (100m threshold) and battery efficiency
-- **Liquid Glass UI**: Native SwiftUI materials (`.regularMaterial`, `.ultraThinMaterial`) with gradient overlays
-- **Performance Optimized**: Deferred heavy operations, cached location checks, throttled updates
-- **Swift 6.2 Concurrency**: Strict concurrency with `actor`, `@MainActor`, and structured concurrency
+location, storage, calendar
 
----
+Weather / preferences / notifications
 
-### 📱 React Native/Expo App Architecture (Secondary)
+3. Dependency Injection
 
-#### **Technology Stack**
-- **Framework**: React Native 0.81
-- **Router**: Expo Router 3.5
-- **Language**: TypeScript
-- **State Management**: React Context API
-- **UI**: React Native components with Expo modules
+SwiftUI’s @Environment distributes shared state.
 
-#### **Project Structure**
+4. Structured Concurrency
 
-```
+async/await
+
+Task
+
+actors for thread safety
+
+5. Navigation Flow
+RootView
+→ Welcome
+→ Permissions
+→ Login/Sign-up
+→ Onboarding Survey
+→ MainTabView (Dashboard, Chat, Map, Safety, Settings)
+
+📱 React Native / Expo App (Secondary)
+
+Cross-platform (iOS + Android) implementation via Expo SDK 54.
+
+Technology Stack
+
+React Native 0.81
+
+Expo Router 3.5 (file-based routing)
+
+TypeScript
+
+React Context for state
+
+Expo modules for sensors, maps, etc.
+
+📁 Project Structure (mobile/)
 mobile/
-├── app/                           # Expo Router file-based routing
-│   ├── _layout.tsx               # Root layout
-│   ├── (tabs)/                    # Tab navigation group
-│   │   ├── dashboard.tsx         # Dashboard screen
-│   │   ├── chat.tsx              # Chat screen
-│   │   ├── map.tsx               # Map screen
-│   │   └── safety.tsx            # Safety screen
-│   ├── welcome.tsx                # Welcome screen
-│   ├── permissions.tsx           # Permissions screen
-│   └── quick/[category].tsx      # Quick action results
-├── components/                    # Reusable React components
-├── context/                       # React Context providers
-│   ├── ChatContext.tsx           # Chat state management
-│   └── PlaceContext.tsx          # Selected place state
-├── hooks/                         # Custom React hooks
-│   └── useLocation.ts            # Location tracking hook
-├── constants/
-│   └── theme.ts                  # Design system constants
-└── utils/                         # Utility functions
-```
+├── app/
+│   ├── _layout.tsx
+│   ├── welcome.tsx
+│   ├── permissions.tsx
+│   ├── (tabs)/
+│   │   ├── dashboard.tsx
+│   │   ├── chat.tsx
+│   │   ├── map.tsx
+│   │   └── safety.tsx
+│   └── quick/[category].tsx
+│
+├── components/
+├── context/
+│   ├── ChatContext.tsx
+│   └── PlaceContext.tsx
+│
+├── hooks/
+│   └── useLocation.ts
+│
+├── constants/theme.ts
+└── utils/
 
----
+🖥️ Backend API Architecture (Python Flask)
 
-### 🖥️ Backend API Architecture
+This is where the core intelligence lives:
 
-#### **Technology Stack**
-- **Framework**: Flask (Python)
-- **AI**: Google Gemini API for chat recommendations
-- **APIs**: Google Places, Google Directions, OpenWeatherMap, NYC Open Data
+Gemini-powered chat
 
-#### **Project Structure**
+Google Places search
 
-```
+Walking routes
+
+Weather
+
+NYC permitted events
+
+Embedding-based scoring
+
+Conversation memory
+
+Technology Stack
+
+Flask (REST API)
+
+Google Generative AI (Gemini 2.5 Flash)
+
+Google Places API
+
+Google Directions API
+
+OpenWeatherMap
+
+NYC Open Data
+
+Python 3.10+
+
+📁 Project Structure (server/)
 server/
-├── app.py                         # Flask app & route definitions
-├── services/                      # Business logic services
-│   ├── recommendation_service.py # AI-powered recommendations
-│   ├── places_service.py        # Google Places integration
-│   ├── directions_service.py    # Walking directions
-│   ├── weather_service.py       # Weather data
-│   ├── nyc_events_service.py    # NYC permitted events
+├── app.py
+│
+├── services/
+│   ├── recommendation/
+│   │   ├── driver.py
+│   │   ├── intent.py
+│   │   ├── llm_reply.py
+│   │   ├── scoring.py
+│   │   ├── context.py
+│   │   ├── places.py
+│   │   ├── events.py
+│   │   ├── event_filter.py
+│   │   ├── event_normalizer.py
+│   │   └── ...
+│   ├── places_service.py
+│   ├── directions_service.py
+│   ├── weather_service.py
+│   ├── popularity_service.py
+│   ├── nyc_events_service.py
+│   └── vibes.py
+│
+├── utils/
+│   ├── cache.py
+│   ├── chat_memory.py
+│   ├── helpers.py
 │   └── ...
-├── utils/                         # Utility modules
-│   ├── cache.py                 # Request caching
-│   ├── chat_memory.py           # Chat conversation memory
-│   └── helpers.py               # Helper functions
-└── requirements.txt              # Python dependencies
-```
+│
+├── static/events.json
+└── requirements.txt
 
-#### **API Endpoints**
+🧠 Backend Flow (End-to-End)
+1. Intent Classification
 
-- `POST /api/chat` - AI chat recommendations with conversation memory
-- `GET /api/quick_recs?category=<category>` - Quick action recommendations
-- `GET /api/events` - NYC permitted events near campus
-- `GET /api/directions?lat=<lat>&lng=<lng>` - Walking directions
-- `GET /health` - Health check endpoint
+Determines the user’s purpose:
 
----
+new recommendation
 
-## 🚀 Developer Setup Guide
+follow-up details
 
-This project uses Expo SDK 54, React 19, expo-router, and React Native 0.81.
-Because of the newer versions, the setup must be followed exactly to avoid dependency conflicts.
+alternative options
 
-🚀 1. Requirements
-Node
-    Use Node 18 or Node 20.
-    Check:
+general chatting
 
-        node -v
+2. Vibe Classification
 
-NPM:
-    Use npm, not yarn/pnpm:
-    Check:
+Uses message → vibe → Google place types.
 
-        npm -v
+3. Google Places Search
 
-Xcode (for iOS development):
-    Open Xcode at least once
+Nearby + open_now filtering.
 
-    Make sure iOS Simulator is installed
-(       Xcode → Settings → Platforms → iOS)
+4. Walking Route
 
---------------------------------------------------------
+Via Google Directions.
 
-📦 2. Install Dependencies
-Clone the project:
+5. Busyness Score
 
-    git clone <repository-url>
-    cd mobile
+Heuristic + ratings.
+
+6. Events
+
+Fetched from:
+
+NYC Permitted Events API
+
+Static cached files
+
+7. Normalization
+
+Places & events → unified card format.
+
+8. Scoring
+
+Gemini embedding comparison:
+
+query relevance
+
+vibe match
+
+popularity/rating
+
+distance/walk time
+
+busyness
+
+9. Conversation Memory
+
+Tracks:
+
+last_places
+
+last_results
+
+last_query
+
+Enables natural follow-ups:
+
+“What is Wiki Wiki?”
+“Tell me more about #2”
+“Show me similar spots”
+
+10. LLM Response
+
+Gemini writes:
+
+place descriptions
+
+comparison summaries
+
+follow-up explanations
+
+Never invents places.
+
+🔥 API Endpoints
+POST /api/chat
+
+Returns reply + place cards + weather.
+
+GET /api/quick_recs?category=<>&limit=10
+
+Used by Dashboard Quick Actions.
+
+GET /api/directions?lat=&lng=
+
+Returns:
+
+polyline
+
+walk time
+
+distance
+
+step-by-step directions
+
+GET /api/events
+
+NYC permitted events near Tandon.
+
+GET /api/top_recommendations
+
+Main dashboard recommendations.
+
+GET /health
+
+Health check.
+
+⚙️ Backend Configuration
+
+Environment variables:
+
+GOOGLE_API_KEY=
+OPENWEATHER_API_KEY=
+GEMINI_API_KEY=
+FLASK_ENV=development
+
+▶️ Running the Backend
+cd server
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
 
 
-Install:
+Local API root:
 
-    npm install
+http://127.0.0.1:5001
 
+🚀 React Native Setup Guide (Important)
+Requirements
 
-⚠️ Do NOT install anything manually.
-The dependency versions are intentionally locked to avoid conflicts.
+Node 18 or 20
 
-------------------------------------------------------------------
+npm (NOT yarn)
 
-📱 3. Install the iOS Development Build (Required)
-    This project does not work in Expo Go.
-    You must build and install the dev client:
+Xcode installed
 
-        npx expo run:ios
+iOS simulator installed
 
+Install dependencies
+npm install
 
-    This step builds a native iOS app and installs it in the simulator.
-    (First time takes ~10–20 minutes.)
+Build the iOS dev client (must do once)
+npx expo run:ios
 
----------------------------------------------------------------
+Start app
+npx expo start --clear
 
-▶️ 4. Run the App
-
-Start Metro:
-
-    npx expo start --clear
-
-
-The simulator will automatically open the dev build and load the app.
-If the simulator does not open:
-
-    npx expo start --dev-client
-
-Then press:
-
-    i
-
------------------------------------------------------------------------
-
-📁 5. Required File Structure
-Do not delete or rename these files:
-
-mobile/
-  app/
-    _layout.tsx
-    (onboarding)/
-    (tabs)/
-  package.json
-
--------------------------------------------------------------------------
-
-⚠️ 6. Do NOT Do These Things to keep the project stable:
-
-❌ Do NOT run npm install react
-❌ Do NOT run npm install react-native
-❌ Do NOT run npm install expo-router
-❌ Do NOT update Expo or React Native
-❌ Do NOT delete App.js
-❌ Do NOT install navigation packages manually
-
-Everything is preconfigured.
-
----------------------------------------------------------------------
-
-🔄 7. Reset If Something Breaks
-
-If you hit bundling errors or React version conflicts:
-
+If you break dependencies:
 rm -rf node_modules
 rm package-lock.json
 npm install
 npx expo run:ios
 npx expo start --clear
 
+🎨 iOS Development Guidelines
 
-This fixes:
+Use Swift 6.2 features
 
-Duplicate React packages
+Follow MVVM strictly
 
-"React Element from older version" errors
+UI materials must use .regularMaterial, .ultraThinMaterial
 
-Metro cache corruption
+Throttle location updates
 
-Missing module issues
+Use actors for thread-safe services
 
----------------------------------------------------------------------------------
+Use @MainActor for UI
 
----
+🛠 Backend Development Guidelines
 
-## 🎉 You're Ready to Develop
+All APIs RESTful
 
-Once the setup is done, you can work normally inside:
+Clear error responses
 
-- **iOS App**: `ios-app/VioletVibes/` - Native Swift/SwiftUI development
-- **React Native App**: `mobile/app/` - Cross-platform development
-- **Backend**: `server/` - Python Flask API development
+Avoid unnecessary external calls (use caching)
 
----
+Never invent LLM facts
 
-## 📝 Development Guidelines
+Always normalize place/event data
 
-### iOS App Development
+Keep scoring deterministic
 
-- **Use Swift 6.2 features**: `@Observable`, `actor`, strict concurrency
-- **Follow MVVM pattern**: Keep business logic in ViewModels, UI in Views
-- **Performance**: Defer heavy operations, throttle location updates, cache data
-- **Design**: Follow iOS 18 HIG, use liquid glass materials for UI elements
-- **Concurrency**: Use `@MainActor` for UI updates, `actor` for thread-safe services
+📚 Additional Docs
 
-### React Native Development
+ios-app/SETUP_GUIDE.md
 
-- **File-based routing**: Use Expo Router's file-based navigation
-- **State management**: Use Context API for shared state
-- **Components**: Keep components reusable and well-typed with TypeScript
+ios-app/SERVER_CONNECTION.md
 
-### Backend Development
-
-- **RESTful APIs**: Follow REST conventions for endpoints
-- **Error handling**: Always return proper HTTP status codes and error messages
-- **Caching**: Use request caching for external API calls to reduce latency
-
----
-
-## 🔧 Troubleshooting
-
-### iOS App Issues
-
-- **Metal rendering crashes**: Ensure GeometryReader has valid dimensions before rendering
-- **Location updates**: Check throttling settings if updates are too frequent
-- **Performance**: Use Instruments to profile and identify bottlenecks
-
-### React Native Issues
-
-See the setup guide above for common React/Expo issues and fixes.
-
----
-
-## 📚 Additional Documentation
-
-- **iOS Setup**: See `ios-app/SETUP_GUIDE.md`
-- **Server Connection**: See `ios-app/SERVER_CONNECTION.md`
-- **Troubleshooting**: See `ios-app/TROUBLESHOOTING.md`
+ios-app/TROUBLESHOOTING.md

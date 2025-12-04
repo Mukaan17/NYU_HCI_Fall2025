@@ -7,15 +7,18 @@ import SwiftUI
 
 struct OnboardingSurveyView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(UserSession.self) private var session
+
     @State private var selectedCategories: Set<String> = []
     @State private var budgetSelection: BudgetOption = .noPreference
     @State private var selectedDietaryRestrictions: Set<String> = []
     @State private var walkingDistance: WalkingDistanceOption = .noPreference
     @State private var hobbies: String = ""
     @State private var isSaving = false
-    
+
     private let storage = StorageService.shared
-    
+    private let api = APIService.shared
+
     // Category options
     private let categoryOptions = [
         "Study Spots / Cozy Cafés",
@@ -24,7 +27,7 @@ struct OnboardingSurveyView: View {
         "Nightlife",
         "Explore All / I'm open to anything"
     ]
-    
+
     // Dietary restriction options
     private let dietaryOptions = [
         "Vegetarian",
@@ -37,7 +40,7 @@ struct OnboardingSurveyView: View {
         "Seafood Allergy",
         "Other"
     ]
-    
+
     var body: some View {
         ZStack {
             // Background
@@ -51,7 +54,7 @@ struct OnboardingSurveyView: View {
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
-            
+
             // Blur Shapes
             GeometryReader { geometry in
                 Circle()
@@ -59,7 +62,7 @@ struct OnboardingSurveyView: View {
                     .frame(width: 300, height: 300)
                     .offset(x: -50, y: -100)
                     .blur(radius: 60)
-                
+
                 Circle()
                     .fill(Theme.Colors.gradientStart.opacity(0.12))
                     .frame(width: 250, height: 250)
@@ -67,23 +70,23 @@ struct OnboardingSurveyView: View {
                     .blur(radius: 50)
             }
             .allowsHitTesting(false)
-            
+
             ScrollView {
                 VStack(spacing: Theme.Spacing.`4xl`) {
                     Spacer()
                         .frame(height: 60)
-                    
+
                     // Title
                     VStack(spacing: Theme.Spacing.sm) {
                         Text("Tell us about yourself")
                             .themeFont(size: .`3xl`, weight: .bold)
                             .foregroundColor(Theme.Colors.textPrimary)
-                        
+
                         Text("Help us personalize your experience")
                             .themeFont(size: .lg)
                             .foregroundColor(Theme.Colors.textSecondary)
                     }
-                    
+
                     // What are you looking for?
                     PreferenceSectionView(title: "What are you looking for?") {
                         LazyVStack(spacing: Theme.Spacing.md) {
@@ -103,12 +106,12 @@ struct OnboardingSurveyView: View {
                             }
                         }
                     }
-                    
+
                     // Budget
                     PreferenceSectionView(title: "Budget (Optional)") {
                         BudgetSelectorView(selection: $budgetSelection)
                     }
-                    
+
                     // Dietary Restrictions
                     PreferenceSectionView(title: "Dietary Restrictions") {
                         LazyVStack(spacing: Theme.Spacing.md) {
@@ -128,12 +131,12 @@ struct OnboardingSurveyView: View {
                             }
                         }
                     }
-                    
+
                     // Walking Distance
                     PreferenceSectionView(title: "Walking Distance from Campus") {
                         WalkingDistanceSelectorView(selection: $walkingDistance)
                     }
-                    
+
                     // Hobbies/Interests
                     PreferenceSectionView(title: "Hobbies / Interests (Optional)") {
                         TextField("Tell us about your interests", text: $hobbies, axis: .vertical)
@@ -148,7 +151,7 @@ struct OnboardingSurveyView: View {
                             .cornerRadius(Theme.BorderRadius.md)
                             .lineLimit(3...6)
                     }
-                    
+
                     // Continue Button
                     Button(action: {
                         savePreferences()
@@ -176,7 +179,7 @@ struct OnboardingSurveyView: View {
                     }
                     .disabled(isSaving)
                     .opacity(isSaving ? 0.5 : 1.0)
-                    
+
                     Spacer()
                         .frame(height: 40)
                 }
@@ -190,35 +193,51 @@ struct OnboardingSurveyView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
-    
+
     private func savePreferences() {
         isSaving = true
-        
+
         Task {
             // Convert budget selection to min/max
             let (budgetMin, budgetMax) = budgetSelection.toBudgetRange()
-            
-            // Convert walking distance to minutes
             let maxWalkMinutes = walkingDistance.toMinutes()
-            
-            let preferences = UserPreferences(
-                categories: selectedCategories,
-                budgetMin: budgetMin,
-                budgetMax: budgetMax,
-                dietaryRestrictions: selectedDietaryRestrictions,
-                maxWalkMinutes: maxWalkMinutes,
-                hobbies: hobbies.isEmpty ? nil : hobbies,
-                googleCalendarEnabled: false,
-                notificationsEnabled: false,
-                usePreferencesForPersonalization: true
-            )
-            
-            await storage.saveUserPreferences(preferences)
-            await storage.setHasCompletedOnboardingSurvey(true)
-            
-            await MainActor.run {
-                isSaving = false
-                onboardingViewModel.markOnboardingSurveyCompleted()
+
+            var prefs = UserPreferences()
+            prefs.categories = selectedCategories
+            prefs.budgetMin = budgetMin
+            prefs.budgetMax = budgetMax
+            prefs.dietaryRestrictions = selectedDietaryRestrictions
+            prefs.maxWalkMinutes = maxWalkMinutes
+            prefs.hobbies = hobbies.isEmpty ? nil : hobbies
+            prefs.googleCalendarEnabled = false
+            prefs.notificationsEnabled = false
+            prefs.usePreferencesForPersonalization = true
+
+            do {
+                if let jwt = session.jwt {
+                    // Save to backend first to get sanitized version
+                    let backendPrefs = try await api.saveUserPreferences(preferences: prefs, jwt: jwt)
+                    prefs = UserPreferences.fromBackendPreferencesPayload(backendPrefs, existing: prefs)
+                }
+
+                // Persist locally
+                await storage.saveUserPreferences(prefs)
+                await storage.setHasCompletedOnboardingSurvey(true)
+
+                // Update live session
+                session.preferences = prefs
+
+                await MainActor.run {
+                    isSaving = false
+                    onboardingViewModel.markOnboardingSurveyCompleted()
+                }
+            } catch {
+                print("Onboarding save prefs error:", error)
+                await MainActor.run {
+                    isSaving = false
+                    // Optionally show error UI later
+                    onboardingViewModel.markOnboardingSurveyCompleted()
+                }
             }
         }
     }
@@ -230,7 +249,7 @@ enum BudgetOption: String, CaseIterable {
     case low = "$"
     case medium = "$$"
     case high = "$$$"
-    
+
     func toBudgetRange() -> (Int?, Int?) {
         switch self {
         case .noPreference:
@@ -251,7 +270,7 @@ enum WalkingDistanceOption: String, CaseIterable {
     case tenToFifteen = "10–15 min"
     case fifteenToTwenty = "15–20 min"
     case noPreference = "No preference"
-    
+
     func toMinutes() -> Int? {
         switch self {
         case .fiveToTen:
@@ -267,16 +286,18 @@ enum WalkingDistanceOption: String, CaseIterable {
 }
 
 // MARK: - Preference Section View
+// (unchanged below here, I’m keeping your UI pieces exactly as-is)
+
 struct PreferenceSectionView<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
             Text(title)
                 .themeFont(size: .xl, weight: .bold)
                 .foregroundColor(Theme.Colors.textPrimary)
-            
+
             content
         }
         .padding(Theme.Spacing.`3xl`)
@@ -284,7 +305,7 @@ struct PreferenceSectionView<Content: View>: View {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                     .fill(.regularMaterial)
-                
+
                 LinearGradient(
                     colors: [
                         Theme.Colors.gradientStart.opacity(0.1),
@@ -308,7 +329,7 @@ struct PreferenceCheckbox: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: Theme.Spacing.`2xl`) {
@@ -316,9 +337,9 @@ struct PreferenceCheckbox: View {
                     .themeFont(size: .base)
                     .foregroundColor(Theme.Colors.textPrimary)
                     .multilineTextAlignment(.leading)
-                
+
                 Spacer()
-                
+
                 ZStack {
                     Circle()
                         .fill(isSelected ? Theme.Colors.gradientStart : Color.clear)
@@ -327,7 +348,7 @@ struct PreferenceCheckbox: View {
                             Circle()
                                 .stroke(isSelected ? Theme.Colors.gradientStart : Theme.Colors.border, lineWidth: 2)
                         )
-                    
+
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
@@ -340,12 +361,12 @@ struct PreferenceCheckbox: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                         .fill(.ultraThinMaterial)
-                    
+
                     if !isSelected {
                         RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                             .fill(Color.black.opacity(0.3))
                     }
-                    
+
                     if isSelected {
                         LinearGradient(
                             colors: [
@@ -372,7 +393,7 @@ struct PreferenceCheckbox: View {
 // MARK: - Budget Selector View
 struct BudgetSelectorView: View {
     @Binding var selection: BudgetOption
-    
+
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
             ForEach(BudgetOption.allCases, id: \.self) { option in
@@ -390,12 +411,12 @@ struct BudgetSelectorView: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                                     .fill(.ultraThinMaterial)
-                                
+
                                 if selection != option {
                                     RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                                         .fill(Color.black.opacity(0.3))
                                 }
-                                
+
                                 if selection == option {
                                     LinearGradient(
                                         colors: [
@@ -424,7 +445,7 @@ struct BudgetSelectorView: View {
 // MARK: - Walking Distance Selector View
 struct WalkingDistanceSelectorView: View {
     @Binding var selection: WalkingDistanceOption
-    
+
     var body: some View {
         VStack(spacing: Theme.Spacing.md) {
             ForEach(WalkingDistanceOption.allCases, id: \.self) { option in
@@ -437,9 +458,9 @@ struct WalkingDistanceSelectorView: View {
                         Text(option.rawValue)
                             .themeFont(size: .base, weight: selection == option ? .semiBold : .regular)
                             .foregroundColor(selection == option ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
-                        
+
                         Spacer()
-                        
+
                         if selection == option {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .bold))
@@ -451,12 +472,12 @@ struct WalkingDistanceSelectorView: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                                 .fill(.ultraThinMaterial)
-                            
+
                             if selection != option {
                                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                                     .fill(Color.black.opacity(0.3))
                             }
-                            
+
                             if selection == option {
                                 LinearGradient(
                                     colors: [
@@ -481,4 +502,3 @@ struct WalkingDistanceSelectorView: View {
         }
     }
 }
-

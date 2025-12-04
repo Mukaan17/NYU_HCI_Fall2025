@@ -10,6 +10,7 @@ import Observation
 @Observable
 final class PlaceViewModel {
     var selectedPlace: SelectedPlace?
+    var nearbyPlaces: [SelectedPlace] = []  
     
     func setSelectedPlace(_ place: SelectedPlace) {
         selectedPlace = place

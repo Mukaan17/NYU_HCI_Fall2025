@@ -7,16 +7,18 @@ import SwiftUI
 
 struct PreferencesView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(UserSession.self) private var session
+
     @State private var selectedCategories: Set<String> = []
     @State private var budgetSelection: BudgetOption = .noPreference
     @State private var selectedDietaryRestrictions: Set<String> = []
     @State private var walkingDistance: WalkingDistanceOption = .noPreference
     @State private var hobbies: String = ""
     @State private var isSaving = false
-    
+
     private let storage = StorageService.shared
-    
-    // Category options
+    private let api = APIService.shared
+
     private let categoryOptions = [
         "Study Spots / Cozy Cafés",
         "Free Events & Pop-Ups",
@@ -24,8 +26,7 @@ struct PreferencesView: View {
         "Nightlife",
         "Explore All / I'm open to anything"
     ]
-    
-    // Dietary restriction options
+
     private let dietaryOptions = [
         "Vegetarian",
         "Vegan",
@@ -37,7 +38,7 @@ struct PreferencesView: View {
         "Seafood Allergy",
         "Other"
     ]
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -52,7 +53,7 @@ struct PreferencesView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-                
+
                 // Blur Shapes
                 GeometryReader { geometry in
                     Circle()
@@ -60,7 +61,7 @@ struct PreferencesView: View {
                         .frame(width: 300, height: 300)
                         .offset(x: -50, y: -100)
                         .blur(radius: 60)
-                    
+
                     Circle()
                         .fill(Theme.Colors.gradientStart.opacity(0.12))
                         .frame(width: 250, height: 250)
@@ -68,13 +69,13 @@ struct PreferencesView: View {
                         .blur(radius: 50)
                 }
                 .allowsHitTesting(false)
-                
+
                 ScrollView {
                     VStack(spacing: Theme.Spacing.`4xl`) {
                         Spacer()
                             .frame(height: 20)
-                        
-                        // What are you looking for?
+
+                        // Categories
                         PreferenceSectionView(title: "What are you looking for?") {
                             LazyVStack(spacing: Theme.Spacing.md) {
                                 ForEach(categoryOptions, id: \.self) { category in
@@ -94,14 +95,14 @@ struct PreferencesView: View {
                             }
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
+
                         // Budget
                         PreferenceSectionView(title: "Budget (Optional)") {
                             BudgetSelectorView(selection: $budgetSelection)
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
-                        // Dietary Restrictions
+
+                        // Dietary
                         PreferenceSectionView(title: "Dietary Restrictions") {
                             LazyVStack(spacing: Theme.Spacing.md) {
                                 ForEach(dietaryOptions, id: \.self) { restriction in
@@ -121,14 +122,14 @@ struct PreferencesView: View {
                             }
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
-                        // Walking Distance
+
+                        // Walking distance
                         PreferenceSectionView(title: "Walking Distance from Campus") {
                             WalkingDistanceSelectorView(selection: $walkingDistance)
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
-                        // Hobbies/Interests
+
+                        // Hobbies
                         PreferenceSectionView(title: "Hobbies / Interests (Optional)") {
                             TextField("Tell us about your interests", text: $hobbies, axis: .vertical)
                                 .themeFont(size: .base)
@@ -143,8 +144,8 @@ struct PreferencesView: View {
                                 .lineLimit(3...6)
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
-                        // Save Button
+
+                        // Save
                         Button(action: {
                             savePreferences()
                         }) {
@@ -197,53 +198,72 @@ struct PreferencesView: View {
             }
         }
     }
-    
+
     private func loadPreferences() async {
-        let preferences = await storage.userPreferences
+        // Prefer live session (which should already be merged from backend),
+        // fall back to storage if it's still default.
+        var prefs = session.preferences
+        if prefs == UserPreferences() {
+            let local = await storage.userPreferences
+            prefs = local
+        }
+
         await MainActor.run {
-            selectedCategories = preferences.categories
-            budgetSelection = BudgetOption.fromBudgetRange(min: preferences.budgetMin, max: preferences.budgetMax)
-            selectedDietaryRestrictions = preferences.dietaryRestrictions
-            walkingDistance = WalkingDistanceOption.fromMinutes(preferences.maxWalkMinutes)
-            hobbies = preferences.hobbies ?? ""
+            selectedCategories = prefs.categories
+            budgetSelection = BudgetOption.fromBudgetRange(min: prefs.budgetMin, max: prefs.budgetMax)
+            selectedDietaryRestrictions = prefs.dietaryRestrictions
+            walkingDistance = WalkingDistanceOption.fromMinutes(prefs.maxWalkMinutes)
+            hobbies = prefs.hobbies ?? ""
         }
     }
-    
+
     private func savePreferences() {
         isSaving = true
-        
+
         Task {
-            // Convert budget selection to min/max
             let (budgetMin, budgetMax) = budgetSelection.toBudgetRange()
-            
-            // Convert walking distance to minutes
             let maxWalkMinutes = walkingDistance.toMinutes()
-            
-            var preferences = await storage.userPreferences
-            preferences.categories = selectedCategories
-            preferences.budgetMin = budgetMin
-            preferences.budgetMax = budgetMax
-            preferences.dietaryRestrictions = selectedDietaryRestrictions
-            preferences.maxWalkMinutes = maxWalkMinutes
-            preferences.hobbies = hobbies.isEmpty ? nil : hobbies
-            
-            await storage.saveUserPreferences(preferences)
-            
-            await MainActor.run {
-                isSaving = false
-                dismiss()
+
+            var prefs = session.preferences
+            prefs.categories = selectedCategories
+            prefs.budgetMin = budgetMin
+            prefs.budgetMax = budgetMax
+            prefs.dietaryRestrictions = selectedDietaryRestrictions
+            prefs.maxWalkMinutes = maxWalkMinutes
+            prefs.hobbies = hobbies.isEmpty ? nil : hobbies
+
+            do {
+                if let jwt = session.jwt {
+                    let backendPrefs = try await api.saveUserPreferences(preferences: prefs, jwt: jwt)
+                    prefs = UserPreferences.fromBackendPreferencesPayload(backendPrefs, existing: prefs)
+                }
+
+                await storage.saveUserPreferences(prefs)
+                session.preferences = prefs
+
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                print("Preferences save error:", error)
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                }
             }
         }
     }
 }
 
-// MARK: - Budget Option Extensions
+// MARK: - Budget / Distance helpers
+
 extension BudgetOption {
     static func fromBudgetRange(min: Int?, max: Int?) -> BudgetOption {
         guard let min = min, let max = max else {
             return .noPreference
         }
-        
+
         if min <= 20 && max <= 20 {
             return .low
         } else if min <= 50 && max <= 50 {
@@ -254,13 +274,12 @@ extension BudgetOption {
     }
 }
 
-// MARK: - Walking Distance Option Extensions
 extension WalkingDistanceOption {
     static func fromMinutes(_ minutes: Int?) -> WalkingDistanceOption {
         guard let minutes = minutes else {
             return .noPreference
         }
-        
+
         switch minutes {
         case 5...10:
             return .fiveToTen
@@ -273,4 +292,3 @@ extension WalkingDistanceOption {
         }
     }
 }
-

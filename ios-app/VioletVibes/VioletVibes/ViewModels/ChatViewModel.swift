@@ -9,13 +9,15 @@ import Observation
 
 @Observable
 final class ChatViewModel {
+
+    // MARK: - UI State
     var messages: [ChatMessage] = []
     var isTyping: Bool = false
-    
+
     private let apiService = APIService.shared
-    
+
+    // MARK: - Init (welcome)
     init() {
-        // Initialize with welcome message
         messages = [
             ChatMessage(
                 id: 1,
@@ -26,12 +28,22 @@ final class ChatViewModel {
             )
         ]
     }
-    
-    func sendMessage(_ text: String, latitude: Double? = nil, longitude: Double? = nil) async {
+
+    // MARK: - Main Send Function
+    func sendMessage(
+        _ text: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        session: UserSession,
+        preferences: UserPreferences
+    ) async {
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        
-        // Add user message
+
+        // ------------------------------------------
+        // Add USER message
+        // ------------------------------------------
         let userMessage = ChatMessage(
             id: Int(Date().timeIntervalSince1970),
             type: .text,
@@ -39,15 +51,26 @@ final class ChatViewModel {
             content: trimmed,
             timestamp: Date()
         )
-        
+
         messages.append(userMessage)
         isTyping = true
-        
+
+        // ------------------------------------------
+        // Call BACKEND
+        // ------------------------------------------
         do {
-            let response = try await apiService.sendChatMessage(trimmed, latitude: latitude, longitude: longitude)
-            
+            let response = try await apiService.sendChatMessage(
+                trimmed,
+                latitude: latitude,
+                longitude: longitude,
+                jwt: session.jwt
+            )
+
+            // ------------------------------------------
+            // Add AI response
+            // ------------------------------------------
             await MainActor.run {
-                // Add AI text reply
+
                 let aiMessage = ChatMessage(
                     id: Int(Date().timeIntervalSince1970) + 1,
                     type: .text,
@@ -55,45 +78,51 @@ final class ChatViewModel {
                     content: response.replyText,
                     timestamp: Date()
                 )
-                
                 messages.append(aiMessage)
-                
-                // Add recommendations if present
+
+                // ------------------------------------------
+                // Include recommendations
+                // ------------------------------------------
                 if let places = response.places, !places.isEmpty {
-                    let recommendations = places.enumerated().map { index, place in
-                        // Use a unique ID based on timestamp and index to avoid duplicates
-                        let uniqueId = Int(Date().timeIntervalSince1970 * 1000) + index
-                        return Recommendation(
-                            id: place.id != 0 ? place.id : uniqueId,
-                            title: place.title,
-                            description: place.description,
-                            distance: place.distance,
-                            walkTime: place.walkTime,
-                            lat: place.lat,
-                            lng: place.lng,
-                            popularity: place.popularity,
-                            image: place.image
+
+                    let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+
+                    let recommendations: [Recommendation] = places.enumerated().map { idx, p in
+                        Recommendation(
+                            id: "chat-\(timestamp)-\(idx)",
+                            title: p.title,
+                            description: p.description,
+                            distance: p.distance,
+                            walkTime: p.walkTime,
+                            lat: p.lat,
+                            lng: p.lng,
+                            popularity: p.popularity,
+                            image: p.image,
+                            busyness: p.busyness,
+                            rating: p.rating,
+                            score: p.score,
+                            mapsLink: p.mapsLink,
+                            type: p.type,
+                            source: p.source
                         )
                     }
-                    
-                    let recommendationsMessage = ChatMessage(
+
+                    let recMessage = ChatMessage(
                         id: Int(Date().timeIntervalSince1970) + 2,
                         type: .recommendations,
                         role: .ai,
-                        content: nil,
                         recommendations: recommendations,
                         timestamp: Date()
                     )
-                    
-                    messages.append(recommendationsMessage)
+
+                    messages.append(recMessage)
                 }
-                
+
                 isTyping = false
             }
+
         } catch {
-            print("Chat error: \(error)")
-            print("Error details: \(error.localizedDescription)")
-            
+            print("Chat error:", error)
             await MainActor.run {
                 let errorMessage = ChatMessage(
                     id: Int(Date().timeIntervalSince1970) + 1,
@@ -102,11 +131,9 @@ final class ChatViewModel {
                     content: "I'm having trouble connecting right now. Please try again!",
                     timestamp: Date()
                 )
-                
                 messages.append(errorMessage)
                 isTyping = false
             }
         }
     }
 }
-

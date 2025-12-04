@@ -1,5 +1,3 @@
-# server/services/directions_service.py
-
 import os
 import logging
 from typing import Optional, Dict, Any
@@ -18,10 +16,6 @@ def get_walking_directions(
     dest_lat: float,
     dest_lng: float
 ) -> Optional[Dict[str, Any]]:
-    """
-    Get walking directions from Google Directions API.
-    FAST MODE: short timeout, returns None on failure (UI can still show place).
-    """
 
     if not GOOGLE_API_KEY:
         logger.warning("GOOGLE_API_KEY not set, cannot get directions")
@@ -42,43 +36,47 @@ def get_walking_directions(
 
         routes = data.get("routes", [])
         if not routes:
-            logger.debug(f"No routes found from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")
             return None
 
-        leg = routes[0].get("legs", [{}])[0]
+        route = routes[0]
+        leg = route["legs"][0]
+
         duration_text = leg.get("duration", {}).get("text")
         distance_text = leg.get("distance", {}).get("text")
 
-        q = urllib.parse.urlencode({
-            "api": 1,
-            "origin": f"{origin_lat},{origin_lng}",
-            "destination": f"{dest_lat},{dest_lng}",
-            "travelmode": "walking"
-        })
-        maps_link = f"https://www.google.com/maps/dir/?{q}"
+        encoded_polyline = route.get("overview_polyline", {}).get("points")
+
+        # Extract step-by-step instructions
+        steps = []
+        for step in leg.get("steps", []):
+            steps.append({
+                "instruction": step.get("html_instructions", ""),
+                "distance": step.get("distance", {}).get("text", ""),
+                "duration": step.get("duration", {}).get("text", "")
+            })
+
+        maps_link = (
+            "https://www.google.com/maps/dir/?api=1"
+            f"&origin={origin_lat},{origin_lng}"
+            f"&destination={dest_lat},{dest_lng}"
+            f"&travelmode=walking"
+        )
 
         return {
             "duration_text": duration_text,
             "distance_text": distance_text,
+            "polyline_encoded": encoded_polyline,
+            "steps": steps,
             "maps_link": maps_link,
         }
 
-    except requests.Timeout:
-        logger.warning(f"Timeout getting directions from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")
+    except Exception as e:
+        logger.error(f"Directions error: {e}", exc_info=True)
         return None
-    except requests.RequestException as e:
-        logger.warning(f"Error getting directions: {e}")
-        return None
-    except Exception as ex:
-        logger.error(f"Directions error: {ex}", exc_info=True)
-        return None
+
 
 
 def walking_minutes(walk_time: Optional[str]) -> Optional[int]:
-    """
-    Convert strings like '14 mins' or '1 hour 5 mins' into total minutes.
-    """
-
     if not walk_time:
         return None
 
@@ -101,5 +99,6 @@ def walking_minutes(walk_time: Optional[str]) -> Optional[int]:
                     break
 
         return total if total > 0 else None
+
     except Exception:
         return None

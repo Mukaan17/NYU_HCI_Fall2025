@@ -11,6 +11,8 @@ import UIKit
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(UserSession.self) private var session
+
     @State private var locationPermission: Bool = false
     @State private var calendarPermission: Bool = false
     @State private var notificationPermission: Bool = false
@@ -21,14 +23,14 @@ struct AccountSettingsView: View {
     @State private var trustedContactsCount: Int = 0
     @State private var usePreferencesForPersonalization: Bool = true
     @State private var showChangePassword = false
-    
+
     private let locationService = LocationService.shared
-    private let calendarService = CalendarService.shared
     private let notificationService = NotificationService.shared
     private let contactsService = ContactsService.shared
     private let remindersService = RemindersService.shared
     private let storage = StorageService.shared
-    
+    private let api = APIService.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -43,7 +45,7 @@ struct AccountSettingsView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-                
+
                 // Blur Shapes
                 GeometryReader { geometry in
                     Circle()
@@ -51,7 +53,7 @@ struct AccountSettingsView: View {
                         .frame(width: geometry.size.width * 0.75, height: geometry.size.width * 0.75)
                         .offset(x: -geometry.size.width * 0.2, y: -100)
                         .blur(radius: 60)
-                    
+
                     Circle()
                         .fill(Theme.Colors.accentBlue.opacity(0.12))
                         .frame(width: geometry.size.width * 0.6, height: geometry.size.width * 0.6)
@@ -59,26 +61,26 @@ struct AccountSettingsView: View {
                         .blur(radius: 50)
                 }
                 .allowsHitTesting(false)
-                
+
                 ScrollView {
                     VStack(spacing: Theme.Spacing.`4xl`) {
                         // Account Settings Section
                         AccountSettingsSectionView()
                             .padding(.horizontal, Theme.Spacing.`2xl`)
                             .padding(.top, Theme.Spacing.`3xl`)
-                        
+
                         // Preferences Section
                         NavigationLink(destination: PreferencesView()) {
                             PreferencesSectionCardView()
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
-                        
+
                         // Permissions Section
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
                             Text("Permissions")
                                 .themeFont(size: .`2xl`, weight: .bold)
                                 .foregroundColor(Theme.Colors.textPrimary)
-                            
+
                             // Location Permission
                             PermissionToggleRow(
                                 icon: "📍",
@@ -91,13 +93,12 @@ struct AccountSettingsView: View {
                                             await requestLocationPermission()
                                         }
                                     } else {
-                                        // Show alert that user needs to disable in Settings
                                         showSettingsAlert(for: "Location")
                                     }
                                 }
                             )
-                            
-                            // Google Calendar Permission
+
+                            // Google Calendar Permission (OAuth-based, not EventKit)
                             PermissionToggleRow(
                                 icon: "📅",
                                 title: "Google Calendar",
@@ -106,8 +107,9 @@ struct AccountSettingsView: View {
                                 onToggle: { enabled in
                                     if enabled {
                                         Task {
-                                            await requestCalendarPermission()
-                                            await saveCalendarPreference(enabled)
+                                            // Launch Google OAuth + save preference
+                                            openGoogleCalendarOAuth()
+                                            await saveCalendarPreference(true)
                                         }
                                     } else {
                                         Task {
@@ -117,7 +119,7 @@ struct AccountSettingsView: View {
                                     }
                                 }
                             )
-                            
+
                             // Notification Permission
                             PermissionToggleRow(
                                 icon: "🔔",
@@ -138,7 +140,7 @@ struct AccountSettingsView: View {
                                     }
                                 }
                             )
-                            
+
                             // Use Preferences Toggle
                             PermissionToggleRow(
                                 icon: "🎯",
@@ -151,7 +153,7 @@ struct AccountSettingsView: View {
                                     }
                                 }
                             )
-                            
+
                             // Contacts Permission
                             PermissionToggleRow(
                                 icon: "👥",
@@ -168,7 +170,7 @@ struct AccountSettingsView: View {
                                     }
                                 }
                             )
-                            
+
                             // Reminders Permission
                             PermissionToggleRow(
                                 icon: "📝",
@@ -195,16 +197,16 @@ struct AccountSettingsView: View {
                         .cornerRadius(Theme.BorderRadius.lg)
                         .padding(.horizontal, Theme.Spacing.`2xl`)
                         .padding(.top, Theme.Spacing.`3xl`)
-                        
+
                         // Trusted Contacts Section
                         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                             HStack {
                                 Text("Trusted Contacts")
                                     .themeFont(size: .`2xl`, weight: .bold)
                                     .foregroundColor(Theme.Colors.textPrimary)
-                                
+
                                 Spacer()
-                                
+
                                 if trustedContactsCount > 0 {
                                     Text("\(trustedContactsCount)")
                                         .themeFont(size: .base, weight: .semiBold)
@@ -215,19 +217,19 @@ struct AccountSettingsView: View {
                                         .cornerRadius(Theme.BorderRadius.md)
                                 }
                             }
-                            
+
                             Text("Manage contacts who can receive your location")
                                 .themeFont(size: .base)
                                 .foregroundColor(Theme.Colors.textSecondary)
-                            
+
                             NavigationLink(destination: TrustedContactsView()) {
                                 HStack {
                                     Text("Manage Trusted Contacts")
                                         .themeFont(size: .lg, weight: .semiBold)
                                         .foregroundColor(Theme.Colors.gradientStart)
-                                    
+
                                     Spacer()
-                                    
+
                                     Image(systemName: "chevron.right")
                                         .foregroundColor(Theme.Colors.textSecondary)
                                 }
@@ -249,19 +251,19 @@ struct AccountSettingsView: View {
                         .cornerRadius(Theme.BorderRadius.lg)
                         .padding(.horizontal, Theme.Spacing.`2xl`)
                         .padding(.top, Theme.Spacing.`3xl`)
-                        
+
                         // Home Address Section
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
                             Text("Home Address")
                                 .themeFont(size: .`2xl`, weight: .bold)
                                 .foregroundColor(Theme.Colors.textPrimary)
-                            
+
                             Text("Used for safe route home feature")
                                 .themeFont(size: .sm)
                                 .foregroundColor(Theme.Colors.textSecondary)
-                            
+
                             LocationPickerView(address: $homeAddress)
-                            
+
                             Button(action: {
                                 saveHomeAddress()
                             }) {
@@ -314,74 +316,91 @@ struct AccountSettingsView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 // Dismiss keyboard when tapping outside text fields
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil,
+                    from: nil,
+                    for: nil
+                )
             }
         }
     }
-    
+
+    // MARK: - Google OAuth launcher
+
+    private func openGoogleCalendarOAuth() {
+        guard let jwt = session.jwt,
+              let url = URL(string: "\(APIService.serverURL)/api/calendar/oauth/google/start?token=\(jwt)") else {
+            print("⚠️ Missing JWT or invalid calendar OAuth URL")
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    // MARK: - Permissions
+
     private func checkPermissions() async {
         isCheckingPermissions = true
-        
-        // Check Location
+
+        // Location
         let locationStatus = locationService.authorizationStatus
-        locationPermission = locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
-        
-        // Check Calendar
-        calendarPermission = calendarService.hasPermission
-        
-        // Check Notifications
-        notificationPermission = await notificationService.hasPermission
-        
-        // Check Contacts
-        contactsPermission = contactsService.hasPermission
-        
-        // Check Reminders
-        remindersPermission = remindersService.hasPermission
-        
-        isCheckingPermissions = false
+        let locGranted = locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
+
+        // Notifications
+        let notifGranted = await notificationService.hasPermission
+
+        // Contacts / Reminders
+        let contactsGranted = contactsService.hasPermission
+        let remindersGranted = remindersService.hasPermission
+
+        // Calendar = backend-linked (from session preferences)
+        let calendarEnabled = await MainActor.run { session.preferences.googleCalendarEnabled }
+
+        await MainActor.run {
+            locationPermission = locGranted
+            notificationPermission = notifGranted
+            contactsPermission = contactsGranted
+            remindersPermission = remindersGranted
+            calendarPermission = calendarEnabled
+            isCheckingPermissions = false
+        }
     }
-    
+
     private func requestLocationPermission() async {
         let granted = await locationService.requestPermission()
         await MainActor.run {
             locationPermission = granted
         }
     }
-    
-    private func requestCalendarPermission() async {
-        let granted = await calendarService.requestPermission()
-        await MainActor.run {
-            calendarPermission = granted
-        }
-    }
-    
+
     private func requestNotificationPermission() async {
         let granted = await notificationService.requestPermission()
         await MainActor.run {
             notificationPermission = granted
         }
     }
-    
+
     private func requestContactsPermission() async {
         let granted = await contactsService.requestPermission()
         await MainActor.run {
             contactsPermission = granted
         }
     }
-    
+
     private func requestRemindersPermission() async {
         let granted = await remindersService.requestPermission()
         await MainActor.run {
             remindersPermission = granted
         }
     }
-    
+
     private func showSettingsAlert(for permission: String) {
         // In a real app, you'd show an alert directing users to Settings
-        // For now, we'll just update the toggle state
-        print("User needs to disable \(permission) permission in Settings app")
+        print("User needs to manage \(permission) permission in Settings app")
     }
-    
+
+    // MARK: - Home Address
+
     private func loadHomeAddress() async {
         let address = await storage.homeAddress
         let contacts = await storage.trustedContacts
@@ -390,62 +409,144 @@ struct AccountSettingsView: View {
             trustedContactsCount = contacts.count
         }
     }
-    
+
     private func saveHomeAddress() {
         Task {
             await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
         }
     }
-    
+
+    // MARK: - Preferences (Local + Backend + Session)
+
     private func loadPreferences() async {
-        let preferences = await storage.userPreferences
+        // Try backend first if we have a JWT
+        if let jwt = await MainActor.run(body: { session.jwt }) {
+            do {
+                let backendPrefs = try await api.fetchUserPreferences(jwt: jwt)
+                let backendSettings = try await api.fetchUserSettings(jwt: jwt)
+
+                // Build local prefs from backend pieces
+                let prefsFromBackend = UserPreferences.fromBackendPreferencesPayload(backendPrefs)
+                let merged = UserPreferences.mergedWithSettings(prefsFromBackend, backendSettings: backendSettings)
+
+                // Persist locally + session
+                await storage.saveUserPreferences(merged)
+                await MainActor.run {
+                    session.preferences = merged
+                    usePreferencesForPersonalization = merged.usePreferencesForPersonalization
+                    calendarPermission = merged.googleCalendarEnabled
+                    notificationPermission = merged.notificationsEnabled
+                }
+                return
+            } catch {
+                print("⚠️ Failed to load preferences from backend:", error)
+            }
+        }
+
+        // Fallback to local only
+        let localPrefs = await storage.userPreferences
         await MainActor.run {
-            usePreferencesForPersonalization = preferences.usePreferencesForPersonalization
+            session.preferences = localPrefs
+            usePreferencesForPersonalization = localPrefs.usePreferencesForPersonalization
+            calendarPermission = localPrefs.googleCalendarEnabled
+            notificationPermission = localPrefs.notificationsEnabled
         }
     }
-    
+
     private func saveCalendarPreference(_ enabled: Bool) async {
         var preferences = await storage.userPreferences
         preferences.googleCalendarEnabled = enabled
         await storage.saveUserPreferences(preferences)
+
+        await MainActor.run {
+            session.preferences = preferences
+            calendarPermission = enabled
+        }
+
+        if let jwt = await MainActor.run(body: { session.jwt }) {
+            let settingsPayload = BackendSettingsPayload(
+                google_calendar_enabled: enabled,
+                notifications_enabled: nil,
+                use_preferences_for_personalization: nil
+            )
+            do {
+                _ = try await api.saveUserSettings(settings: settingsPayload, jwt: jwt)
+            } catch {
+                print("⚠️ Failed to save calendar setting to backend:", error)
+            }
+        }
     }
-    
+
     private func saveNotificationPreference(_ enabled: Bool) async {
         var preferences = await storage.userPreferences
         preferences.notificationsEnabled = enabled
         await storage.saveUserPreferences(preferences)
+
+        await MainActor.run {
+            session.preferences = preferences
+            notificationPermission = enabled
+        }
+
+        if let jwt = await MainActor.run(body: { session.jwt }) {
+            let settingsPayload = BackendSettingsPayload(
+                google_calendar_enabled: nil,
+                notifications_enabled: enabled,
+                use_preferences_for_personalization: nil
+            )
+            do {
+                _ = try await api.saveUserSettings(settings: settingsPayload, jwt: jwt)
+            } catch {
+                print("⚠️ Failed to save notification setting to backend:", error)
+            }
+        }
     }
-    
+
     private func saveUsePreferencesPreference(_ enabled: Bool) async {
         var preferences = await storage.userPreferences
         preferences.usePreferencesForPersonalization = enabled
         await storage.saveUserPreferences(preferences)
+
         await MainActor.run {
+            session.preferences = preferences
             usePreferencesForPersonalization = enabled
+        }
+
+        if let jwt = await MainActor.run(body: { session.jwt }) {
+            let settingsPayload = BackendSettingsPayload(
+                google_calendar_enabled: nil,
+                notifications_enabled: nil,
+                use_preferences_for_personalization: enabled
+            )
+            do {
+                _ = try await api.saveUserSettings(settings: settingsPayload, jwt: jwt)
+            } catch {
+                print("⚠️ Failed to save personalization setting to backend:", error)
+            }
         }
     }
 }
 
 // MARK: - Account Settings Section View
+
 struct AccountSettingsSectionView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @State private var firstName: String = ""
     @State private var showChangePassword = false
     @State private var showLogoutAlert = false
     private let storage = StorageService.shared
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
             Text("Account Settings")
                 .themeFont(size: .`2xl`, weight: .bold)
                 .foregroundColor(Theme.Colors.textPrimary)
-            
+
             // First Name
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                 Text("First Name")
                     .themeFont(size: .sm, weight: .semiBold)
                     .foregroundColor(Theme.Colors.textSecondary)
-                
+
                 TextField("Enter your first name", text: $firstName)
                     .textContentType(.givenName)
                     .autocapitalization(.words)
@@ -458,11 +559,11 @@ struct AccountSettingsSectionView: View {
                             .stroke(Theme.Colors.border, lineWidth: 1)
                     )
                     .cornerRadius(Theme.BorderRadius.md)
-                    .onChange(of: firstName) { oldValue, newValue in
+                    .onChange(of: firstName) { _, newValue in
                         saveFirstName(newValue)
                     }
             }
-            
+
             // Change Password Button
             Button(action: {
                 showChangePassword = true
@@ -471,9 +572,9 @@ struct AccountSettingsSectionView: View {
                     Text("Change Password")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.gradientStart)
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .foregroundColor(Theme.Colors.textSecondary)
                 }
@@ -485,7 +586,7 @@ struct AccountSettingsSectionView: View {
                         .stroke(Theme.Colors.border, lineWidth: 1)
                 )
             }
-            
+
             // Logout Button
             Button(action: {
                 showLogoutAlert = true
@@ -494,9 +595,9 @@ struct AccountSettingsSectionView: View {
                     Text("Logout")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textError)
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "arrow.right.square")
                         .foregroundColor(Theme.Colors.textError)
                 }
@@ -514,7 +615,7 @@ struct AccountSettingsSectionView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                     .fill(.regularMaterial)
-                
+
                 LinearGradient(
                     colors: [
                         Theme.Colors.gradientStart.opacity(0.1),
@@ -545,7 +646,7 @@ struct AccountSettingsSectionView: View {
             Text("Are you sure you want to logout?")
         }
     }
-    
+
     private func loadAccountInfo() async {
         if let account = await storage.userAccount {
             await MainActor.run {
@@ -553,7 +654,7 @@ struct AccountSettingsSectionView: View {
             }
         }
     }
-    
+
     private func saveFirstName(_ name: String) {
         Task {
             if var account = await storage.userAccount {
@@ -562,7 +663,7 @@ struct AccountSettingsSectionView: View {
             }
         }
     }
-    
+
     private func logout() {
         Task {
             await storage.setHasLoggedIn(false)
@@ -573,7 +674,8 @@ struct AccountSettingsSectionView: View {
     }
 }
 
-// MARK: - Preferences Section Card View
+// MARK: - Preferences Section Card View + PermissionToggleRow
+
 struct PreferencesSectionCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
@@ -581,13 +683,13 @@ struct PreferencesSectionCardView: View {
                 Text("Preferences")
                     .themeFont(size: .`2xl`, weight: .bold)
                     .foregroundColor(Theme.Colors.textPrimary)
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .foregroundColor(Theme.Colors.textSecondary)
             }
-            
+
             Text("Update your preferences for personalized recommendations")
                 .themeFont(size: .base)
                 .foregroundColor(Theme.Colors.textSecondary)
@@ -597,7 +699,7 @@ struct PreferencesSectionCardView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                     .fill(.regularMaterial)
-                
+
                 LinearGradient(
                     colors: [
                         Theme.Colors.gradientStart.opacity(0.1),
@@ -622,7 +724,7 @@ struct PermissionToggleRow: View {
     let description: String
     @Binding var isEnabled: Bool
     let onToggle: (Bool) -> Void
-    
+
     var body: some View {
         HStack(spacing: Theme.Spacing.`2xl`) {
             // Icon
@@ -630,24 +732,24 @@ struct PermissionToggleRow: View {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
                     .fill(Theme.Colors.whiteOverlayMedium)
                     .frame(width: 48, height: 48)
-                
+
                 Text(icon)
                     .font(.system(size: 24))
             }
-            
+
             // Text
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 Text(title)
                     .themeFont(size: .base, weight: .semiBold)
                     .foregroundColor(Theme.Colors.textPrimary)
-                
+
                 Text(description)
                     .themeFont(size: .sm)
                     .foregroundColor(Theme.Colors.textSecondary)
             }
-            
+
             Spacer()
-            
+
             // Toggle
             Toggle("", isOn: Binding(
                 get: { isEnabled },
@@ -659,4 +761,3 @@ struct PermissionToggleRow: View {
         }
     }
 }
-

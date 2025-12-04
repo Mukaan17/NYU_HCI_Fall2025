@@ -12,17 +12,17 @@ import Observation
 final class MapViewModel {
     var cameraPosition: MapCameraPosition
     var polylineCoordinates: [CLLocationCoordinate2D] = []
+    var steps: [StepInstruction] = []
+    var mapsLink: String? = nil
     var isLoadingRoute: Bool = false
     
     private let apiService = APIService.shared
     
-    // NYU Tandon default
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
     
-    // Track last update to prevent excessive updates
     private var lastLocationUpdate: Date?
-    private let locationUpdateThrottle: TimeInterval = 2.0 // Update at most every 2 seconds
+    private let locationUpdateThrottle: TimeInterval = 2.0
     
     init() {
         let region = MKCoordinateRegion(
@@ -33,12 +33,8 @@ final class MapViewModel {
     }
     
     func updateRegion(latitude: Double, longitude: Double, animated: Bool = true) {
-        // Throttle location updates to improve performance
         let now = Date()
-        if let lastUpdate = lastLocationUpdate,
-           now.timeIntervalSince(lastUpdate) < locationUpdateThrottle {
-            return
-        }
+        if let last = lastLocationUpdate, now.timeIntervalSince(last) < locationUpdateThrottle { return }
         lastLocationUpdate = now
         
         let region = MKCoordinateRegion(
@@ -56,7 +52,6 @@ final class MapViewModel {
     }
     
     func centerToUserLocation(latitude: Double, longitude: Double) {
-        // Clear any throttling to ensure immediate update
         lastLocationUpdate = nil
         
         let region = MKCoordinateRegion(
@@ -64,39 +59,44 @@ final class MapViewModel {
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         )
         
-        // Always update, bypassing throttling for manual button presses
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             cameraPosition = .region(region)
         }
     }
     
     func fetchRoute(destinationLat: Double, destinationLng: Double) async {
-            isLoadingRoute = true
+        isLoadingRoute = true
+        defer { isLoadingRoute = false }
         
         do {
             let response = try await apiService.getDirections(lat: destinationLat, lng: destinationLng)
             
-            if let polyline = response.polyline {
-                let coordinates = polyline.compactMap { point -> CLLocationCoordinate2D? in
-                    guard point.count >= 2 else { return nil }
-                    return CLLocationCoordinate2D(latitude: point[0], longitude: point[1])
+            mapsLink = response.maps_link
+            
+            // polyline
+            if let poly = response.polyline {
+                polylineCoordinates = poly.compactMap { arr in
+                    guard arr.count >= 2 else { return nil }
+                    return CLLocationCoordinate2D(latitude: arr[0], longitude: arr[1])
                 }
-                
-                polylineCoordinates = coordinates
-                isLoadingRoute = false
             } else {
                 polylineCoordinates = []
-                isLoadingRoute = false
             }
+            
+            // steps
+            steps = response.steps ?? []
+            
         } catch {
             print("Route error: \(error)")
             polylineCoordinates = []
-            isLoadingRoute = false
+            steps = []
+            mapsLink = nil
         }
     }
     
     func clearRoute() {
         polylineCoordinates = []
+        steps = []
+        mapsLink = nil
     }
 }
-

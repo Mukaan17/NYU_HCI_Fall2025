@@ -8,6 +8,7 @@ import SwiftUI
 struct QuickResultsSheetView: View {
     let category: String
     @Environment(PlaceViewModel.self) private var placeViewModel
+    @Environment(TabCoordinator.self) private var tabCoordinator    // 👈 add this
     @Environment(\.dismiss) private var dismiss
     
     @State private var places: [Recommendation] = []
@@ -28,7 +29,6 @@ struct QuickResultsSheetView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background with liquid glass
                 LinearGradient(
                     colors: [
                         Theme.Colors.background,
@@ -40,7 +40,6 @@ struct QuickResultsSheetView: View {
                 )
                 .ignoresSafeArea()
                 
-                // Blur Shapes
                 GeometryReader { geometry in
                     Circle()
                         .fill(Theme.Colors.gradientStart.opacity(0.15))
@@ -83,6 +82,7 @@ struct QuickResultsSheetView: View {
                                     image: place.image
                                 )
                                 placeViewModel.setSelectedPlace(selectedPlace)
+                                tabCoordinator.selectedTab = .map      // 👈 go to map
                                 dismiss()
                             }
                             .listRowBackground(
@@ -112,7 +112,6 @@ struct QuickResultsSheetView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground {
-            // Liquid glass background for sheet
             ZStack {
                 RoundedRectangle(cornerRadius: 0)
                     .fill(.regularMaterial)
@@ -128,7 +127,6 @@ struct QuickResultsSheetView: View {
             }
         }
         .task(id: category) {
-            // Reset places before loading to prevent accumulation
             await MainActor.run {
                 places = []
             }
@@ -140,38 +138,10 @@ struct QuickResultsSheetView: View {
         loading = true
         do {
             let response = try await apiService.getQuickRecommendations(category: category, limit: 10)
+            
             await MainActor.run {
-                // Deduplicate places using multiple strategies
-                var seenIds = Set<Int>()
-                var seenKeys = Set<String>()
-                
-                places = response.places.compactMap { place -> Recommendation? in
-                    // First, try to deduplicate by ID (if ID is not 0 or a default value)
-                    if place.id != 0 && seenIds.contains(place.id) {
-                        return nil
-                    }
-                    if place.id != 0 {
-                        seenIds.insert(place.id)
-                    }
-                    
-                    // Create a comprehensive unique key from title, description, and location
-                    let normalizedTitle = place.title.lowercased().trimmingCharacters(in: CharacterSet.whitespaces)
-                    let normalizedDesc = (place.description ?? "").lowercased().trimmingCharacters(in: CharacterSet.whitespaces)
-                    let normalizedLat = place.lat.map { String(format: "%.6f", $0) } ?? "0"
-                    let normalizedLng = place.lng.map { String(format: "%.6f", $0) } ?? "0"
-                    
-                    // Use title + description + location as unique key
-                    let uniqueKey = "\(normalizedTitle)-\(normalizedDesc)-\(normalizedLat)-\(normalizedLng)"
-                    
-                    if seenKeys.contains(uniqueKey) {
-                        return nil
-                    }
-                    seenKeys.insert(uniqueKey)
-                    
-                    return place
-                }
-                
-                print("✅ Loaded \(places.count) unique places (from \(response.places.count) total)")
+                places = response.places.uniqued()
+                print("✅ Loaded \(places.count) unique places")
                 loading = false
             }
         } catch {
@@ -184,7 +154,8 @@ struct QuickResultsSheetView: View {
     }
 }
 
-// MARK: - Quick Result Row
+// MARK: - Quick Result Row View
+
 struct QuickResultRow: View {
     let place: Recommendation
     let onTap: () -> Void
@@ -235,13 +206,13 @@ struct QuickResultRow: View {
                     
                     HStack(spacing: Theme.Spacing.lg) {
                         if let walkTime = place.walkTime {
-                            Label("\(walkTime) min", systemImage: "figure.walk")
+                            Label("\(walkTime)", systemImage: "figure.walk")
                                 .themeFont(size: .xs)
                                 .foregroundColor(Theme.Colors.textSecondary)
                         }
                         
                         if let distance = place.distance {
-                            Label(String(format: "%.1f mi", distance), systemImage: "location")
+                            Label("\(distance)", systemImage: "location")
                                 .themeFont(size: .xs)
                                 .foregroundColor(Theme.Colors.textSecondary)
                         }
@@ -280,8 +251,11 @@ struct QuickResultRow: View {
     }
 }
 
-// MARK: - String Identifiable Extension
-extension String: Identifiable {
-    public var id: String { self }
-}
+// MARK: - Array Unique Extension
 
+extension Array where Element: Identifiable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element.ID>()
+        return self.filter { seen.insert($0.id).inserted }
+    }
+}

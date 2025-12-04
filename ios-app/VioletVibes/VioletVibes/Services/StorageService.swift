@@ -28,8 +28,13 @@ actor StorageService {
         static let hasCompletedOnboardingSurvey = "hasCompletedOnboardingSurvey"
         static let homeAddress = "homeAddress"
         static let trustedContacts = "trustedContacts"
+
+        // EXISTING
         static let userAccount = "userAccount"
         static let userPreferences = "userPreferences"
+
+        // NEW — SESSION STORAGE
+        static let userSession = "vv_user_session"   // stores jwt + googleCalendarLinked
     }
     
     nonisolated private init() {}
@@ -78,6 +83,7 @@ actor StorageService {
         userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
         userDefaults.removeObject(forKey: Keys.userAccount)
         userDefaults.removeObject(forKey: Keys.userPreferences)
+        userDefaults.removeObject(forKey: Keys.userSession)  // <-- NEW
     }
     
     // MARK: - Home Address
@@ -115,12 +121,10 @@ actor StorageService {
     func addTrustedContact(_ contact: TrustedContact) throws {
         var contacts = trustedContacts
         
-        // Check for duplicate ID
         if contacts.contains(where: { $0.id == contact.id }) {
             throw StorageError.duplicateContact("Contact with this ID already exists")
         }
         
-        // Check for duplicate phone number (if provided)
         if let phoneNumber = contact.phoneNumber, !phoneNumber.isEmpty {
             let normalizedPhone = normalizePhoneNumber(phoneNumber)
             if contacts.contains(where: { existingContact in
@@ -133,12 +137,11 @@ actor StorageService {
             }
         }
         
-        // Check for duplicate email (if provided)
         if let email = contact.email, !email.isEmpty {
-            let normalizedEmail = email.lowercased().trimmingCharacters(in: CharacterSet.whitespaces)
+            let normalizedEmail = email.lowercased().trimmingCharacters(in: .whitespaces)
             if contacts.contains(where: { existingContact in
                 if let existingEmail = existingContact.email, !existingEmail.isEmpty {
-                    return existingEmail.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) == normalizedEmail
+                    return existingEmail.lowercased().trimmingCharacters(in: .whitespaces) == normalizedEmail
                 }
                 return false
             }) {
@@ -146,12 +149,10 @@ actor StorageService {
             }
         }
         
-        // If we get here, no duplicates found - add the contact
         contacts.append(contact)
         setTrustedContacts(contacts)
     }
     
-    /// Normalizes phone number by removing non-digit characters for comparison
     private func normalizePhoneNumber(_ phone: String) -> String {
         return phone.filter { $0.isNumber }
     }
@@ -198,6 +199,29 @@ actor StorageService {
         } else {
             userDefaults.removeObject(forKey: Keys.userPreferences)
         }
+    }
+
+    // ========================================================================
+    // MARK: - SESSION STORAGE (jwt + googleCalendarLinked)
+    // ========================================================================
+    
+    func saveUserSession(_ session: UserSession) {
+        let dict: [String: Any] = [
+            "jwt": session.jwt ?? "",
+            "googleCalendarLinked": session.googleCalendarLinked
+        ]
+        userDefaults.set(dict, forKey: Keys.userSession)
+    }
+    
+    func loadUserSession() -> UserSession {
+        let session = UserSession()
+        
+        if let dict = userDefaults.dictionary(forKey: Keys.userSession) {
+            session.jwt = dict["jwt"] as? String
+            session.googleCalendarLinked = dict["googleCalendarLinked"] as? Bool ?? false
+        }
+        
+        return session
     }
 }
 

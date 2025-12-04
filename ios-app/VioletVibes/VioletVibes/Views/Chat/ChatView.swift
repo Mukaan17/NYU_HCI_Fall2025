@@ -12,8 +12,13 @@ struct ChatView: View {
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(LocationManager.self) private var locationManager
     @Environment(WeatherManager.self) private var weatherManager
+    @Environment(TabCoordinator.self) private var tabCoordinator   
+    @Environment(UserSession.self) private var session
+
     
     @FocusState private var isInputFocused: Bool
+    
+    // MARK: - Background
     
     private var backgroundGradient: some View {
         LinearGradient(
@@ -28,6 +33,8 @@ struct ChatView: View {
         .ignoresSafeArea()
     }
     
+    // MARK: - Layout
+    
     private var mainContent: some View {
         VStack(spacing: 0) {
             headerSection
@@ -35,6 +42,8 @@ struct ChatView: View {
             inputSection
         }
     }
+    
+    // MARK: - Header
     
     private var headerSection: some View {
         VStack(spacing: Theme.Spacing.`2xl`) {
@@ -59,7 +68,7 @@ struct ChatView: View {
     private var weatherBadge: some View {
         Group {
             if let weather = weatherManager.weather {
-                Text("\(weather.emoji) \(weather.temp)°F")
+                Text("\(weather.emoji) \(weather.tempF)°F")
                     .themeFont(size: .base, weight: .semiBold)
                     .foregroundColor(Theme.Colors.textBlue)
                     .padding(.horizontal, Theme.Spacing.xl)
@@ -137,6 +146,8 @@ struct ChatView: View {
         .opacity(0.4)
     }
     
+    // MARK: - Messages
+    
     private var messagesSection: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -172,10 +183,15 @@ struct ChatView: View {
     
     @ViewBuilder
     private func messageView(for message: ChatMessage) -> some View {
+        // Recommendation bundle from backend
         if message.type == .recommendations, let recommendations = message.recommendations {
             VStack(spacing: Theme.Spacing.`2xl`) {
                 ForEach(recommendations) { recommendation in
-                    RecommendationCard(recommendation: recommendation) {
+                    RecommendationCard(
+                        recommendation: recommendation,
+                        session: session,
+                        preferences: session.preferences
+                    ) {
                         let place = SelectedPlace(
                             name: recommendation.title,
                             latitude: recommendation.lat ?? 40.693393,
@@ -185,13 +201,18 @@ struct ChatView: View {
                             address: recommendation.description,
                             image: recommendation.image
                         )
+                        // 1. Save selected place for Map
                         placeViewModel.setSelectedPlace(place)
+                        // 2. Jump to Map tab
+                        tabCoordinator.selectedTab = .map
                     }
                 }
             }
             .padding(.horizontal, Theme.Spacing.`2xl`)
             .padding(.top, Theme.Spacing.`2xl`)
-        } else if let content = message.content {
+        }
+        // Normal text messages
+        else if let content = message.content {
             MessageBubble(message: message, content: content)
                 .padding(.horizontal, Theme.Spacing.`2xl`)
         }
@@ -211,19 +232,25 @@ struct ChatView: View {
         .padding(.horizontal, Theme.Spacing.`2xl`)
     }
     
+    // MARK: - Input
+    
     private var inputSection: some View {
         InputField(placeholder: "Ask VioletVibes...", isFocused: $isInputFocused) { text in
             Task {
                 await chatViewModel.sendMessage(
                     text,
                     latitude: locationManager.location?.coordinate.latitude,
-                    longitude: locationManager.location?.coordinate.longitude
+                    longitude: locationManager.location?.coordinate.longitude,
+                    session: session,
+                    preferences: session.preferences
                 )
             }
         }
         .padding(.horizontal, Theme.Spacing.`2xl`)
         .padding(.bottom, Theme.Spacing.`2xl`)
     }
+    
+    // MARK: - Body
     
     var body: some View {
         ZStack {
@@ -235,20 +262,32 @@ struct ChatView: View {
                 }
             mainContent
         }
-            .task {
-                // Load weather on task start (app launch/restart)
-                await weatherManager.loadWeather(locationManager: locationManager)
+        .task {
+            if let jwt = session.jwt {
+                await weatherManager.loadWeather()
             }
-            .onChange(of: locationManager.location) { oldValue, newValue in
-                // Reload weather when location changes
-                if newValue != nil {
-                    Task {
-                        await weatherManager.loadWeather(locationManager: locationManager)
-                    }
+        }
+        .onChange(of: session.jwt) { _, newJWT in
+            if let jwt = newJWT {
+                Task {
+                    print("🔑 JWT changed → ChatView loading weather")
+                    await weatherManager.loadWeather()
                 }
             }
+        }
+        .onChange(of: locationManager.location) { _, newValue in
+            if newValue != nil, let jwt = session.jwt {
+                Task {
+                    print("📍 Location changed → reloading weather")
+                    await weatherManager.loadWeather()
+                }
+            }
+        }
+
     }
 }
+
+// MARK: - Message Bubble
 
 struct MessageBubble: View {
     let message: ChatMessage
@@ -260,8 +299,10 @@ struct MessageBubble: View {
                 Spacer()
             }
             
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: Theme.Spacing.xs) {
-                // Format and display text with proper markdown support
+            VStack(alignment: message.role == .user ? .trailing : .leading,
+                   spacing: Theme.Spacing.xs) {
+                
+                // Text with markdown-ish formatting
                 formattedText(content)
                     .themeFont(size: .lg)
                     .foregroundColor(Theme.Colors.textPrimary)
@@ -291,13 +332,18 @@ struct MessageBubble: View {
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
                     .stroke(Theme.Colors.border, lineWidth: message.role == .user ? 0 : 1)
             )
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: message.role == .user ? .trailing : .leading)
+            .frame(
+                maxWidth: UIScreen.main.bounds.width * 0.75,
+                alignment: message.role == .user ? .trailing : .leading
+            )
             
             if message.role == .ai {
                 Spacer()
             }
         }
     }
+    
+    // MARK: - Time formatting
     
     private func formatTime(_ date: Date) -> String {
         let diff = Date().timeIntervalSince(date)
@@ -317,19 +363,17 @@ struct MessageBubble: View {
         }
     }
     
-    // Format text with markdown support and proper spacing
+    // MARK: - Text formatting
+    
     @ViewBuilder
     private func formattedText(_ text: String) -> some View {
         let cleanedText = cleanAndFormatText(text)
         
         if #available(iOS 15.0, *) {
-            // Try to parse as markdown with better formatting
             if let attributedString = try? AttributedString(markdown: cleanedText) {
-                // Add paragraph spacing to the attributed string
                 let styledString = applyParagraphSpacing(to: attributedString)
                 Text(styledString)
             } else {
-                // Fallback: display cleaned text with line spacing
                 Text(cleanedText)
                     .lineSpacing(4)
             }
@@ -339,7 +383,6 @@ struct MessageBubble: View {
         }
     }
     
-    // Apply paragraph spacing to an AttributedString
     @available(iOS 15.0, *)
     private func applyParagraphSpacing(to attributedString: AttributedString) -> AttributedString {
         var styledString = attributedString
@@ -348,44 +391,36 @@ struct MessageBubble: View {
         paragraphStyle.paragraphSpacingBefore = 8
         paragraphStyle.lineSpacing = 4
         
-        // Apply paragraph style to entire string
         let paragraphStyleAttribute = AttributeContainer([.paragraphStyle: paragraphStyle])
         styledString.mergeAttributes(paragraphStyleAttribute, mergePolicy: .keepNew)
         
         return styledString
     }
     
-    // Clean and format text for better readability
     private func cleanAndFormatText(_ text: String) -> String {
-        // Process line by line to handle formatting properly
         let lines = text.components(separatedBy: .newlines)
         var formattedLines: [String] = []
         
         for line in lines {
             var processedLine = line
-            
-            // Replace multiple spaces/tabs with single space
-            processedLine = processedLine.replacingOccurrences(of: "[ \t]+", with: " ", options: .regularExpression)
-            
-            // Trim whitespace but preserve the line structure
+            processedLine = processedLine.replacingOccurrences(
+                of: "[ \t]+",
+                with: " ",
+                options: .regularExpression
+            )
             processedLine = processedLine.trimmingCharacters(in: .whitespaces)
             
             if processedLine.isEmpty {
-                // Only add empty line if previous line wasn't empty
                 if !formattedLines.isEmpty && !formattedLines.last!.isEmpty {
                     formattedLines.append("")
                 }
                 continue
             }
             
-            // Check if this is a list item - must start with * or - followed by space
-            // But NOT if it's part of markdown formatting (**bold** or *italic*)
             let trimmed = processedLine.trimmingCharacters(in: .whitespaces)
             
-            // Convert list markers to bullet points
-            // Only if it starts with "* " or "- " and is not markdown formatting
+            // Convert basic markdown lists to bullets
             if trimmed.hasPrefix("* ") {
-                // Check if it's not part of **bold** formatting
                 let afterMarker = String(trimmed.dropFirst(2))
                 if !trimmed.contains("**") || !trimmed.hasPrefix("**") {
                     processedLine = "• " + afterMarker
@@ -399,29 +434,51 @@ struct MessageBubble: View {
         
         var cleaned = formattedLines.joined(separator: "\n")
         
-        // Ensure proper spacing around em dashes
-        cleaned = cleaned.replacingOccurrences(of: "([^ ])—", with: "$1 — ", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: "—([^ ])", with: " — $1", options: .regularExpression)
+        // Spaces around em dash
+        cleaned = cleaned.replacingOccurrences(
+            of: "([^ ])—",
+            with: "$1 — ",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "—([^ ])",
+            with: " — $1",
+            options: .regularExpression
+        )
         
-        // Add paragraph breaks after sentences ending with ! or ? followed by capital letters
-        cleaned = cleaned.replacingOccurrences(of: "([!?])\\s+([A-Z])", with: "$1\n\n$2", options: .regularExpression)
+        // Extra paragraph breaks after ! ? .
+        cleaned = cleaned.replacingOccurrences(
+            of: "([!?])\\s+([A-Z])",
+            with: "$1\n\n$2",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "\\.\\s+([A-Z][a-z]{2,})",
+            with: ".\n\n$1",
+            options: .regularExpression
+        )
         
-        // Add paragraph breaks after periods followed by capital letters (new sentences)
-        cleaned = cleaned.replacingOccurrences(of: "\\.\\s+([A-Z][a-z]{2,})", with: ".\n\n$1", options: .regularExpression)
+        // Line breaks before bullets
+        cleaned = cleaned.replacingOccurrences(
+            of: "([^\n])(• )",
+            with: "$1\n\n$2",
+            options: .regularExpression
+        )
         
-        // Add line breaks before list items (bullet points) if they're on the same line
-        cleaned = cleaned.replacingOccurrences(of: "([^\n])(• )", with: "$1\n\n$2", options: .regularExpression)
+        // Break after colons before bullets
+        cleaned = cleaned.replacingOccurrences(
+            of: ":([^\n])(• )",
+            with: ":\n\n$1$2",
+            options: .regularExpression
+        )
         
-        // Add line breaks after colons if followed by a list
-        cleaned = cleaned.replacingOccurrences(of: ":([^\n])(• )", with: ":\n\n$1$2", options: .regularExpression)
+        // Collapse huge gaps
+        cleaned = cleaned.replacingOccurrences(
+            of: "\n{3,}",
+            with: "\n\n",
+            options: .regularExpression
+        )
         
-        // Clean up multiple newlines (max 2 consecutive for paragraph breaks)
-        cleaned = cleaned.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
-        
-        // Trim whitespace
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        return cleaned
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
-

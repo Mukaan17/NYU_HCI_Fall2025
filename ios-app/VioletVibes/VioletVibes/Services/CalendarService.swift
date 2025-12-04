@@ -4,44 +4,77 @@
 //
 
 import Foundation
-import EventKit
 
-class CalendarService {
+actor CalendarService {
     static let shared = CalendarService()
-    
-    private let eventStore = EKEventStore()
-    
+
     private init() {}
-    
-    // MARK: - Permissions
-    func requestPermission() async -> Bool {
-        let status = EKEventStore.authorizationStatus(for: .event)
-        
-        switch status {
-        case .authorized, .fullAccess, .writeOnly:
-            return true
-        case .notDetermined:
-            do {
-                return try await eventStore.requestAccess(to: .event)
-            } catch {
-                return false
-            }
-        case .denied, .restricted:
-            return false
-        @unknown default:
-            return false
+
+    // MARK: - Fetch Next Free Time Block
+    func fetchNextFree(jwt: String) async throws -> NextFreeResponse {
+        guard let url = URL(string: "\(APIService.serverURL)/api/calendar/next_free") else {
+            throw APIError.invalidURL
         }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard http.statusCode == 200 else {
+            // Try to pull a message from server JSON
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = json["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+
+        return try JSONDecoder().decode(NextFreeResponse.self, from: data)
     }
-    
-    // MARK: - Calendar Access
-    var hasPermission: Bool {
-        let status = EKEventStore.authorizationStatus(for: .event)
-        return status == .authorized || status == .fullAccess || status == .writeOnly
+
+    // MARK: - Fetch Free Blocks (optional helper)
+    func fetchFreeBlocks(jwt: String) async throws -> FreeBlocksResponse {
+        guard let url = URL(string: "\(APIService.serverURL)/api/calendar/free_time") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+
+        return try JSONDecoder().decode(FreeBlocksResponse.self, from: data)
     }
-    
-    func getCalendars() -> [EKCalendar] {
-        guard hasPermission else { return [] }
-        return eventStore.calendars(for: .event)
-    }
+}
+
+// MARK: - Backend DTOs
+
+struct NextFreeResponse: Codable {
+    let has_free_time: Bool
+    let next_free: FreeBlock?
+    let suggestion: Recommendation?
+    let suggestion_type: String?
+    let message: String
+}
+
+struct FreeBlocksResponse: Codable {
+    let free_blocks: [FreeBlock]
+}
+
+struct FreeBlock: Codable {
+    let start: String
+    let end: String
 }
 

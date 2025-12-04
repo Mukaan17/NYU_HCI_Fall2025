@@ -15,10 +15,10 @@ from services.recommendation.quick_recommendations import get_quick_recommendati
 dashboard_bp = Blueprint("dashboard", __name__)
 logger = logging.getLogger(__name__)
 
-
 @dashboard_bp.route("/dashboard", methods=["GET"])
 @require_auth
 def dashboard():
+    print("📡 DASHBOARD ROUTE HIT")
     """
     Dashboard API combines:
       - Current weather

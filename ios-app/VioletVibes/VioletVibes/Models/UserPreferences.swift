@@ -2,85 +2,213 @@
 //  UserPreferences.swift
 //  VioletVibes
 //
-//  Created by Mukhil Sundararaj on 11/25/25.
-//
-
-
-//
-//  UserPreferences.swift
-//  VioletVibes
-//
 
 import Foundation
 
-struct UserPreferences: Codable, Equatable {
-    var categories: Set<String> // Study Spots, Free Events, Food, Nightlife, Explore All
-    var budgetMin: Int?
-    var budgetMax: Int?
-    var dietaryRestrictions: Set<String> // Vegetarian, Vegan, Halal, Kosher, etc.
-    var maxWalkMinutes: Int? // 5, 10, 15, 20, or nil for no preference
-    var hobbies: String?
-    var googleCalendarEnabled: Bool
-    var notificationsEnabled: Bool
-    var usePreferencesForPersonalization: Bool
-    
-    init(
-        categories: Set<String> = [],
-        budgetMin: Int? = nil,
-        budgetMax: Int? = nil,
-        dietaryRestrictions: Set<String> = [],
-        maxWalkMinutes: Int? = nil,
-        hobbies: String? = nil,
-        googleCalendarEnabled: Bool = false,
-        notificationsEnabled: Bool = false,
-        usePreferencesForPersonalization: Bool = true
-    ) {
-        self.categories = categories
-        self.budgetMin = budgetMin
-        self.budgetMax = budgetMax
-        self.dietaryRestrictions = dietaryRestrictions
-        self.maxWalkMinutes = maxWalkMinutes
-        self.hobbies = hobbies
-        self.googleCalendarEnabled = googleCalendarEnabled
-        self.notificationsEnabled = notificationsEnabled
-        self.usePreferencesForPersonalization = usePreferencesForPersonalization
-    }
-    
-    // MARK: - Helper Methods
-    
-    /// Returns budget range as formatted string (e.g., "$ - $$")
-    var budgetDisplay: String {
-        guard let min = budgetMin, let max = budgetMax else {
-            return "No preference"
+// MARK: - Backend DTOs
+
+struct BackendBudgetPayload: Codable, Sendable {
+    var min: Int?
+    var max: Int?
+}
+
+struct BackendPreferencesPayload: Codable, Sendable {
+    var preferred_vibes: [String]?
+    var budget: BackendBudgetPayload?
+    var dietary_restrictions: [String]?
+    var max_walk_minutes_default: Int?
+    var interests: String?
+}
+
+struct BackendSettingsPayload: Codable, Sendable {
+    var google_calendar_enabled: Bool?
+    var notifications_enabled: Bool?
+    var use_preferences_for_personalization: Bool?
+}
+
+// MARK: - App-level Preferences
+
+struct UserPreferences: Codable, Sendable, Equatable {
+    /// UI categories (pretty labels)
+    var categories: Set<String> = []
+
+    /// Budget range in dollars (optional)
+    var budgetMin: Int? = nil
+    var budgetMax: Int? = nil
+
+    /// Dietary restriction labels as shown in UI
+    var dietaryRestrictions: Set<String> = []
+
+    /// Max preferred walk time in minutes
+    var maxWalkMinutes: Int? = nil
+
+    /// Free-text hobbies / interests
+    var hobbies: String? = nil
+
+    /// Settings (mirrored from backend /settings)
+    var googleCalendarEnabled: Bool = false
+    var notificationsEnabled: Bool = false
+    var usePreferencesForPersonalization: Bool = true
+}
+
+// MARK: - Mapping: App → Backend
+
+extension UserPreferences {
+
+    func toBackendPreferencesPayload() -> BackendPreferencesPayload {
+        let vibes = categories.compactMap { uiCategoryToBackendVibe($0) }
+
+        let backendDiets = dietaryRestrictions.compactMap { uiDietToBackendDiet($0) }
+        let dietList = backendDiets.isEmpty ? nil : backendDiets
+
+        var budgetPayload: BackendBudgetPayload? = nil
+        if budgetMin != nil || budgetMax != nil {
+            budgetPayload = BackendBudgetPayload(min: budgetMin, max: budgetMax)
         }
-        
-        let minSymbol = budgetSymbol(for: min)
-        let maxSymbol = budgetSymbol(for: max)
-        
-        if minSymbol == maxSymbol {
-            return minSymbol
+
+        return BackendPreferencesPayload(
+            preferred_vibes: vibes.isEmpty ? nil : vibes,
+            budget: budgetPayload,
+            dietary_restrictions: dietList,
+            max_walk_minutes_default: maxWalkMinutes,
+            interests: hobbies?.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    /// Build / update UserPreferences from backend JSON.
+    /// If `existing` is provided, we keep UI-only fields (like toggles) from it.
+    static func fromBackendPreferencesPayload(
+        _ backend: BackendPreferencesPayload?,
+        existing: UserPreferences? = nil
+    ) -> UserPreferences {
+        var prefs = existing ?? UserPreferences()
+
+        guard let backend = backend else {
+            return prefs
+        }
+
+        // Vibes → categories
+        if let vibes = backend.preferred_vibes {
+            let uiCats = vibes.compactMap { backendVibeToUICategory($0) }
+            prefs.categories = Set(uiCats)
+        }
+
+        // Budget
+        if let b = backend.budget {
+            prefs.budgetMin = b.min
+            prefs.budgetMax = b.max
         } else {
-            return "\(minSymbol) - \(maxSymbol)"
+            prefs.budgetMin = nil
+            prefs.budgetMax = nil
         }
-    }
-    
-    /// Converts budget value to symbol
-    private func budgetSymbol(for value: Int) -> String {
-        if value <= 20 {
-            return "$"
-        } else if value <= 50 {
-            return "$$"
+
+        // Diets
+        if let diets = backend.dietary_restrictions {
+            let uiDiets = diets.compactMap { backendDietToUIDiet($0) }
+            prefs.dietaryRestrictions = Set(uiDiets)
         } else {
-            return "$$$"
+            prefs.dietaryRestrictions = []
         }
+
+        prefs.maxWalkMinutes = backend.max_walk_minutes_default
+        prefs.hobbies = backend.interests
+
+        return prefs
     }
-    
-    /// Returns walking distance as formatted string
-    var walkingDistanceDisplay: String {
-        guard let minutes = maxWalkMinutes else {
-            return "No preference"
+
+    /// Apply backend /settings flags onto a preferences object.
+    static func mergedWithSettings(
+        _ prefs: UserPreferences,
+        backendSettings: BackendSettingsPayload?
+    ) -> UserPreferences {
+        var copy = prefs
+        guard let s = backendSettings else { return copy }
+
+        if let gc = s.google_calendar_enabled {
+            copy.googleCalendarEnabled = gc
         }
-        return "\(minutes) min"
+        if let notif = s.notifications_enabled {
+            copy.notificationsEnabled = notif
+        }
+        if let usePrefs = s.use_preferences_for_personalization {
+            copy.usePreferencesForPersonalization = usePrefs
+        }
+
+        return copy
+    }
+}
+
+// MARK: - Category Mapping
+
+fileprivate func uiCategoryToBackendVibe(_ category: String) -> String? {
+    let trimmed = category.lowercased()
+
+    if trimmed.contains("study") || trimmed.contains("café") || trimmed.contains("cafe") {
+        return "study"
+    }
+    if trimmed.contains("free events") || trimmed.contains("pop-ups") || trimmed.contains("pop ups") {
+        return "free_events"
+    }
+    if trimmed.contains("food around campus") || trimmed.contains("food") {
+        return "food"
+    }
+    if trimmed.contains("nightlife") {
+        return "nightlife"
+    }
+    if trimmed.contains("explore") || trimmed.contains("open to anything") {
+        return "explore"
+    }
+
+    return nil
+}
+
+fileprivate func backendVibeToUICategory(_ vibe: String) -> String? {
+    switch vibe.lowercased() {
+    case "study":
+        return "Study Spots / Cozy Cafés"
+    case "free_events":
+        return "Free Events & Pop-Ups"
+    case "food":
+        return "Food Around Campus"
+    case "nightlife":
+        return "Nightlife"
+    case "explore":
+        return "Explore All / I'm open to anything"
+    default:
+        return nil
+    }
+}
+
+// MARK: - Dietary Mapping
+
+fileprivate func uiDietToBackendDiet(_ ui: String) -> String? {
+    switch ui.lowercased() {
+    case "vegetarian": return "vegetarian"
+    case "vegan": return "vegan"
+    case "halal": return "halal"
+    case "kosher": return "kosher"
+    case "gluten-free": return "gluten-free"
+    case "dairy-free": return "dairy-free"
+    case "pork-free": return "pork-free"
+    case "seafood allergy": return "seafood-allergy"
+    default:
+        // "Other" or unknown → don't send to backend
+        return nil
+    }
+}
+
+fileprivate func backendDietToUIDiet(_ backend: String) -> String? {
+    switch backend.lowercased() {
+    case "vegetarian": return "Vegetarian"
+    case "vegan": return "Vegan"
+    case "halal": return "Halal"
+    case "kosher": return "Kosher"
+    case "gluten-free": return "Gluten-Free"
+    case "dairy-free": return "Dairy-Free"
+    case "pork-free": return "Pork-Free"
+    case "seafood-allergy": return "Seafood Allergy"
+    default:
+        return nil
     }
 }
 

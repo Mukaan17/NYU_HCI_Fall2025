@@ -45,6 +45,21 @@
     <key>NSUserTrackingUsageDescription</key>
     <string>Allow tracking to improve personalized recommendations</string>
 
+	<!-- NOTIFICATIONS -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Notifications are used to remind you about events and free time suggestions.</string>
+
+	<!-- SAFARI FOR GOOGLE OAUTH -->
+	<key>NSCameraUsageDescription</key>
+	<string>(Required by the WebKit-based Safari OAuth view)</string>
+
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>(Required by Safari if the Google page requests image upload access)</string>
+
+	<!-- CONTACTS (some versions of Google OAuth trigger this) -->
+	<key>NSContactsUsageDescription</key>
+	<string>Contacts access is needed for emergency safety features.</string>
+
     <key>UIBackgroundModes</key>
     <array>
         <string>location</string>

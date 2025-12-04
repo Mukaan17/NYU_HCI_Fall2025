@@ -4,6 +4,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
+from datetime import datetime
+import pytz
 
 from models.db import db, bcrypt
 
@@ -13,13 +15,18 @@ from routes.user_routes import user_bp
 from routes.calendar_routes import calendar_bp
 from routes.calendar_oauth_routes import oauth_bp
 from routes.notification_routes import notifications_bp
-from routes.dashboard_routes import dashboard_bp     # <-- NEW
+from routes.dashboard_routes import dashboard_bp 
+from routes.weather_routes import weather_bp
+
 
 # SERVICES
 from utils.cache import init_requests_cache
 from services.directions_service import get_walking_directions
 from services.recommendation.driver import build_chat_response
-from services.recommendation.quick_recommendations import get_quick_recommendations
+from services.recommendation.quick_recommendations import (
+    get_quick_recommendations,
+    get_top_recommendations_for_user,   # <-- NEW
+)
 from services.scrapers.engage_events_service import fetch_engage_events
 from services.recommendation.context import ConversationContext
 from utils.auth import decode_token
@@ -61,8 +68,8 @@ app.register_blueprint(user_bp, url_prefix="/api/user")
 app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
 app.register_blueprint(oauth_bp, url_prefix="/api/calendar/oauth")
 app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
-app.register_blueprint(dashboard_bp, url_prefix="/api")         # <-- NEW
-
+app.register_blueprint(dashboard_bp, url_prefix="/api")  
+app.register_blueprint(weather_bp, url_prefix="/api")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -130,6 +137,48 @@ def quick_recs():
 
 
 # ─────────────────────────────────────────────────────────────
+# TOP RECOMMENDATIONS (preferences + context for dashboard)
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/top_recommendations", methods=["GET"])
+def top_recommendations():
+    try:
+        # Optional JWT for personalized preferences
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        user = None
+
+        if token:
+            try:
+                payload = decode_token(token)
+                user = User.query.get(payload.get("sub"))
+            except Exception:
+                user = None
+
+        prefs = user.get_preferences() if user else {}
+
+        # Simple context from server (time of day) + optional weather hint from client
+        tz = pytz.timezone("America/New_York")
+        now = datetime.now(tz)
+
+        context = {
+            "hour": now.hour,
+            "weather": (request.args.get("weather") or "").strip(),
+        }
+
+        limit = int(request.args.get("limit", 3))
+
+        result = get_top_recommendations_for_user(
+            prefs=prefs,
+            context=context,
+            limit=limit,
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        print("TOP_RECS ERROR:", e)
+        return jsonify({"error": "Unable to fetch top recommendations"}), 500
+
+
+# ─────────────────────────────────────────────────────────────
 # EVENTS
 # ─────────────────────────────────────────────────────────────
 @app.route("/api/nyu_engage_events", methods=["GET"])
@@ -148,19 +197,67 @@ def nyu_engage_events():
 # ─────────────────────────────────────────────────────────────
 @app.route("/api/directions", methods=["GET"])
 def directions():
-    lat = float(request.args.get("lat"))
-    lng = float(request.args.get("lng"))
+    try:
+        dest_lat = float(request.args.get("lat"))
+        dest_lng = float(request.args.get("lng"))
 
-    origin_lat = 40.693393  # 2 MetroTech
-    origin_lng = -73.98555
+        origin_lat = 40.693393
+        origin_lng = -73.98555
 
-    result = get_walking_directions(origin_lat, origin_lng, lat, lng)
+        result = get_walking_directions(origin_lat, origin_lng, dest_lat, dest_lng)
 
-    if not result:
+        if not result or "polyline_encoded" not in result:
+            return jsonify({"error": "Directions failed"}), 500
+
+        encoded = result["polyline_encoded"]
+
+        # ---- Decode polyline ----
+        def decode_polyline(poly):
+            points = []
+            index = lat = lng = 0
+
+            while index < len(poly):
+                shift = result = 0
+                while True:
+                    b = ord(poly[index]) - 63
+                    index += 1
+                    result |= (b & 0x1F) << shift
+                    shift += 5
+                    if b < 0x20:
+                        break
+                dlat = ~(result >> 1) if result & 1 else (result >> 1)
+                lat += dlat
+
+                shift = result = 0
+                while True:
+                    b = ord(poly[index]) - 63
+                    index += 1
+                    result |= (b & 0x1F) << shift
+                    shift += 5
+                    if b < 0x20:
+                        break
+                dlng = ~(result >> 1) if result & 1 else (result >> 1)
+                lng += dlng
+
+                points.append([lat / 1e5, lng / 1e5])
+
+            return points
+
+        decoded_points = decode_polyline(encoded)
+
+        response = {
+            "polyline": decoded_points,
+            "duration": result["duration_text"],
+            "distance": result["distance_text"],
+            "steps": result["steps"],            # NEW
+            "maps_link": result["maps_link"],    # NEW
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        print("DIRECTIONS ERROR:", e)
         return jsonify({"error": "Directions failed"}), 500
-
-    return jsonify(result)
-
 
 # ─────────────────────────────────────────────────────────────
 # HEALTH CHECK

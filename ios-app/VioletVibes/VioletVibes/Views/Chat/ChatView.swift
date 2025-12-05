@@ -12,8 +12,17 @@ struct ChatView: View {
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(LocationManager.self) private var locationManager
     @Environment(WeatherManager.self) private var weatherManager
+    @Environment(UserSession.self) private var session
+    @Environment(TabCoordinator.self) private var tabCoordinator
     
     @FocusState private var isInputFocused: Bool
+    @State private var calendarViewModel = CalendarViewModel()
+    @State private var isWeatherExpanded = false
+    @State private var showCalendarSummary = false
+    @State private var selectedVibe: VibeOption? = availableVibes.first
+    @State private var isVibePickerExpanded = false
+    @State private var vibeButtonFrame: CGRect = .zero
+    @State private var weatherButtonFrame: CGRect = .zero
     
     private var backgroundGradient: some View {
         LinearGradient(
@@ -41,7 +50,14 @@ struct ChatView: View {
             HStack(spacing: Theme.Spacing.lg) {
                 weatherBadge
                 scheduleBadge
-                moodBadge
+                vibeBadge
+            }
+            .frame(maxWidth: .infinity)
+            .onPreferenceChange(VibeButtonFrameKey.self) { frame in
+                vibeButtonFrame = frame
+            }
+            .onPreferenceChange(WeatherButtonFrameKey.self) { frame in
+                weatherButtonFrame = frame
             }
         }
         .padding(.top, Theme.Spacing.`2xl`)
@@ -59,18 +75,40 @@ struct ChatView: View {
     private var weatherBadge: some View {
         Group {
             if let weather = weatherManager.weather {
-                Text("\(weather.emoji) \(weather.temp)°F")
-                    .themeFont(size: .base, weight: .semiBold)
-                    .foregroundColor(Theme.Colors.textBlue)
-                    .padding(.horizontal, Theme.Spacing.xl)
-                    .padding(.vertical, Theme.Spacing.sm)
-                    .background(Theme.Colors.accentBlue)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
-                    )
-                    .cornerRadius(Theme.BorderRadius.md)
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isWeatherExpanded.toggle()
+                    }
+                    // Load forecast if not already loaded (in background, don't wait)
+                    if weatherManager.forecast == nil {
+                        Task {
+                            await weatherManager.loadForecast(locationManager: locationManager)
+                        }
+                    }
+                }) {
+                    Text("\(weather.emoji) \(weather.temp)°F")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textBlue)
+                        .padding(.horizontal, Theme.Spacing.xl)
+                        .padding(.vertical, Theme.Spacing.sm)
+                        .frame(minHeight: 40) // Fixed minimum height
+                        .background(Theme.Colors.accentBlue)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.full)
+                                .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
+                        )
+                        .cornerRadius(Theme.BorderRadius.full)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: WeatherButtonFrameKey.self, value: geometry.frame(in: .global))
+                    }
+                )
             } else {
+                // Loading state
                 HStack(spacing: Theme.Spacing.xs) {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -81,47 +119,56 @@ struct ChatView: View {
                 }
                 .padding(.horizontal, Theme.Spacing.xl)
                 .padding(.vertical, Theme.Spacing.sm)
+                .frame(minHeight: 40) // Fixed minimum height
                 .background(Theme.Colors.accentBlue)
                 .overlay(
-                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    RoundedRectangle(cornerRadius: Theme.BorderRadius.full)
                         .stroke(Theme.Colors.accentBlueMedium, lineWidth: 1)
                 )
-                .cornerRadius(Theme.BorderRadius.md)
+                .cornerRadius(Theme.BorderRadius.full)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: weatherManager.weather != nil)
+        .onPreferenceChange(WeatherButtonFrameKey.self) { frame in
+            weatherButtonFrame = frame
         }
     }
     
     private var scheduleBadge: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "clock")
-                .font(.system(size: 18))
-                .foregroundColor(Theme.Colors.textPrimary)
-            Text("Free until 6:30 PM")
-                .themeFont(size: .base, weight: .semiBold)
-                .foregroundColor(Theme.Colors.textPrimary)
-        }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Theme.Colors.glassBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                .stroke(Theme.Colors.border, lineWidth: 1)
-        )
-        .cornerRadius(Theme.BorderRadius.md)
-    }
-    
-    private var moodBadge: some View {
-        Text("Chill ✨")
-            .themeFont(size: .base, weight: .semiBold)
-            .foregroundColor(Theme.Colors.textSecondary)
+        Button(action: {
+            showCalendarSummary = true
+        }) {
+            Group {
+                if calendarViewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(Theme.Colors.textPrimary)
+                } else if let freeTimeText = calendarViewModel.timeUntilFormatted() {
+                    Text(freeTimeText)
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                } else {
+                    Text("Free all day")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                }
+            }
             .padding(.horizontal, Theme.Spacing.xl)
             .padding(.vertical, Theme.Spacing.sm)
-            .background(Theme.Colors.whiteOverlay)
+            .frame(minHeight: 40) // Fixed minimum height
+            .background(Theme.Colors.glassBackground)
             .overlay(
-                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.full)
                     .stroke(Theme.Colors.border, lineWidth: 1)
             )
-            .cornerRadius(Theme.BorderRadius.md)
+            .cornerRadius(Theme.BorderRadius.full)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var vibeBadge: some View {
+        VibePickerDropdown(selectedVibe: $selectedVibe, isExpanded: $isVibePickerExpanded)
     }
     
     private var headerBackground: some View {
@@ -186,6 +233,7 @@ struct ChatView: View {
                             image: recommendation.image
                         )
                         placeViewModel.setSelectedPlace(place)
+                        tabCoordinator.selectedTab = .map
                     }
                 }
             }
@@ -217,7 +265,9 @@ struct ChatView: View {
                 await chatViewModel.sendMessage(
                     text,
                     latitude: locationManager.location?.coordinate.latitude,
-                    longitude: locationManager.location?.coordinate.longitude
+                    longitude: locationManager.location?.coordinate.longitude,
+                    jwt: session.jwt,
+                    preferences: session.preferences
                 )
             }
         }
@@ -233,20 +283,66 @@ struct ChatView: View {
                     isInputFocused = false
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
+            
+            // Vibe picker overlay - positioned at top level to appear above everything
+            VibePickerOverlay(
+                selectedVibe: $selectedVibe,
+                isExpanded: $isVibePickerExpanded,
+                buttonFrame: vibeButtonFrame
+            )
+            .allowsHitTesting(isVibePickerExpanded)
+            .zIndex(10000) // Very high z-index to appear above everything
+            
+            // Weather dropdown overlay - positioned at top level to appear above everything
+            WeatherDropdownOverlay(
+                currentWeather: weatherManager.weather,
+                forecast: weatherManager.forecast,
+                isExpanded: $isWeatherExpanded,
+                buttonFrame: weatherButtonFrame
+            )
+            .allowsHitTesting(isWeatherExpanded)
+            .zIndex(10000) // Very high z-index to appear above everything
+            
             mainContent
         }
-            .task {
-                // Load weather on task start (app launch/restart)
-                await weatherManager.loadWeather(locationManager: locationManager)
+        .onAppear {
+            // Close any open overlays when view appears
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isWeatherExpanded = false
+                isVibePickerExpanded = false
             }
-            .onChange(of: locationManager.location) { oldValue, newValue in
-                // Reload weather when location changes
-                if newValue != nil {
-                    Task {
-                        await weatherManager.loadWeather(locationManager: locationManager)
-                    }
+        }
+        .task {
+            // Load weather on task start (app launch/restart)
+            await weatherManager.loadWeather(locationManager: locationManager)
+            
+            // Load calendar events if calendar is linked
+            if session.googleCalendarLinked {
+                await calendarViewModel.loadTodayEvents(jwt: session.jwt)
+            }
+        }
+        .onChange(of: locationManager.location) { oldValue, newValue in
+            // Reload weather when location changes
+            if newValue != nil {
+                Task {
+                    await weatherManager.loadWeather(locationManager: locationManager)
                 }
             }
+        }
+        .onChange(of: session.googleCalendarLinked) { oldValue, newValue in
+            // Load calendar events when calendar link status changes
+            if newValue {
+                Task {
+                    await calendarViewModel.loadTodayEvents(jwt: session.jwt)
+                }
+            }
+        }
+        .sheet(isPresented: $showCalendarSummary) {
+            CalendarSummaryModal(
+                events: calendarViewModel.eventsUntilNext(),
+                isPresented: $showCalendarSummary
+            )
+        }
     }
 }
 
@@ -323,19 +419,22 @@ struct MessageBubble: View {
         let cleanedText = cleanAndFormatText(text)
         
         if #available(iOS 15.0, *) {
-            // Try to parse as markdown with better formatting
-            if let attributedString = try? AttributedString(markdown: cleanedText) {
+            // Try to parse as markdown with whitespace preservation
+            if let attributedString = try? AttributedString(
+                markdown: cleanedText,
+                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            ) {
                 // Add paragraph spacing to the attributed string
                 let styledString = applyParagraphSpacing(to: attributedString)
                 Text(styledString)
             } else {
                 // Fallback: display cleaned text with line spacing
                 Text(cleanedText)
-                    .lineSpacing(4)
+                    .lineSpacing(6)
             }
         } else {
             Text(cleanedText)
-                .lineSpacing(4)
+                .lineSpacing(6)
         }
     }
     
@@ -346,7 +445,7 @@ struct MessageBubble: View {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.paragraphSpacing = 12
         paragraphStyle.paragraphSpacingBefore = 8
-        paragraphStyle.lineSpacing = 4
+        paragraphStyle.lineSpacing = 6  // Changed from 4 to 6
         
         // Apply paragraph style to entire string
         let paragraphStyleAttribute = AttributeContainer([.paragraphStyle: paragraphStyle])
@@ -355,26 +454,85 @@ struct MessageBubble: View {
         return styledString
     }
     
+    // Decode HTML entities to proper characters
+    private func decodeHTMLEntities(_ text: String) -> String {
+        var decoded = text
+        
+        // Named entities
+        let entities: [String: String] = [
+            "&amp;": "&",
+            "&lt;": "<",
+            "&gt;": ">",
+            "&quot;": "\"",
+            "&apos;": "'",
+            "&nbsp;": " ",
+            "&mdash;": "—",
+            "&ndash;": "–",
+            "&rsquo;": "'",
+            "&lsquo;": "'",
+            "&rdquo;": "\"",
+            "&ldquo;": "\"",
+            "&hellip;": "…",
+            "&copy;": "©",
+            "&reg;": "®",
+            "&trade;": "™"
+        ]
+        
+        // Replace named entities
+        for (entity, replacement) in entities {
+            decoded = decoded.replacingOccurrences(of: entity, with: replacement)
+        }
+        
+        // Handle numeric entities like &#39; or &#8212;
+        // Pattern: &# followed by digits and semicolon
+        let numericPattern = #"&#(\d+);"#
+        if let regex = try? NSRegularExpression(pattern: numericPattern, options: []) {
+            let nsString = decoded as NSString
+            let matches = regex.matches(in: decoded, options: [], range: NSRange(location: 0, length: nsString.length))
+            
+            // Process matches in reverse to maintain correct indices
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let numberRange = match.range(at: 1)
+                    if let numberString = nsString.substring(with: numberRange) as String?,
+                       let number = Int(numberString),
+                       let unicodeScalar = UnicodeScalar(number) {
+                        let replacement = String(Character(unicodeScalar))
+                        let fullRange = match.range
+                        decoded = (decoded as NSString).replacingCharacters(in: fullRange, with: replacement)
+                    }
+                }
+            }
+        }
+        
+        return decoded
+    }
+    
     // Clean and format text for better readability
     private func cleanAndFormatText(_ text: String) -> String {
-        // Process line by line to handle formatting properly
-        let lines = text.components(separatedBy: .newlines)
+        // Step 1: Decode HTML entities first
+        var cleaned = decodeHTMLEntities(text)
+        
+        // Step 2: Normalize line endings (convert \r\n and \r to \n)
+        cleaned = cleaned.replacingOccurrences(of: "\r\n", with: "\n")
+        cleaned = cleaned.replacingOccurrences(of: "\r", with: "\n")
+        
+        // Step 3: Process line by line to handle formatting properly
+        let lines = cleaned.components(separatedBy: "\n")
         var formattedLines: [String] = []
         
         for line in lines {
             var processedLine = line
             
             // Replace multiple spaces/tabs with single space
-            processedLine = processedLine.replacingOccurrences(of: "[ \t]+", with: " ", options: .regularExpression)
+            processedLine = processedLine.replacingOccurrences(of: "[ \t]+", with: " ", options: String.CompareOptions.regularExpression)
             
-            // Trim whitespace but preserve the line structure
+            // Trim trailing whitespace but preserve leading whitespace for indentation
             processedLine = processedLine.trimmingCharacters(in: .whitespaces)
             
             if processedLine.isEmpty {
-                // Only add empty line if previous line wasn't empty
-                if !formattedLines.isEmpty && !formattedLines.last!.isEmpty {
-                    formattedLines.append("")
-                }
+                // Preserve empty lines (they represent paragraph breaks)
+                formattedLines.append("")
                 continue
             }
             
@@ -386,8 +544,9 @@ struct MessageBubble: View {
             // Only if it starts with "* " or "- " and is not markdown formatting
             if trimmed.hasPrefix("* ") {
                 // Check if it's not part of **bold** formatting
-                let afterMarker = String(trimmed.dropFirst(2))
-                if !trimmed.contains("**") || !trimmed.hasPrefix("**") {
+                // If it starts with "**", it's bold, not a list
+                if !trimmed.hasPrefix("**") {
+                    let afterMarker = String(trimmed.dropFirst(2))
                     processedLine = "• " + afterMarker
                 }
             } else if trimmed.hasPrefix("- ") {
@@ -397,29 +556,36 @@ struct MessageBubble: View {
             formattedLines.append(processedLine)
         }
         
-        var cleaned = formattedLines.joined(separator: "\n")
+        // Step 4: Join lines back together
+        cleaned = formattedLines.joined(separator: "\n")
+        
+        // Step 5: Clean up excessive newlines (3+ consecutive newlines → 2)
+        cleaned = cleaned.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: String.CompareOptions.regularExpression)
+        
+        // Step 6: Trim leading/trailing whitespace but preserve structure
+        cleaned = cleaned.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         
         // Ensure proper spacing around em dashes
-        cleaned = cleaned.replacingOccurrences(of: "([^ ])—", with: "$1 — ", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: "—([^ ])", with: " — $1", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "([^ ])—", with: "$1 — ", options: String.CompareOptions.regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "—([^ ])", with: " — $1", options: String.CompareOptions.regularExpression)
         
         // Add paragraph breaks after sentences ending with ! or ? followed by capital letters
-        cleaned = cleaned.replacingOccurrences(of: "([!?])\\s+([A-Z])", with: "$1\n\n$2", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "([!?])\\s+([A-Z])", with: "$1\n\n$2", options: String.CompareOptions.regularExpression)
         
         // Add paragraph breaks after periods followed by capital letters (new sentences)
-        cleaned = cleaned.replacingOccurrences(of: "\\.\\s+([A-Z][a-z]{2,})", with: ".\n\n$1", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "\\.\\s+([A-Z][a-z]{2,})", with: ".\n\n$1", options: String.CompareOptions.regularExpression)
         
         // Add line breaks before list items (bullet points) if they're on the same line
-        cleaned = cleaned.replacingOccurrences(of: "([^\n])(• )", with: "$1\n\n$2", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "([^\n])(• )", with: "$1\n\n$2", options: String.CompareOptions.regularExpression)
         
         // Add line breaks after colons if followed by a list
-        cleaned = cleaned.replacingOccurrences(of: ":([^\n])(• )", with: ":\n\n$1$2", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: ":([^\n])(• )", with: ":\n\n$1$2", options: String.CompareOptions.regularExpression)
         
         // Clean up multiple newlines (max 2 consecutive for paragraph breaks)
-        cleaned = cleaned.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: String.CompareOptions.regularExpression)
         
         // Trim whitespace
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleaned = cleaned.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         
         return cleaned
     }

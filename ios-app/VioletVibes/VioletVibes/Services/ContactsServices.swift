@@ -14,6 +14,12 @@ class ContactsService {
     private init() {}
     
     // MARK: - Permissions
+    func checkPermissionStatus() async -> Bool {
+        // Only check current status, don't request
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        return status == .authorized
+    }
+    
     func requestPermission() async -> Bool {
         let status = CNContactStore.authorizationStatus(for: .contacts)
         

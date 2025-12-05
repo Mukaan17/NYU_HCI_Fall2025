@@ -87,3 +87,68 @@ struct Weather: Codable, Sendable {
     }
 }
 
+// Forecast models for hourly weather data
+struct HourlyForecast: Identifiable, Sendable {
+    let id: UUID
+    let time: Date
+    let temp: Int
+    let emoji: String
+    let description: String
+    let humidity: Int?
+    let windSpeed: Double?
+    
+    init(id: UUID = UUID(), time: Date, temp: Int, emoji: String, description: String, humidity: Int? = nil, windSpeed: Double? = nil) {
+        self.id = id
+        self.time = time
+        self.temp = temp
+        self.emoji = emoji
+        self.description = description
+        self.humidity = humidity
+        self.windSpeed = windSpeed
+    }
+}
+
+// OpenWeather Forecast API Response Structure
+struct ForecastResponse: Codable, Sendable {
+    let list: [ForecastItem]
+    
+    struct ForecastItem: Codable, Sendable {
+        let dt: TimeInterval // Unix timestamp
+        let main: MainData
+        let weather: [WeatherData]
+        let wind: WindData?
+        
+        struct MainData: Codable, Sendable {
+            let temp: Double
+            let humidity: Int?
+        }
+        
+        struct WeatherData: Codable, Sendable {
+            let main: String
+            let description: String
+        }
+        
+        struct WindData: Codable, Sendable {
+            let speed: Double?
+        }
+    }
+}
+
+// Helper function to convert weather condition to emoji
+func weatherConditionToEmoji(_ condition: String) -> String {
+    let conditionLower = condition.lowercased()
+    if conditionLower.contains("cloud") {
+        return "☁️"
+    } else if conditionLower.contains("rain") {
+        return "🌧️"
+    } else if conditionLower.contains("snow") {
+        return "❄️"
+    } else if conditionLower.contains("storm") || conditionLower.contains("thunder") {
+        return "⛈️"
+    } else if conditionLower.contains("mist") || conditionLower.contains("fog") {
+        return "🌫️"
+    } else {
+        return "☀️"
+    }
+}
+

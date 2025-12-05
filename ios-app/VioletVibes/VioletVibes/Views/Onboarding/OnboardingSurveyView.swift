@@ -374,49 +374,94 @@ struct BudgetSelectorView: View {
     @Binding var selection: BudgetOption
     
     var body: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            ForEach(BudgetOption.allCases, id: \.self) { option in
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        selection = option
-                    }
-                }) {
-                    Text(option.rawValue)
-                        .themeFont(size: .base, weight: selection == option ? .semiBold : .regular)
-                        .foregroundColor(selection == option ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Theme.Spacing.lg)
-                        .background {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                    .fill(.ultraThinMaterial)
-                                
-                                if selection != option {
+        VStack(spacing: Theme.Spacing.md) {
+            // Dollar sign options in a row on top
+            HStack(spacing: Theme.Spacing.md) {
+                ForEach([BudgetOption.low, .medium, .high], id: \.self) { option in
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selection = option
+                        }
+                    }) {
+                        Text(option.rawValue)
+                            .themeFont(size: .base, weight: selection == option ? .semiBold : .regular)
+                            .foregroundColor(selection == option ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Theme.Spacing.lg)
+                            .background {
+                                ZStack {
                                     RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                        .fill(Color.black.opacity(0.3))
-                                }
-                                
-                                if selection == option {
-                                    LinearGradient(
-                                        colors: [
-                                            Theme.Colors.gradientStart.opacity(0.2),
-                                            Theme.Colors.gradientEnd.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                    .cornerRadius(Theme.BorderRadius.md)
+                                        .fill(.ultraThinMaterial)
+                                    
+                                    if selection != option {
+                                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                            .fill(Color.black.opacity(0.3))
+                                    }
+                                    
+                                    if selection == option {
+                                        LinearGradient(
+                                            colors: [
+                                                Theme.Colors.gradientStart.opacity(0.2),
+                                                Theme.Colors.gradientEnd.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                        .cornerRadius(Theme.BorderRadius.md)
+                                    }
                                 }
                             }
-                        }
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                .stroke(selection == option ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
-                        )
-                        .cornerRadius(Theme.BorderRadius.md)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                    .stroke(selection == option ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
+                            )
+                            .cornerRadius(Theme.BorderRadius.md)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            
+            // "No preference" button on its own row at the bottom
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    selection = .noPreference
+                }
+            }) {
+                Text(BudgetOption.noPreference.rawValue)
+                    .themeFont(size: .base, weight: selection == .noPreference ? .semiBold : .regular)
+                    .foregroundColor(selection == .noPreference ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Spacing.lg)
+                    .background {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                .fill(.ultraThinMaterial)
+                            
+                            if selection != .noPreference {
+                                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                    .fill(Color.black.opacity(0.3))
+                            }
+                            
+                            if selection == .noPreference {
+                                LinearGradient(
+                                    colors: [
+                                        Theme.Colors.gradientStart.opacity(0.2),
+                                        Theme.Colors.gradientEnd.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                                .cornerRadius(Theme.BorderRadius.md)
+                            }
+                        }
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                            .stroke(selection == .noPreference ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
+                    )
+                    .cornerRadius(Theme.BorderRadius.md)
+            }
+            .buttonStyle(.plain)
         }
     }
 }

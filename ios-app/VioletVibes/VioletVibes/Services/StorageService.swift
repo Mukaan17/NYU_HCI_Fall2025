@@ -30,6 +30,9 @@ actor StorageService {
         static let trustedContacts = "trustedContacts"
         static let userAccount = "userAccount"
         static let userPreferences = "userPreferences"
+        
+        // Session storage
+        static let userSession = "vv_user_session"   // stores jwt + googleCalendarLinked
     }
     
     nonisolated private init() {}
@@ -78,6 +81,7 @@ actor StorageService {
         userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
         userDefaults.removeObject(forKey: Keys.userAccount)
         userDefaults.removeObject(forKey: Keys.userPreferences)
+        userDefaults.removeObject(forKey: Keys.userSession)
     }
     
     // MARK: - Home Address
@@ -198,6 +202,27 @@ actor StorageService {
         } else {
             userDefaults.removeObject(forKey: Keys.userPreferences)
         }
+    }
+    
+    // MARK: - Session Storage (jwt + googleCalendarLinked)
+    
+    func saveUserSession(_ session: UserSession) {
+        let dict: [String: Any] = [
+            "jwt": session.jwt ?? "",
+            "googleCalendarLinked": session.googleCalendarLinked
+        ]
+        userDefaults.set(dict, forKey: Keys.userSession)
+    }
+    
+    func loadUserSession() -> UserSession {
+        let session = UserSession()
+        
+        if let dict = userDefaults.dictionary(forKey: Keys.userSession) {
+            session.jwt = dict["jwt"] as? String
+            session.googleCalendarLinked = dict["googleCalendarLinked"] as? Bool ?? false
+        }
+        
+        return session
     }
 }
 

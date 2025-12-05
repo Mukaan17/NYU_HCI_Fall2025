@@ -14,6 +14,7 @@ struct VioletVibesApp: App {
     @State private var placeViewModel = PlaceViewModel()
     @State private var locationManager = LocationManager()
     @State private var weatherManager = WeatherManager()
+    @State private var userSession = UserSession()
     
     var body: some Scene {
         WindowGroup {
@@ -23,7 +24,17 @@ struct VioletVibesApp: App {
                 .environment(placeViewModel)
                 .environment(locationManager)
                 .environment(weatherManager)
+                .environment(userSession)
                 .preferredColorScheme(.dark)
+                .task {
+                    // Load session on app start
+                    let storage = StorageService.shared
+                    let loadedSession = await storage.loadUserSession()
+                    await MainActor.run {
+                        userSession.jwt = loadedSession.jwt
+                        userSession.googleCalendarLinked = loadedSession.googleCalendarLinked
+                    }
+                }
         }
     }
 }
@@ -31,9 +42,11 @@ struct VioletVibesApp: App {
 struct RootView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(LocationManager.self) private var locationManager
+    @Environment(UserSession.self) private var userSession
     @Environment(\.scenePhase) private var scenePhase
     @State private var isLoading = true
     @State private var previousScenePhase: ScenePhase = .active
+    private let calendarNotificationService = CalendarNotificationService.shared
     
     var body: some View {
         Group {
@@ -56,17 +69,35 @@ struct RootView: View {
         .task {
             await onboardingViewModel.checkOnboardingStatus()
             isLoading = false
+            
+            // Start calendar notification monitoring if user is logged in and has calendar linked
+            if onboardingViewModel.hasLoggedIn,
+               let jwt = userSession.jwt,
+               userSession.googleCalendarLinked {
+                calendarNotificationService.startMonitoring(jwt: jwt)
+            }
+        }
+        .onChange(of: userSession.googleCalendarLinked) { oldValue, newValue in
+            // Start/stop monitoring when calendar link status changes
+            if newValue, let jwt = userSession.jwt {
+                calendarNotificationService.startMonitoring(jwt: jwt)
+            } else {
+                calendarNotificationService.stopMonitoring()
+            }
+        }
+        .onChange(of: userSession.jwt) { oldValue, newValue in
+            // Start/stop monitoring when JWT changes
+            if let jwt = newValue, userSession.googleCalendarLinked {
+                calendarNotificationService.startMonitoring(jwt: jwt)
+            } else {
+                calendarNotificationService.stopMonitoring()
+            }
         }
         .onChange(of: scenePhase) { newPhase in
             let oldPhase = previousScenePhase
             previousScenePhase = newPhase
             
-            if newPhase == .background {
-                // Schedule notification when app goes to background
-                Task {
-                    await scheduleBackgroundNotification()
-                }
-            } else if newPhase == .active {
+            if newPhase == .active {
                 // Swift 6.2: App became active - use TaskGroup to coordinate location and weather
                 if oldPhase == .inactive || oldPhase == .background {
                     print("🔄 App became active from \(oldPhase) - coordinating location check and weather loading")
@@ -99,16 +130,6 @@ struct RootView: View {
                 }
             }
         }
-    }
-    
-    private func scheduleBackgroundNotification() async {
-        let notificationService = NotificationService.shared
-        let message = "You're free till 8 PM — Live jazz at Fulton St starts soon (7 min walk)."
-        await notificationService.scheduleNotification(
-            title: "You're free till 8 PM!",
-            body: message,
-            timeInterval: 3.0 // Send 3 seconds after app goes to background
-        )
     }
 }
 

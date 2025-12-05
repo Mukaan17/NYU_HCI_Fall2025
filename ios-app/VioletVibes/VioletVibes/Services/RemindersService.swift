@@ -14,6 +14,12 @@ class RemindersService {
     private init() {}
     
     // MARK: - Permissions
+    func checkPermissionStatus() async -> Bool {
+        // Only check current status, don't request
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        return status == .authorized || status == .fullAccess || status == .writeOnly
+    }
+    
     func requestPermission() async -> Bool {
         let status = EKEventStore.authorizationStatus(for: .reminder)
         

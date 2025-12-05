@@ -9,6 +9,7 @@ import UIKit
 
 struct LoginView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(UserSession.self) private var session
     @State private var isSignUpMode: Bool = false
     @State private var email: String = ""
     @State private var firstName: String = ""
@@ -25,6 +26,7 @@ struct LoginView: View {
     @State private var hasCheckedDefaultMode = false
     
     private let storage = StorageService.shared
+    private let api = APIService.shared
     
     var body: some View {
         ZStack {
@@ -450,16 +452,42 @@ struct LoginView: View {
         
         isLoggingIn = true
         
-        // Mock authentication - simulate API call
         Task {
-            // Simulate network delay
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            
-            // Mock: Accept any credentials
-            // In production, this would call the backend API
-            await MainActor.run {
-                isLoggingIn = false
-                onboardingViewModel.markLoggedIn()
+            do {
+                // Call real API
+                let authResponse = try await api.login(email: sanitizedEmail, password: sanitizedPassword)
+                
+                // Apply auth result to session
+                await session.applyAuthResult(
+                    token: authResponse.token,
+                    backendPrefs: authResponse.user.preferences,
+                    backendSettings: authResponse.user.settings,
+                    storage: storage
+                )
+                
+                // Save user account
+                let userAccount = UserAccount(
+                    email: authResponse.user.email,
+                    firstName: firstName.isEmpty ? "User" : firstName.trimmingCharacters(in: .whitespaces),
+                    hasLoggedIn: true
+                )
+                await storage.saveUserAccount(userAccount)
+                await storage.setHasLoggedIn(true)
+                
+                await MainActor.run {
+                    isLoggingIn = false
+                    onboardingViewModel.markLoggedIn()
+                }
+            } catch {
+                await MainActor.run {
+                    isLoggingIn = false
+                    if let apiError = error as? APIError {
+                        errorMessage = apiError.errorDescription ?? "Login failed. Please try again."
+                    } else {
+                        errorMessage = "Login failed: \(error.localizedDescription)"
+                    }
+                    showError = true
+                }
             }
         }
     }
@@ -497,23 +525,42 @@ struct LoginView: View {
         
         isSigningUp = true
         
-        // Mock sign up - simulate API call
         Task {
-            // Simulate network delay
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            
-            // Save user account
-            let userAccount = UserAccount(
-                email: sanitizedEmail,
-                firstName: firstName.trimmingCharacters(in: .whitespaces),
-                hasLoggedIn: true
-            )
-            await storage.saveUserAccount(userAccount)
-            await storage.setHasLoggedIn(true)
-            
-            await MainActor.run {
-                isSigningUp = false
-                onboardingViewModel.markLoggedIn()
+            do {
+                // Call real API
+                let authResponse = try await api.signup(email: sanitizedEmail, password: sanitizedPassword)
+                
+                // Apply auth result to session
+                await session.applyAuthResult(
+                    token: authResponse.token,
+                    backendPrefs: authResponse.user.preferences,
+                    backendSettings: authResponse.user.settings,
+                    storage: storage
+                )
+                
+                // Save user account
+                let userAccount = UserAccount(
+                    email: authResponse.user.email,
+                    firstName: firstName.trimmingCharacters(in: .whitespaces),
+                    hasLoggedIn: true
+                )
+                await storage.saveUserAccount(userAccount)
+                await storage.setHasLoggedIn(true)
+                
+                await MainActor.run {
+                    isSigningUp = false
+                    onboardingViewModel.markLoggedIn()
+                }
+            } catch {
+                await MainActor.run {
+                    isSigningUp = false
+                    if let apiError = error as? APIError {
+                        errorMessage = apiError.errorDescription ?? "Sign up failed. Please try again."
+                    } else {
+                        errorMessage = "Sign up failed: \(error.localizedDescription)"
+                    }
+                    showError = true
+                }
             }
         }
     }

@@ -108,8 +108,9 @@ final class LocationManager {
             // Ensure delegate is set first
             await locationService.ensureDelegate()
             
-            let authorized = await locationService.requestPermission()
-            print("📍 LocationManager: Permission authorized: \(authorized)")
+            // Only check permission status, don't request (permissions should only be requested on permissions screen)
+            let authorized = await locationService.checkPermissionStatus()
+            print("📍 LocationManager: Permission status: \(authorized)")
             
             if authorized {
                 // Start location updates (this will handle continuous updates)

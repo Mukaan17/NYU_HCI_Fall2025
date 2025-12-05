@@ -12,6 +12,12 @@ class NotificationService {
     private init() {}
     
     // MARK: - Permissions
+    func checkPermissionStatus() async -> Bool {
+        // Only check current status, don't request
+        let status = await getAuthorizationStatus()
+        return status == .authorized
+    }
+    
     func requestPermission() async -> Bool {
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
@@ -68,6 +74,16 @@ class NotificationService {
             print("📬 Scheduled notification: '\(title)' in \(timeInterval) seconds")
         } catch {
             print("Failed to schedule notification: \(error)")
+        }
+    }
+    
+    // MARK: - Register Push Token with Backend
+    func registerPushToken(_ token: String, jwt: String) async {
+        do {
+            try await APIService.shared.registerPushToken(token, jwt: jwt)
+            print("✅ Push token registered with backend")
+        } catch {
+            print("⚠️ Failed to register push token with backend: \(error)")
         }
     }
 }

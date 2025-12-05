@@ -14,6 +14,7 @@ from routes.calendar_routes import calendar_bp
 
 # SERVICES
 from utils.cache import init_requests_cache
+from utils.config import get_allowed_origins, validate_config
 from services.directions_service import get_walking_directions
 from services.recommendation.driver import build_chat_response
 from services.recommendation.quick_recommendations import get_quick_recommendations
@@ -21,6 +22,9 @@ from services.scrapers.engage_events_service import fetch_engage_events
 from services.recommendation.context import ConversationContext
 from utils.auth import decode_token
 from models.users import User
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # NYU Tandon-ish coordinates
@@ -33,16 +37,38 @@ TANDON_LNG = -73.9866
 # ─────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 load_dotenv()
+
+# Validate configuration
+try:
+    validate_config()
+except ValueError as e:
+    logger.error(f"Configuration validation failed: {e}")
+    # In production, this should fail. In development, continue with warnings.
+
+# CORS configuration - environment-aware
+try:
+    allowed_origins = get_allowed_origins()
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+    logger.info(f"CORS configured with origins: {allowed_origins}")
+except ValueError as e:
+    logger.warning(f"CORS configuration error: {e}. Using wildcard for development.")
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 init_requests_cache()
 
 # Secret key for JWT
 app.config["SECRET_KEY"] = os.getenv("JWT_SECRET", "dev-secret-change-me")
 
-# Database config
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///violetvibes.db"
+# Database config - supports both SQLite (dev) and PostgreSQL (production)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    # Production: Use PostgreSQL from DATABASE_URL
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+else:
+    # Development: Use SQLite
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///violetvibes.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Init extensions
@@ -112,7 +138,9 @@ def chat():
 def quick_recs():
     try:
         category = (request.args.get("category") or "explore").lower()
-        result = get_quick_recommendations(category, limit=10)
+        limit = int(request.args.get("limit", 10))
+        vibe = request.args.get("vibe")  # Optional vibe parameter
+        result = get_quick_recommendations(category, limit=limit, vibe=vibe)
         return jsonify(result)
     except Exception as e:
         print("QUICK_RECS ERROR:", e)
@@ -142,14 +170,20 @@ def nyu_engage_events():
 def directions():
     lat = float(request.args.get("lat"))
     lng = float(request.args.get("lng"))
-
-    origin_lat = 40.693393  # 2 MetroTech
-    origin_lng = -73.98555
+    
+    # Accept optional origin coordinates (for user's current location)
+    # Default to 2 MetroTech if not provided
+    origin_lat = float(request.args.get("origin_lat", 40.693393))
+    origin_lng = float(request.args.get("origin_lng", -73.98555))
 
     result = get_walking_directions(origin_lat, origin_lng, lat, lng)
 
     if not result:
         return jsonify({"error": "Directions failed"}), 500
+
+    # Ensure mode is included in response for frontend
+    if "mode" not in result:
+        result["mode"] = "walking"  # Default fallback
 
     return jsonify(result)
 
@@ -160,7 +194,41 @@ def directions():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"}), 200
+    """
+    Health check endpoint for DigitalOcean App Platform.
+    Checks database and Redis connectivity.
+    """
+    status = {
+        "status": "ok",
+        "database": "not_configured",
+        "redis": "not_configured"
+    }
+    http_status = 200
+    
+    # Check database connectivity
+    try:
+        with app.app_context():
+            db.session.execute(db.text("SELECT 1"))
+        status["database"] = "connected"
+    except Exception as e:
+        status["database"] = "disconnected"
+        logger.warning(f"Health check: Database connection failed - {e}")
+        http_status = 503  # Service Unavailable
+    
+    # Check Redis connectivity (optional)
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            import redis
+            redis_client = redis.from_url(redis_url)
+            redis_client.ping()
+            status["redis"] = "connected"
+        except Exception as e:
+            status["redis"] = "disconnected"
+            logger.warning(f"Health check: Redis connection failed - {e}")
+    # If REDIS_URL not set, redis status remains "not_configured" (OK)
+    
+    return jsonify(status), http_status
 
 
 # ─────────────────────────────────────────────────────────────
@@ -168,4 +236,8 @@ def health():
 # ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    # Get port from environment (DigitalOcean sets PORT)
+    port = int(os.getenv("PORT", 5001))
+    # Only enable debug in development
+    debug = os.getenv("FLASK_ENV", "development").lower() != "production"
+    app.run(host="0.0.0.0", port=port, debug=debug)

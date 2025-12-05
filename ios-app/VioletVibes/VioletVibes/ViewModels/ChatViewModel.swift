@@ -27,7 +27,13 @@ final class ChatViewModel {
         ]
     }
     
-    func sendMessage(_ text: String, latitude: Double? = nil, longitude: Double? = nil) async {
+    func sendMessage(
+        _ text: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        jwt: String? = nil,
+        preferences: UserPreferences? = nil
+    ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
@@ -44,7 +50,13 @@ final class ChatViewModel {
         isTyping = true
         
         do {
-            let response = try await apiService.sendChatMessage(trimmed, latitude: latitude, longitude: longitude)
+            let response = try await apiService.sendChatMessage(
+                trimmed,
+                latitude: latitude,
+                longitude: longitude,
+                jwt: jwt,
+                preferences: preferences
+            )
             
             await MainActor.run {
                 // Add AI text reply

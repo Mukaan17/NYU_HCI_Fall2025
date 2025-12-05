@@ -12,29 +12,129 @@ actor APIService {
     
     nonisolated private init() {
         // Get base URL from environment or use default
-        if let apiURL = ProcessInfo.processInfo.environment["API_URL"] {
+        if let apiURL = ProcessInfo.processInfo.environment["API_URL"], !apiURL.isEmpty {
             baseURL = apiURL
         } else if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
                   let config = NSDictionary(contentsOfFile: path),
-                  let url = config["API_URL"] as? String {
+                  let url = config["API_URL"] as? String,
+                  !url.isEmpty {
             baseURL = url
         } else {
             baseURL = "http://localhost:5001"
         }
+        
+        print("🔗 APIService using baseURL → \(baseURL)")
     }
     
-    // MARK: - Chat
-    nonisolated func sendChatMessage(_ message: String, latitude: Double? = nil, longitude: Double? = nil) async throws -> ChatAPIResponse {
-        var urlComponents = URLComponents(string: "\(baseURL)/api/chat")!
+    // MARK: - Authentication
+    
+    nonisolated func signup(email: String, password: String) async throws -> AuthResponse {
+        guard let url = URL(string: "\(baseURL)/api/auth/signup") else {
+            throw APIError.invalidURL
+        }
         
-        var request = URLRequest(url: urlComponents.url!)
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        let body: [String: Any] = [
+            "email": email,
+            "password": password
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 201 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(AuthResponse.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    nonisolated func login(email: String, password: String) async throws -> AuthResponse {
+        guard let url = URL(string: "\(baseURL)/api/auth/login") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "email": email,
+            "password": password
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(AuthResponse.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Chat
+    nonisolated func sendChatMessage(
+        _ message: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        jwt: String? = nil,
+        preferences: UserPreferences? = nil
+    ) async throws -> ChatAPIResponse {
+        guard let url = URL(string: "\(baseURL)/api/chat") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = jwt {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // Build request body with optional preferences
+        let backendPrefs = preferences?.toBackendPreferencesPayload()
         var payload: [String: Any] = ["message": message]
         if let lat = latitude, let lng = longitude {
             payload["latitude"] = lat
             payload["longitude"] = lng
+        }
+        if let prefs = backendPrefs {
+            // Encode preferences to JSON
+            if let prefsData = try? JSONEncoder().encode(prefs),
+               let prefsDict = try? JSONSerialization.jsonObject(with: prefsData) as? [String: Any] {
+                payload["preferences"] = prefsDict
+            }
         }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -146,15 +246,25 @@ actor APIService {
     }
     
     // MARK: - Directions
-    nonisolated func getDirections(lat: Double, lng: Double) async throws -> DirectionsAPIResponse {
-        let originLat = 40.693393  // 2 MetroTech
-        let originLng = -73.98555
-        
+    nonisolated func getDirections(
+        lat: Double,
+        lng: Double,
+        originLat: Double? = nil,
+        originLng: Double? = nil
+    ) async throws -> DirectionsAPIResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/directions")!
-        urlComponents.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "lat", value: String(lat)),
             URLQueryItem(name: "lng", value: String(lng))
         ]
+        
+        // Add origin coordinates if provided
+        if let originLat = originLat, let originLng = originLng {
+            queryItems.append(URLQueryItem(name: "origin_lat", value: String(originLat)))
+            queryItems.append(URLQueryItem(name: "origin_lng", value: String(originLng)))
+        }
+        
+        urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
             throw APIError.invalidURL
@@ -187,6 +297,359 @@ actor APIService {
         let decoder = JSONDecoder()
         return try decoder.decode(EventsAPIResponse.self, from: data)
     }
+    
+    // MARK: - Dashboard
+    nonisolated func getDashboard(jwt: String) async throws -> DashboardAPIResponse {
+        guard let url = URL(string: "\(baseURL)/api/dashboard") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(DashboardAPIResponse.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Top Recommendations
+    nonisolated func getTopRecommendations(
+        limit: Int = 3,
+        jwt: String? = nil,
+        preferences: UserPreferences? = nil,
+        weather: String? = nil,
+        vibe: String? = nil
+    ) async throws -> [Recommendation] {
+        // Use the existing quick_recs endpoint with "explore" category for top recommendations
+        var comps = URLComponents(string: "\(baseURL)/api/quick_recs")!
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "category", value: "explore"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+        
+        // Add vibe parameter if provided
+        if let vibe = vibe {
+            items.append(URLQueryItem(name: "vibe", value: vibe))
+        }
+        
+        comps.queryItems = items
+        
+        guard let url = comps.url else { throw APIError.invalidURL }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        if let token = jwt {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            // quick_recs returns { "category": "...", "places": [...] }
+            let decoded = try JSONDecoder().decode(QuickRecsAPIResponse.self, from: data)
+            return decoded.places
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - User Preferences
+    nonisolated func fetchUserPreferences(jwt: String) async throws -> BackendPreferencesPayload {
+        guard let url = URL(string: "\(baseURL)/api/user/preferences") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(BackendPreferencesPayload.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    nonisolated func saveUserPreferences(
+        preferences: UserPreferences,
+        jwt: String
+    ) async throws -> BackendPreferencesPayload {
+        guard let url = URL(string: "\(baseURL)/api/user/preferences") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let payload = preferences.toBackendPreferencesPayload()
+        let encoder = JSONEncoder()
+        let body = try encoder.encode(payload)
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(BackendPreferencesPayload.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - User Settings
+    nonisolated func fetchUserSettings(jwt: String) async throws -> BackendSettingsPayload {
+        guard let url = URL(string: "\(baseURL)/api/user/settings") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(BackendSettingsPayload.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    nonisolated func saveUserSettings(
+        settings: BackendSettingsPayload,
+        jwt: String
+    ) async throws -> BackendSettingsPayload {
+        guard let url = URL(string: "\(baseURL)/api/user/settings") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let encoder = JSONEncoder()
+        let body = try encoder.encode(settings)
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(BackendSettingsPayload.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Push Notifications
+    nonisolated func registerPushToken(_ token: String, jwt: String) async throws {
+        guard let url = URL(string: "\(baseURL)/api/user/notification_token") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        print("✅ Push token registered!")
+    }
+    
+    // MARK: - Calendar
+    nonisolated func fetchTodayCalendarEvents(jwt: String) async throws -> CalendarEventsResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/today") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        if http.statusCode != 200 {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(CalendarEventsResponse.self, from: data)
+    }
+    
+    // MARK: - Calendar Notifications
+    nonisolated func checkCalendarNotifications(jwt: String) async throws -> NotificationCheckResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/notifications/check") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        if http.statusCode != 200 {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(NotificationCheckResponse.self, from: data)
+    }
+    
+    // MARK: - User Activity
+    nonisolated func logUserActivity(
+        type: String,
+        placeId: String? = nil,
+        name: String? = nil,
+        vibe: String? = nil,
+        score: Double? = nil,
+        jwt: String
+    ) async throws {
+        guard let url = URL(string: "\(baseURL)/api/user/activity") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        var payload: [String: Any] = ["type": type]
+        if let placeId = placeId {
+            payload["place_id"] = placeId
+        }
+        if let name = name {
+            payload["name"] = name
+        }
+        if let vibe = vibe {
+            payload["vibe"] = vibe
+        }
+        if let score = score {
+            payload["score"] = score
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+    }
 }
 
 enum APIError: LocalizedError {
@@ -204,7 +667,7 @@ enum APIError: LocalizedError {
         case .decodingError(let message):
             return "Decoding error: \(message)"
         case .serverError(let message):
-            return "Server error: \(message)"
+            return message
         }
     }
 }

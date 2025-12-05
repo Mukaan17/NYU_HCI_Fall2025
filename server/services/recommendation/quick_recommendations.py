@@ -149,6 +149,7 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
         photo_url = build_photo_url(ref)
 
         enriched.append({
+            "place_id": p.get("place_id"),  # Include place_id for unique identification
             "name": p.get("name"),
             "rating": p.get("rating", 0),
             "address": p.get("vicinity"),
@@ -200,7 +201,7 @@ def _load_events() -> List[Dict[str, Any]]:
 # MAIN API
 # -----------------------------------------------------------
 
-def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
+def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None = None) -> Dict[str, Any]:
     """
     Returns:
       {
@@ -232,6 +233,9 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
         places = _search_places_for_category("explore")
         for p in places:
             p["score"] = _score_explore(p)
+            # Apply vibe-based scoring if vibe is provided
+            if vibe:
+                p["score"] = _apply_vibe_scoring(p, vibe, p["score"])
         places.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": places[:limit]}
 
@@ -245,3 +249,70 @@ def get_quick_recommendations(category: str, limit: int = 10) -> Dict[str, Any]:
 
     # ----------- Unknown category -----------
     return {"category": category, "places": []}
+
+
+# -----------------------------------------------------------
+# VIBE-BASED SCORING
+# -----------------------------------------------------------
+
+def _apply_vibe_scoring(place: Dict[str, Any], vibe: str, base_score: float) -> float:
+    """
+    Adjust score based on vibe to better match user's current mood.
+    """
+    name = (place.get("name") or "").lower()
+    description = (place.get("description") or "").lower()
+    place_type = place.get("type", "").lower()
+    
+    vibe_boost = 0.0
+    
+    if vibe == "study":
+        # Boost libraries, cafes, quiet places
+        if any(k in name for k in ["library", "cafe", "coffee", "study", "quiet"]):
+            vibe_boost = 0.3
+        elif place_type in ["cafe", "library"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "party":
+        # Boost bars, clubs, nightlife
+        if any(k in name for k in ["bar", "club", "lounge", "night", "party"]):
+            vibe_boost = 0.3
+        elif place_type in ["night_club", "bar"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "food_general":
+        # Boost restaurants, food places
+        if any(k in name for k in ["restaurant", "grill", "diner", "food", "kitchen"]):
+            vibe_boost = 0.3
+        elif place_type in ["restaurant", "food"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "chill_drinks":
+        # Boost bars, cafes for drinks
+        if any(k in name for k in ["bar", "pub", "cafe", "lounge", "drinks"]):
+            vibe_boost = 0.3
+        elif place_type in ["bar", "cafe"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "shopping":
+        # Boost shopping places
+        if any(k in name for k in ["shop", "store", "mall", "boutique", "market"]):
+            vibe_boost = 0.3
+        elif place_type in ["shopping_mall", "clothing_store", "department_store"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "fast_bite":
+        # Boost fast food, quick service
+        if any(k in name for k in ["fast", "quick", "express", "takeout", "grab"]):
+            vibe_boost = 0.3
+        elif place_type in ["meal_takeaway", "fast_food"]:
+            vibe_boost = 0.2
+    
+    elif vibe == "explore":
+        # Boost attractions, points of interest
+        if any(k in name for k in ["park", "museum", "gallery", "attraction", "viewpoint"]):
+            vibe_boost = 0.3
+        elif place_type in ["tourist_attraction", "point_of_interest", "park"]:
+            vibe_boost = 0.2
+    
+    # Apply boost to base score
+    return base_score + vibe_boost

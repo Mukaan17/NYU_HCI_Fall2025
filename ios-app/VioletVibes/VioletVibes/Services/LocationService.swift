@@ -76,6 +76,14 @@ final class LocationService: NSObject {
     
     // MARK: - Permissions
     @MainActor
+    func checkPermissionStatus() async -> Bool {
+        // Only check current status, don't request
+        let currentStatus = locationManager.authorizationStatus
+        authorizationStatus = currentStatus
+        return currentStatus == .authorizedWhenInUse || currentStatus == .authorizedAlways
+    }
+    
+    @MainActor
     func requestPermission() async -> Bool {
         // Always check current status from location manager (not cached)
         let currentStatus = locationManager.authorizationStatus

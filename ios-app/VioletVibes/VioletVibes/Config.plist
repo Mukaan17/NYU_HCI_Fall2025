@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_URL</key>
-	<string>https://your-app-name.ondigitalocean.app</string>
+	<string>http://localhost:5001</string>
 	<!-- 
 		For local development, use: http://localhost:5001
 		For production, replace with your DigitalOcean App Platform URL

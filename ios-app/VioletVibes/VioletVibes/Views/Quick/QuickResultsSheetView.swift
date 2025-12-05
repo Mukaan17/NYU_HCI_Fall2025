@@ -8,6 +8,7 @@ import SwiftUI
 struct QuickResultsSheetView: View {
     let category: String
     @Environment(PlaceViewModel.self) private var placeViewModel
+    @Environment(TabCoordinator.self) private var tabCoordinator
     @Environment(\.dismiss) private var dismiss
     
     @State private var places: [Recommendation] = []
@@ -83,6 +84,7 @@ struct QuickResultsSheetView: View {
                                     image: place.image
                                 )
                                 placeViewModel.setSelectedPlace(selectedPlace)
+                                tabCoordinator.selectedTab = .map
                                 dismiss()
                             }
                             .listRowBackground(
@@ -139,37 +141,60 @@ struct QuickResultsSheetView: View {
     private func loadPlaces() async {
         loading = true
         do {
-            let response = try await apiService.getQuickRecommendations(category: category, limit: 10)
+            // Map "chill_cafes" to "cozy_cafes" for backend compatibility
+            let apiCategory = category == "chill_cafes" ? "cozy_cafes" : category
+            let response = try await apiService.getQuickRecommendations(category: apiCategory, limit: 10)
             await MainActor.run {
-                // Deduplicate places using multiple strategies
+                // Improved deduplication using multiple strategies
+                var deduplicatedPlaces: [Recommendation] = []
                 var seenIds = Set<Int>()
                 var seenKeys = Set<String>()
                 
-                places = response.places.compactMap { place -> Recommendation? in
-                    // First, try to deduplicate by ID (if ID is not 0 or a default value)
-                    if place.id != 0 && seenIds.contains(place.id) {
-                        return nil
-                    }
+                for place in response.places {
+                    // Strategy 1: Deduplicate by ID (if ID is not 0)
                     if place.id != 0 {
+                        if seenIds.contains(place.id) {
+                            continue
+                        }
                         seenIds.insert(place.id)
                     }
                     
-                    // Create a comprehensive unique key from title, description, and location
-                    let normalizedTitle = place.title.lowercased().trimmingCharacters(in: CharacterSet.whitespaces)
-                    let normalizedDesc = (place.description ?? "").lowercased().trimmingCharacters(in: CharacterSet.whitespaces)
-                    let normalizedLat = place.lat.map { String(format: "%.6f", $0) } ?? "0"
-                    let normalizedLng = place.lng.map { String(format: "%.6f", $0) } ?? "0"
+                    // Strategy 2: Create a comprehensive unique key from title and location
+                    let normalizedTitle = place.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                     
-                    // Use title + description + location as unique key
-                    let uniqueKey = "\(normalizedTitle)-\(normalizedDesc)-\(normalizedLat)-\(normalizedLng)"
+                    // Round coordinates to 4 decimal places (~11 meters precision) to catch nearby duplicates
+                    let normalizedLat = place.lat.map { String(format: "%.4f", $0) } ?? "0"
+                    let normalizedLng = place.lng.map { String(format: "%.4f", $0) } ?? "0"
+                    
+                    // Use title + location as primary unique key
+                    let uniqueKey = "\(normalizedTitle)-\(normalizedLat)-\(normalizedLng)"
                     
                     if seenKeys.contains(uniqueKey) {
-                        return nil
+                        continue
                     }
                     seenKeys.insert(uniqueKey)
                     
-                    return place
+                    // Ensure unique ID for SwiftUI ForEach
+                    var uniquePlace = place
+                    if uniquePlace.id == 0 {
+                        // Generate a unique ID from the unique key
+                        uniquePlace = Recommendation(
+                            id: abs(uniqueKey.hashValue) % Int.max,
+                            title: place.title,
+                            description: place.description,
+                            distance: place.distance,
+                            walkTime: place.walkTime,
+                            lat: place.lat,
+                            lng: place.lng,
+                            popularity: place.popularity,
+                            image: place.image
+                        )
+                    }
+                    
+                    deduplicatedPlaces.append(uniquePlace)
                 }
+                
+                places = deduplicatedPlaces
                 
                 print("✅ Loaded \(places.count) unique places (from \(response.places.count) total)")
                 loading = false

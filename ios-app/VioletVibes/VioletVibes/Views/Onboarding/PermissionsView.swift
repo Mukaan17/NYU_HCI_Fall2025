@@ -162,11 +162,12 @@ struct PermissionsView: View {
     }
     
     private func checkPermissions() async {
-        locationPermission = await locationService.requestPermission()
-        calendarPermission = await calendarService.requestPermission()
-        notificationPermission = await notificationService.requestPermission()
-        contactsPermission = await contactsService.requestPermission()
-        remindersPermission = await remindersService.requestPermission()
+        // Only check current permission status, don't request
+        locationPermission = await locationService.checkPermissionStatus()
+        calendarPermission = await calendarService.checkPermissionStatus()
+        notificationPermission = await notificationService.checkPermissionStatus()
+        contactsPermission = await contactsService.checkPermissionStatus()
+        remindersPermission = await remindersService.checkPermissionStatus()
     }
     
     private func requestAllPermissions() async {

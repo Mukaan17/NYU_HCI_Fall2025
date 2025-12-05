@@ -10,6 +10,7 @@ import CoreLocation
 struct MapView: View {
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(LocationManager.self) private var locationManager
+    @Environment(\.openURL) private var openURL
     @State private var viewModel = MapViewModel()
     @State private var currentLocationAddress: String? = nil
     @State private var isGeocoding = false
@@ -18,6 +19,8 @@ struct MapView: View {
     @State private var locationPollingTask: Task<Void, Never>? = nil
     @State private var geocodingTask: Task<Void, Never>? = nil
     @State private var lastGeocodeTime: Date? = nil
+    @State private var showMapsPicker = false
+    @State private var pendingDestination: (coordinate: CLLocationCoordinate2D, name: String)? = nil
     private let geocodeThrottle: TimeInterval = 5.0 // Only geocode every 5 seconds
     
     private let defaultLat = 40.693393
@@ -26,396 +29,558 @@ struct MapView: View {
     
     var body: some View {
         ZStack {
-            // Map using modern iOS 17+ API
-            Map(position: $viewModel.cameraPosition) {
-                // User location - dynamic blip (uses cached location to avoid repeated checks)
-                // Use stable ID to prevent unnecessary annotation recreation
-                if let location = currentDeviceLocation {
-                    Annotation("My Location", coordinate: location.coordinate) {
-                        LocationBlipView()
-                            .id("user_location") // Stable ID to prevent recreation
-                    }
-                }
-                
-                // Destination marker
-                if let place = placeViewModel.selectedPlace {
-                    Annotation(place.name, coordinate: place.coordinate) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundColor(Theme.Colors.gradientStart)
-                            .font(.system(size: 32))
-                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                    }
-                }
-                
-                // Route polyline
-                if !viewModel.polylineCoordinates.isEmpty {
-                    MapPolyline(coordinates: viewModel.polylineCoordinates)
-                        .stroke(Theme.Colors.gradientStart, lineWidth: 5)
-                }
-            }
-            .mapStyle(.standard(elevation: .flat)) // Changed from .realistic to .flat for better performance
-            .ignoresSafeArea()
-            
-            // Address Badge
-            VStack {
-                if let place = placeViewModel.selectedPlace {
-                    HStack(spacing: Theme.Spacing.md) {
-                        Text("📍")
-                            .font(.system(size: 15))
-                        Text(place.address ?? place.name)
-                            .themeFont(size: .base, weight: .semiBold)
-                            .foregroundColor(Theme.Colors.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(2)
-                    }
-                    .padding(.horizontal, Theme.Spacing.`3xl`)
-                    .padding(.vertical, Theme.Spacing.`2xl`)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .fill(.regularMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .stroke(Theme.Colors.border, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                } else {
-                    HStack(spacing: Theme.Spacing.md) {
-                        Text("📍")
-                            .font(.system(size: 15))
-                        if isGeocoding {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(Theme.Colors.textPrimary)
-                                Text("Getting location...")
-                                    .themeFont(size: .base, weight: .semiBold)
-                                    .foregroundColor(Theme.Colors.textPrimary)
-                            }
-                        } else {
-                            Text(currentLocationAddress ?? "2 MetroTech Center")
-                                .themeFont(size: .base, weight: .semiBold)
-                                .foregroundColor(Theme.Colors.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .lineLimit(2)
-                        }
-                    }
-                    .padding(.horizontal, Theme.Spacing.`3xl`)
-                    .padding(.vertical, Theme.Spacing.`2xl`)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .fill(.regularMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .stroke(Theme.Colors.border, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                }
-                
-                Spacer()
-            }
-            .padding(.top, Theme.Spacing.`2xl`)
-            
-            // Bottom Sheet - Optimized with cached calculations and safety checks
-            GeometryReader { geometry in
-                // Safety check: ensure geometry has valid size before rendering
-                let geometryWidth = geometry.size.width
-                let geometryHeight = geometry.size.height
-                
-                // Only render if geometry is valid (prevents Metal rendering errors)
-                if geometryWidth > 0 && geometryHeight > 0 {
-                    let safeAreaBottom = geometry.safeAreaInsets.bottom
-                    let tabBarContentHeight: CGFloat = 49
-                    let tabBarHeight = safeAreaBottom + tabBarContentHeight
-                    let cardBottomPadding = Theme.Spacing.`2xl`
-                    let hasImage = placeViewModel.selectedPlace?.image != nil
-                    let cardContentHeight: CGFloat = hasImage ? 272 : 112
-                    let cardPadding = Theme.Spacing.`2xl` * 2
-                    let estimatedCardHeight = cardContentHeight + cardPadding
-                    let gradientHeight = max(tabBarHeight + cardBottomPadding + estimatedCardHeight, 200) // Ensure minimum height
-                    
-                    ZStack(alignment: .bottom) {
-                        // Gradient that starts from absolute bottom and ends at card top
-                        LinearGradient(
-                            colors: [
-                                Color.clear,
-                                Theme.Colors.backgroundOverlay,
-                                Theme.Colors.background
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: max(gradientHeight, 200)) // Ensure minimum valid height
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .ignoresSafeArea(edges: .bottom)
-                        .allowsHitTesting(false)
-                        
-                        // Card positioned at bottom
-                        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-                        if let place = placeViewModel.selectedPlace {
-                            if let imageURL = place.image {
-                                AsyncImage(url: URL(string: imageURL)) { phase in
-                                    switch phase {
-                                    case .empty:
-                                        ProgressView()
-                                            .frame(height: 160)
-                                    case .success(let image):
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    case .failure:
-                                        Image(systemName: "photo")
-                                            .foregroundColor(Theme.Colors.textSecondary)
-                                            .frame(height: 160)
-                                    @unknown default:
-                                        EmptyView()
-                                    }
-                                }
-                                .frame(height: 160)
-                                .cornerRadius(12)
-                                .clipped()
-                                .id(imageURL) // Cache hint for SwiftUI
-                            }
-                            
-                            Text(place.name)
-                                .themeFont(size: .`2xl`, weight: .semiBold)
-                                .foregroundColor(Theme.Colors.textPrimary)
-                            
-                            if let walkTime = place.walkTime, let distance = place.distance {
-                                Text("\(walkTime) • \(distance)")
-                                    .themeFont(size: .base)
-                                    .foregroundColor(Theme.Colors.textSecondary)
-                            } else {
-                                Text("Home base • NYU Tandon")
-                                    .themeFont(size: .base)
-                                    .foregroundColor(Theme.Colors.textSecondary)
-                            }
-                            
-                            Text("Walking directions coming soon…")
-                                .themeFont(size: .sm)
-                                .foregroundColor(Theme.Colors.textSecondary)
-                                .opacity(0.8)
-                        } else {
-                            Text("2 MetroTech Center")
-                                .themeFont(size: .`2xl`, weight: .semiBold)
-                                .foregroundColor(Theme.Colors.textPrimary)
-                            
-                            Text("Home base • NYU Tandon")
-                                .themeFont(size: .base)
-                                .foregroundColor(Theme.Colors.textSecondary)
-                        }
-                    }
-                    .padding(Theme.Spacing.`2xl`)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.Colors.glassBackground)
-                    .cornerRadius(Theme.BorderRadius.lg)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
-                            .stroke(Theme.Colors.border, lineWidth: 1)
-                    )
-                        .padding(.horizontal, Theme.Spacing.`2xl`)
-                        .padding(.bottom, Theme.Spacing.`2xl`)
-                    }
-                } else {
-                    // Return empty view if geometry is invalid
-                    EmptyView()
-                }
-            }
-            
-            // Center to Location Button - bottom right corner above card (on top layer)
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        // Haptic feedback
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        
-                        // Get the latest location - use cached location first
-                        let latestLocation = currentDeviceLocation ?? LocationService.shared.location ?? locationManager.location
-                        
-                        if let location = latestLocation {
-                            // Always center to the latest location, even if coordinates are similar
-                            viewModel.centerToUserLocation(
-                                latitude: location.coordinate.latitude,
-                                longitude: location.coordinate.longitude
-                            )
-                        } else {
-                            // Force location check and wait for update
-                            locationManager.forceLocationCheck()
-                            
-                            Task {
-                                // Wait a bit for location to update
-                                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-                                
-                                await MainActor.run {
-                                    let updatedLocation = LocationService.shared.location ?? locationManager.location
-                                    if let location = updatedLocation {
-                                        viewModel.centerToUserLocation(
-                                            latitude: location.coordinate.latitude,
-                                            longitude: location.coordinate.longitude
-                                        )
-                                    } else {
-                                        // Fallback to default location
-                                        viewModel.centerToUserLocation(
-                                            latitude: defaultLat,
-                                            longitude: defaultLng
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(Theme.Colors.textPrimary)
-                            .frame(width: 48, height: 48)
-                            .background(
-                                ZStack {
-                                    Circle()
-                                        .fill(.ultraThinMaterial)
-                                    
-                                    Circle()
-                                        .fill(Theme.Colors.glassBackground.opacity(0.8))
-                                }
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Theme.Colors.border.opacity(0.3), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.trailing, Theme.Spacing.`2xl`)
-                    .padding(.bottom, 120)
-                }
-            }
+            mapContent
+            addressBadge
+            bottomSheet
+            centerToLocationButton
         }
         .onChange(of: placeViewModel.selectedPlace) { oldValue, newValue in
-            // Only update if place actually changed
-            guard oldValue?.id != newValue?.id else { return }
-            
-            if let place = newValue {
-                // Clear current location address when a place is selected
-                currentLocationAddress = nil
-                viewModel.updateRegion(latitude: place.latitude, longitude: place.longitude, animated: true)
-                Task {
-                    await viewModel.fetchRoute(destinationLat: place.latitude, destinationLng: place.longitude)
-                }
-            } else {
-                // Clear route when place is deselected
-                viewModel.clearRoute()
-                // Geocode current location when place is deselected
-                if let location = locationManager.location {
-                    geocodingTask?.cancel()
-                    geocodingTask = Task {
-                        await geocodeLocation(location)
-                    }
-                }
-            }
+            handlePlaceChange(oldValue: oldValue, newValue: newValue)
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Only update if location changed significantly (100m threshold for better performance)
-            guard let newLocation = newValue else { return }
-            
-            // Update cached location immediately for annotation
-            currentDeviceLocation = newLocation
-            
-            // Throttle map updates - only update if moved significantly
-            if let oldLocation = oldValue {
-                let distance = newLocation.distance(from: oldLocation)
-                guard distance > 100 else { return } // Increased from 50m to 100m to reduce updates
-            }
-            
-            // Defer heavy operations
-            handleLocationUpdate(oldLocation: oldValue, newLocation: newValue)
+            handleLocationChange(oldLocation: oldValue, newLocation: newValue)
         }
         .onAppear {
-            // Optimize initial load - set default region immediately, defer location updates
-            viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng, animated: false)
-            
-            // Defer all heavy operations to improve initial render performance
-            Task { @MainActor in
-                // Allow map to render first before doing location work
-                try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-                
-                // Check both LocationService and LocationManager for initial location
-                let initialLocation = LocationService.shared.location ?? locationManager.location
-                if let location = initialLocation {
-                    currentDeviceLocation = location
-                    viewModel.updateRegion(
-                        latitude: location.coordinate.latitude,
-                        longitude: location.coordinate.longitude,
-                        animated: true // Animate after initial render
-                    )
-                    lastProcessedLocation = location
-                    
-                    // Defer geocoding significantly to prioritize map rendering
-                    geocodingTask?.cancel()
-                    geocodingTask = Task {
-                        // Wait longer before geocoding to ensure map is fully rendered
-                        try? await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
-                        await geocodeLocation(location)
-                    }
+            handleAppear()
+        }
+        .task {
+            handleTask()
+        }
+        .onDisappear {
+            handleDisappear()
+        }
+    }
+    
+    // MARK: - Map Content
+    private var mapContent: some View {
+        Map(position: $viewModel.cameraPosition) {
+            // User location annotation
+            if let location = currentDeviceLocation {
+                Annotation("My Location", coordinate: location.coordinate) {
+                    LocationBlipView()
+                        .id("user_location")
                 }
+            }
+            
+            // Destination annotation
+            if let place = placeViewModel.selectedPlace {
+                Annotation(place.name, coordinate: place.coordinate) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(Theme.Colors.gradientStart)
+                        .font(.system(size: 32))
+                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+            }
+            
+            // Route polyline
+            if !viewModel.polylineCoordinates.isEmpty {
+                MapPolyline(coordinates: viewModel.polylineCoordinates)
+                    .stroke(
+                        viewModel.routeMode == "transit" ? Theme.Colors.accentBlue : Theme.Colors.gradientStart,
+                        lineWidth: viewModel.routeMode == "transit" ? 6 : 5
+                    )
+            }
+        }
+        .mapStyle(.standard(elevation: .flat))
+        .ignoresSafeArea()
+    }
+    
+    // MARK: - Address Badge
+    @ViewBuilder
+    private var addressBadge: some View {
+        VStack {
+            if let place = placeViewModel.selectedPlace {
+                placeAddressBadge(place: place)
+            } else {
+                currentLocationBadge
+            }
+            Spacer()
+        }
+        .padding(.top, Theme.Spacing.`2xl`)
+    }
+    
+    @ViewBuilder
+    private func placeAddressBadge(place: SelectedPlace) -> some View {
+        HStack(spacing: Theme.Spacing.md) {
+            Text("📍")
+                .font(.system(size: 15))
+            Text(place.address ?? place.name)
+                .themeFont(size: .base, weight: .semiBold)
+                .foregroundColor(Theme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, Theme.Spacing.`3xl`)
+        .padding(.vertical, Theme.Spacing.`2xl`)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+    
+    @ViewBuilder
+    private var currentLocationBadge: some View {
+        HStack(spacing: Theme.Spacing.md) {
+            Text("📍")
+                .font(.system(size: 15))
+            if isGeocoding {
+                HStack(spacing: Theme.Spacing.xs) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(Theme.Colors.textPrimary)
+                    Text("Getting location...")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                }
+            } else {
+                Text(currentLocationAddress ?? "2 MetroTech Center")
+                    .themeFont(size: .base, weight: .semiBold)
+                    .foregroundColor(Theme.Colors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.`3xl`)
+        .padding(.vertical, Theme.Spacing.`2xl`)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - Bottom Sheet
+    @ViewBuilder
+    private var bottomSheet: some View {
+        GeometryReader { geometry in
+            let geometryWidth = geometry.size.width
+            let geometryHeight = geometry.size.height
+            
+            if geometryWidth > 0 && geometryHeight > 0 {
+                let safeAreaBottom = geometry.safeAreaInsets.bottom
+                let tabBarContentHeight: CGFloat = 49
+                let tabBarHeight = safeAreaBottom + tabBarContentHeight
+                let cardBottomPadding = Theme.Spacing.`2xl`
+                let hasImage = placeViewModel.selectedPlace?.image != nil
+                let cardContentHeight: CGFloat = hasImage ? 272 : 112
+                let cardPadding = Theme.Spacing.`2xl` * 2
+                let estimatedCardHeight = cardContentHeight + cardPadding
+                let gradientHeight = max(tabBarHeight + cardBottomPadding + estimatedCardHeight, 200)
                 
-                // Start periodic check for LocationService updates (only if no location yet)
-                // Use longer interval to reduce battery and memory usage
-                if currentDeviceLocation == nil {
-                    locationPollingTask = Task {
-                        // Only run a few times, then rely on onChange handlers
-                        var iterations = 0
-                        let maxIterations = 2 // Reduced from 3 to 2 (20 seconds total)
+                ZStack(alignment: .bottom) {
+                    bottomSheetGradient(height: gradientHeight)
+                    bottomSheetCard
+                }
+            } else {
+                EmptyView()
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func bottomSheetGradient(height: CGFloat) -> some View {
+        LinearGradient(
+            colors: [
+                Color.clear,
+                Theme.Colors.backgroundOverlay,
+                Theme.Colors.background
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: max(height, 200))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+    }
+    
+    @ViewBuilder
+    private var bottomSheetCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            if let place = placeViewModel.selectedPlace {
+                placeCardContent(place: place)
+            } else {
+                defaultCardContent
+            }
+        }
+        .padding(Theme.Spacing.`2xl`)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Colors.glassBackground)
+        .cornerRadius(Theme.BorderRadius.lg)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.BorderRadius.lg)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .padding(.horizontal, Theme.Spacing.`2xl`)
+        .padding(.bottom, Theme.Spacing.`2xl`)
+    }
+    
+    @ViewBuilder
+    private func placeCardContent(place: SelectedPlace) -> some View {
+        if let imageURL = place.image {
+            placeImage(url: imageURL)
+        }
+        
+        Text(place.name)
+            .themeFont(size: .`2xl`, weight: .semiBold)
+            .foregroundColor(Theme.Colors.textPrimary)
+        
+        routeInfoView(place: place)
+        getDirectionsButton(place: place)
+        
+        if viewModel.isLoadingRoute {
+            loadingRouteIndicator
+        }
+    }
+    
+    @ViewBuilder
+    private func placeImage(url: String) -> some View {
+        AsyncImage(url: URL(string: url)) { phase in
+            switch phase {
+            case .empty:
+                ProgressView()
+                    .frame(height: 160)
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            case .failure:
+                Image(systemName: "photo")
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .frame(height: 160)
+            @unknown default:
+                EmptyView()
+            }
+        }
+        .frame(height: 160)
+        .cornerRadius(12)
+        .clipped()
+        .id(url)
+    }
+    
+    @ViewBuilder
+    private func routeInfoView(place: SelectedPlace) -> some View {
+        if !viewModel.polylineCoordinates.isEmpty, let duration = viewModel.routeDuration {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: viewModel.routeMode == "transit" ? "tram.fill" : "figure.walk")
+                    .font(.system(size: 14))
+                    .foregroundColor(viewModel.routeMode == "transit" ? Theme.Colors.accentBlue : Theme.Colors.gradientStart)
+                Text(duration)
+                    .themeFont(size: .base)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                if let distance = viewModel.routeDistance {
+                    Text("• \(distance)")
+                        .themeFont(size: .base)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+            }
+        } else if let walkTime = place.walkTime, let distance = place.distance {
+            Text("\(walkTime) • \(distance)")
+                .themeFont(size: .base)
+                .foregroundColor(Theme.Colors.textSecondary)
+        } else {
+            Text("Home base • NYU Tandon")
+                .themeFont(size: .base)
+                .foregroundColor(Theme.Colors.textSecondary)
+        }
+    }
+    
+    @ViewBuilder
+    private func getDirectionsButton(place: SelectedPlace) -> some View {
+        Button(action: {
+            handleGetDirections(place: place)
+        }) {
+            HStack {
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Get Directions")
+                    .themeFont(size: .base, weight: .semiBold)
+            }
+            .foregroundColor(Theme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Theme.Spacing.md)
+            .background(
+                LinearGradient(
+                    colors: [Theme.Colors.gradientStart, Theme.Colors.gradientEnd],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(Theme.BorderRadius.md)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .stroke(Theme.Colors.border.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .confirmationDialog("Open Directions", isPresented: $showMapsPicker, titleVisibility: .visible) {
+            Button("Apple Maps") {
+                if let destination = pendingDestination {
+                    let userLocation = currentDeviceLocation ?? locationManager.location
+                    let origin = userLocation?.coordinate ?? CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng)
+                    openInAppleMaps(origin: origin, destination: destination.coordinate, destinationName: destination.name)
+                }
+                pendingDestination = nil
+            }
+            Button("Google Maps") {
+                if let destination = pendingDestination {
+                    let userLocation = currentDeviceLocation ?? locationManager.location
+                    let origin = userLocation?.coordinate ?? CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng)
+                    openInGoogleMaps(origin: origin, destination: destination.coordinate, destinationName: destination.name)
+                }
+                pendingDestination = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDestination = nil
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var loadingRouteIndicator: some View {
+        HStack {
+            ProgressView()
+                .scaleEffect(0.8)
+            Text("Loading route...")
+                .themeFont(size: .sm)
+                .foregroundColor(Theme.Colors.textSecondary)
+        }
+        .padding(.top, Theme.Spacing.xs)
+    }
+    
+    @ViewBuilder
+    private var defaultCardContent: some View {
+        Text("2 MetroTech Center")
+            .themeFont(size: .`2xl`, weight: .semiBold)
+            .foregroundColor(Theme.Colors.textPrimary)
+        
+        Text("Home base • NYU Tandon")
+            .themeFont(size: .base)
+            .foregroundColor(Theme.Colors.textSecondary)
+    }
+    
+    // MARK: - Center to Location Button
+    @ViewBuilder
+    private var centerToLocationButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button(action: handleCenterToLocation) {
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(Theme.Colors.textPrimary)
+                        .frame(width: 48, height: 48)
+                        .background(
+                            ZStack {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                
+                                Circle()
+                                    .fill(Theme.Colors.glassBackground.opacity(0.8))
+                            }
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Theme.Colors.border.opacity(0.3), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.trailing, Theme.Spacing.`2xl`)
+                .padding(.bottom, 120)
+            }
+        }
+    }
+    
+    // MARK: - Event Handlers
+    private func handlePlaceChange(oldValue: SelectedPlace?, newValue: SelectedPlace?) {
+        guard oldValue?.id != newValue?.id else { return }
+        
+        if let place = newValue {
+            currentLocationAddress = nil
+            viewModel.updateRegion(latitude: place.latitude, longitude: place.longitude, animated: true)
+        } else {
+            viewModel.clearRoute()
+            if let location = locationManager.location {
+                geocodingTask?.cancel()
+                geocodingTask = Task {
+                    await geocodeLocation(location)
+                }
+            }
+        }
+    }
+    
+    private func handleLocationChange(oldLocation: CLLocation?, newLocation: CLLocation?) {
+        guard let newLocation = newLocation else { return }
+        
+        currentDeviceLocation = newLocation
+        
+        if let oldLocation = oldLocation {
+            let distance = newLocation.distance(from: oldLocation)
+            guard distance > 100 else { return }
+        }
+        
+        handleLocationUpdate(oldLocation: oldLocation, newLocation: newLocation)
+    }
+    
+    private func handleAppear() {
+        viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng, animated: false)
+        
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            
+            let initialLocation = LocationService.shared.location ?? locationManager.location
+            if let location = initialLocation {
+                currentDeviceLocation = location
+                viewModel.updateRegion(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    animated: true
+                )
+                lastProcessedLocation = location
+                
+                geocodingTask?.cancel()
+                geocodingTask = Task {
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    await geocodeLocation(location)
+                }
+            }
+            
+            if currentDeviceLocation == nil {
+                locationPollingTask = Task {
+                    var iterations = 0
+                    let maxIterations = 2
+                    
+                    while !Task.isCancelled && iterations < maxIterations {
+                        try? await Task.sleep(nanoseconds: 10_000_000_000)
                         
-                        while !Task.isCancelled && iterations < maxIterations {
-                            try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
-                            
-                            let latestLocation = LocationService.shared.location ?? locationManager.location
-                            if let location = latestLocation {
-                                // Only update if we don't have a location yet or it changed significantly
-                                if let lastLocation = lastProcessedLocation {
-                                    let distance = location.distance(from: lastLocation)
-                                    if distance > 100 { // Only update if moved 100+ meters
-                                        await MainActor.run {
-                                            currentDeviceLocation = location
-                                            handleLocationUpdate(oldLocation: lastProcessedLocation, newLocation: location)
-                                            lastProcessedLocation = location
-                                        }
-                                    }
-                                } else {
-                                    // First location
+                        let latestLocation = LocationService.shared.location ?? locationManager.location
+                        if let location = latestLocation {
+                            if let lastLocation = lastProcessedLocation {
+                                let distance = location.distance(from: lastLocation)
+                                if distance > 100 {
                                     await MainActor.run {
                                         currentDeviceLocation = location
-                                        handleLocationUpdate(oldLocation: nil, newLocation: location)
+                                        handleLocationUpdate(oldLocation: lastProcessedLocation, newLocation: location)
                                         lastProcessedLocation = location
                                     }
                                 }
+                            } else {
+                                await MainActor.run {
+                                    currentDeviceLocation = location
+                                    handleLocationUpdate(oldLocation: nil, newLocation: location)
+                                    lastProcessedLocation = location
+                                }
                             }
-                            iterations += 1
                         }
+                        iterations += 1
                     }
                 }
             }
         }
-        .task {
-            // Defer geocoding to improve initial load - only if no location yet
-            if placeViewModel.selectedPlace == nil {
-                // Wait longer for map to fully render first
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+    }
+    
+    private func handleTask() {
+        if placeViewModel.selectedPlace == nil {
+            Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 
                 if let location = locationManager.location ?? LocationService.shared.location {
                     await geocodeLocation(location)
                 }
             }
         }
-        .onDisappear {
-            // Cancel all tasks to prevent memory leaks
-            locationPollingTask?.cancel()
-            locationPollingTask = nil
-            geocodingTask?.cancel()
-            geocodingTask = nil
+    }
+    
+    private func handleDisappear() {
+        locationPollingTask?.cancel()
+        locationPollingTask = nil
+        geocodingTask?.cancel()
+        geocodingTask = nil
+    }
+    
+    private func handleGetDirections(place: SelectedPlace) {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        
+        // Store destination and show picker
+        let destinationCoordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
+        pendingDestination = (coordinate: destinationCoordinate, name: place.name)
+        showMapsPicker = true
+    }
+    
+    private func openInAppleMaps(origin: CLLocationCoordinate2D, destination: CLLocationCoordinate2D, destinationName: String) {
+        // Create map items for origin and destination
+        let originPlacemark = MKPlacemark(coordinate: origin)
+        let destinationPlacemark = MKPlacemark(coordinate: destination)
+        
+        let originMapItem = MKMapItem(placemark: originPlacemark)
+        originMapItem.name = "Current Location"
+        
+        let destinationMapItem = MKMapItem(placemark: destinationPlacemark)
+        destinationMapItem.name = destinationName
+        
+        // Open in Apple Maps with walking directions (since we're using walking/transit)
+        let options = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking]
+        MKMapItem.openMaps(with: [originMapItem, destinationMapItem], launchOptions: options)
+    }
+    
+    private func openInGoogleMaps(origin: CLLocationCoordinate2D, destination: CLLocationCoordinate2D, destinationName: String) {
+        // Google Maps URL scheme for directions
+        let urlString = "comgooglemaps://?saddr=\(origin.latitude),\(origin.longitude)&daddr=\(destination.latitude),\(destination.longitude)&directionsmode=walking"
+        
+        if let url = URL(string: urlString) {
+            openURL(url)
+        } else {
+            // Fallback to web version if Google Maps app is not installed
+            let webURLString = "https://www.google.com/maps/dir/?api=1&origin=\(origin.latitude),\(origin.longitude)&destination=\(destination.latitude),\(destination.longitude)&travelmode=walking"
+            if let webURL = URL(string: webURLString) {
+                openURL(webURL)
+            }
+        }
+    }
+    
+    private func handleCenterToLocation() {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        let latestLocation = currentDeviceLocation ?? LocationService.shared.location ?? locationManager.location
+        
+        if let location = latestLocation {
+            viewModel.centerToUserLocation(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude
+            )
+        } else {
+            locationManager.forceLocationCheck()
+            
+            Task {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                
+                await MainActor.run {
+                    let updatedLocation = LocationService.shared.location ?? locationManager.location
+                    if let location = updatedLocation {
+                        viewModel.centerToUserLocation(
+                            latitude: location.coordinate.latitude,
+                            longitude: location.coordinate.longitude
+                        )
+                    } else {
+                        viewModel.centerToUserLocation(
+                            latitude: defaultLat,
+                            longitude: defaultLng
+                        )
+                    }
+                }
+            }
         }
     }
     

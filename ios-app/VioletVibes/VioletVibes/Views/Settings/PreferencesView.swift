@@ -7,14 +7,17 @@ import SwiftUI
 
 struct PreferencesView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(UserSession.self) private var session
     @State private var selectedCategories: Set<String> = []
     @State private var budgetSelection: BudgetOption = .noPreference
     @State private var selectedDietaryRestrictions: Set<String> = []
     @State private var walkingDistance: WalkingDistanceOption = .noPreference
     @State private var hobbies: String = ""
     @State private var isSaving = false
+    @State private var isLoading = false
     
     private let storage = StorageService.shared
+    private let api = APIService.shared
     
     // Category options
     private let categoryOptions = [
@@ -199,6 +202,34 @@ struct PreferencesView: View {
     }
     
     private func loadPreferences() async {
+        isLoading = true
+        
+        // Try to load from backend first if JWT is available
+        if let jwt = session.jwt {
+            do {
+                let backendPrefs = try await api.fetchUserPreferences(jwt: jwt)
+                let loadedPrefs = UserPreferences.fromBackendPreferencesPayload(backendPrefs, existing: session.preferences)
+                
+                await MainActor.run {
+                    selectedCategories = loadedPrefs.categories
+                    budgetSelection = BudgetOption.fromBudgetRange(min: loadedPrefs.budgetMin, max: loadedPrefs.budgetMax)
+                    selectedDietaryRestrictions = loadedPrefs.dietaryRestrictions
+                    walkingDistance = WalkingDistanceOption.fromMinutes(loadedPrefs.maxWalkMinutes)
+                    hobbies = loadedPrefs.hobbies ?? ""
+                    session.preferences = loadedPrefs
+                    isLoading = false
+                }
+                
+                // Also save to local storage
+                await storage.saveUserPreferences(loadedPrefs)
+                return
+            } catch {
+                print("Failed to load preferences from backend: \(error)")
+                // Fall through to load from local storage
+            }
+        }
+        
+        // Fallback to local storage
         let preferences = await storage.userPreferences
         await MainActor.run {
             selectedCategories = preferences.categories
@@ -206,6 +237,7 @@ struct PreferencesView: View {
             selectedDietaryRestrictions = preferences.dietaryRestrictions
             walkingDistance = WalkingDistanceOption.fromMinutes(preferences.maxWalkMinutes)
             hobbies = preferences.hobbies ?? ""
+            isLoading = false
         }
     }
     
@@ -227,7 +259,24 @@ struct PreferencesView: View {
             preferences.maxWalkMinutes = maxWalkMinutes
             preferences.hobbies = hobbies.isEmpty ? nil : hobbies
             
+            // Save to local storage first
             await storage.saveUserPreferences(preferences)
+            
+            // Update session
+            await MainActor.run {
+                session.preferences = preferences
+            }
+            
+            // Save to backend if JWT is available
+            if let jwt = session.jwt {
+                do {
+                    _ = try await api.saveUserPreferences(preferences: preferences, jwt: jwt)
+                    print("✅ Preferences saved to backend")
+                } catch {
+                    print("⚠️ Failed to save preferences to backend: \(error)")
+                    // Continue anyway - local storage is saved
+                }
+            }
             
             await MainActor.run {
                 isSaving = false

@@ -119,8 +119,6 @@ def login():
         # Save session to Redis and ensure Postgres is up to date
         from services.session_service import save_user_session
         session_data = {
-            'google_calendar_linked': bool(user.google_refresh_token),
-            'google_calendar_enabled': user.get_settings().get('google_calendar_enabled', False),
             'calendar_integration_enabled': user.get_settings().get('calendar_integration_enabled', False),
         }
         save_user_session(user.id, session_data)

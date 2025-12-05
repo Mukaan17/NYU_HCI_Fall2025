@@ -193,9 +193,7 @@ struct DashboardView: View {
                                 weatherButtonFrame = frame
                             }
                             
-                            // Schedule Badge - Combined calendar status and free time
-                            // Priority: 1) System calendar, 2) Google Calendar from backend
-                            // Shows "Calendar not linked" if Google Calendar not connected and system calendar unavailable
+                            // Schedule Badge - System calendar free time
                             Button(action: {
                                 // Always show calendar summary modal (shows system calendar events)
                                 showCalendarSummary = true
@@ -207,15 +205,8 @@ struct DashboardView: View {
                                             .scaleEffect(0.8)
                                             .tint(Theme.Colors.textPrimary)
                                     } else if let systemFreeTime = calendarViewModel.timeUntilFormatted(), !calendarViewModel.events.isEmpty {
-                                        // Priority 1: System calendar has data
+                                        // System calendar has data
                                         Text(systemFreeTime)
-                                            .themeFont(size: .base, weight: .semiBold)
-                                            .foregroundColor(Theme.Colors.textPrimary)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.75)
-                                    } else if let googleFreeTime = viewModel.nextFreeBlock, (viewModel.calendarLinked || session.googleCalendarLinked) {
-                                        // Priority 2: Google Calendar from backend (user's login email)
-                                        Text(formatFreeTimeBlock(googleFreeTime))
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
@@ -226,18 +217,8 @@ struct DashboardView: View {
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
-                                    } else if !viewModel.calendarLinked && !session.googleCalendarLinked {
-                                        // No system calendar events AND Google Calendar not linked
-                                        // Show "Calendar not linked" to prompt user to link Google Calendar
-                                        HStack(spacing: Theme.Spacing.sm) {
-                                            Image(systemName: "calendar.badge.exclamationmark")
-                                                .font(.system(size: 15))
-                                            Text("Calendar not linked")
-                                                .themeFont(size: .base, weight: .semiBold)
-                                        }
-                                        .foregroundColor(Theme.Colors.textSecondary)
                                     } else {
-                                        // Free all day (no events in either calendar, but Google Calendar is linked)
+                                        // No events - free all day
                                         Text("Free all day")
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
@@ -387,16 +368,7 @@ struct DashboardView: View {
             // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
-                isPresented: $showCalendarSummary,
-                calendarLinked: viewModel.calendarLinked || session.googleCalendarLinked,
-                onCalendarLinked: {
-                    // Reload dashboard when calendar is linked
-                    Task {
-                        if let jwt = session.jwt {
-                            await viewModel.loadDashboard(jwt: jwt)
-                        }
-                    }
-                }
+                isPresented: $showCalendarSummary
             )
         }
         .refreshable {

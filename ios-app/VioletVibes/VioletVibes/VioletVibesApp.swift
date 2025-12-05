@@ -27,16 +27,11 @@ struct VioletVibesApp: App {
                 .environment(userSession)
                 .preferredColorScheme(.dark)
                 .task {
-                    // Load session on app start - this restores JWT and calendar status from local storage
+                    // Load session on app start - this restores JWT from local storage
                     let storage = StorageService.shared
                     let loadedSession = await storage.loadUserSession()
                     await MainActor.run {
                         userSession.jwt = loadedSession.jwt
-                        userSession.googleCalendarLinked = loadedSession.googleCalendarLinked
-                        
-                        // If we have a JWT, verify calendar status with backend on next dashboard load
-                        // The dashboard API will return the current calendar_linked status
-                        // This ensures the local state stays in sync with the backend
                     }
                 }
         }
@@ -62,38 +57,42 @@ struct RootView: View {
                 WelcomeView()
             } else if !onboardingViewModel.hasCompletedPermissions {
                 PermissionsView()
-            } else if !onboardingViewModel.hasLoggedIn {
+            } else if userSession.jwt == nil {
+                // Only show login if no JWT token exists (user not logged in)
                 LoginView()
             } else if !onboardingViewModel.hasCompletedOnboardingSurvey {
                 OnboardingSurveyView()
-            } else if !onboardingViewModel.hasCompletedCalendarOAuth {
-                GoogleCalendarOAuthView()
             } else {
                 MainTabView()
             }
         }
         .task {
             await onboardingViewModel.checkOnboardingStatus()
+            
+            // If user has a JWT token, they're logged in - update onboarding status
+            if userSession.jwt != nil {
+                await MainActor.run {
+                    onboardingViewModel.hasLoggedIn = true
+                }
+            }
+            
             isLoading = false
             
-            // Start calendar notification monitoring if user is logged in and has calendar linked
-            if onboardingViewModel.hasLoggedIn,
-               let jwt = userSession.jwt,
-               userSession.googleCalendarLinked {
+            // Start calendar notification monitoring if user is logged in
+            if let jwt = userSession.jwt {
                 calendarNotificationService.startMonitoring(jwt: jwt)
-            }
-        }
-        .onChange(of: userSession.googleCalendarLinked) { oldValue, newValue in
-            // Start/stop monitoring when calendar link status changes
-            if newValue, let jwt = userSession.jwt {
-                calendarNotificationService.startMonitoring(jwt: jwt)
-            } else {
-                calendarNotificationService.stopMonitoring()
             }
         }
         .onChange(of: userSession.jwt) { oldValue, newValue in
+            // Update onboarding status when JWT is loaded
+            if newValue != nil {
+                Task { @MainActor in
+                    onboardingViewModel.hasLoggedIn = true
+                }
+            }
+            
             // Start/stop monitoring when JWT changes
-            if let jwt = newValue, userSession.googleCalendarLinked {
+            if let jwt = newValue {
                 calendarNotificationService.startMonitoring(jwt: jwt)
             } else {
                 calendarNotificationService.stopMonitoring()

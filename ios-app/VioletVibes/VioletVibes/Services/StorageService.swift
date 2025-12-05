@@ -549,7 +549,7 @@ actor StorageService {
         userDefaults.removeObject(forKey: Keys.userPreferences)
     }
     
-    // MARK: - Session Storage (jwt + googleCalendarLinked)
+    // MARK: - Session Storage (jwt)
     // Session is stored per-user to prevent state leakage between users
     
     func saveUserSession(_ session: UserSession) {
@@ -568,8 +568,7 @@ actor StorageService {
         }
         
         let dict: [String: Any] = [
-            "jwt": session.jwt ?? "",
-            "googleCalendarLinked": session.googleCalendarLinked
+            "jwt": session.jwt ?? ""
         ]
         userDefaults.set(dict, forKey: userKey)
         
@@ -599,11 +598,9 @@ actor StorageService {
         if let key = userKey,
            let dict = userDefaults.dictionary(forKey: key) {
             session.jwt = dict["jwt"] as? String
-            session.googleCalendarLinked = dict["googleCalendarLinked"] as? Bool ?? false
         } else if let dict = userDefaults.dictionary(forKey: Keys.userSession) {
             // Fallback to global key (legacy support)
             session.jwt = dict["jwt"] as? String
-            session.googleCalendarLinked = dict["googleCalendarLinked"] as? Bool ?? false
         }
         
         return session

@@ -1,15 +1,11 @@
 # routes/dashboard_routes.py
 from flask import Blueprint, jsonify, g
-import os
 import logging
 
 from utils.auth import require_auth
 import utils.limiter as limiter_module
 
 from services.weather_service import current_weather
-from services.calendar_service import fetch_free_time_blocks, fetch_today_events
-from services.calendar_suggestion_service import compute_next_free_block
-from services.free_time_recommender import get_free_time_suggestion
 from services.recommendation.quick_recommendations import get_quick_recommendations
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -32,15 +28,6 @@ def dashboard():
 
     logger.info(f"[{req_id}] Dashboard request from user {user.id} (email: {user.email})")
 
-    # CRITICAL: Always check the current user's google_refresh_token
-    # This ensures calendar status is user-specific and doesn't leak between users
-    if not user.google_refresh_token:
-        logger.debug(f"[{req_id}] User {user.id} does not have Google Calendar linked")
-        linked_calendar = False
-    else:
-        logger.debug(f"[{req_id}] User {user.id} has Google Calendar linked")
-        linked_calendar = True
-
     # ------------------------------------------------------
     # WEATHER
     # ------------------------------------------------------
@@ -51,37 +38,9 @@ def dashboard():
         weather = {"error": "Weather unavailable"}
 
     # ------------------------------------------------------
-    # CALENDAR (free time, next free block, suggestion)
+    # CALENDAR
+    # System calendar only - handled client-side
     # ------------------------------------------------------
-    next_block = None
-    suggestion_payload = None
-
-    if linked_calendar:
-        try:
-            free_blocks = fetch_free_time_blocks(
-                refresh_token=user.google_refresh_token,
-                client_id=os.getenv("GOOGLE_CLIENT_ID"),
-                client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-            )
-
-            next_block = compute_next_free_block(free_blocks)
-
-            # Only generate free-time suggestion if block exists
-            if next_block:
-                events = fetch_today_events(
-                    refresh_token=user.google_refresh_token,
-                    client_id=os.getenv("GOOGLE_CLIENT_ID"),
-                    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-                )
-
-                suggestion_payload = get_free_time_suggestion(
-                    free_block=next_block,
-                    events=events,
-                    user_profile=user.get_preferences()
-                )
-
-        except Exception as e:
-            logger.error(f"[{req_id}] DASHBOARD CALENDAR ERROR: {e}", exc_info=True)
 
     # ------------------------------------------------------
     # QUICK RECOMMENDATIONS (all 4 categories)
@@ -108,9 +67,9 @@ def dashboard():
     # ------------------------------------------------------
     return jsonify({
         "weather": weather,
-        "calendar_linked": linked_calendar,
-        "next_free": next_block,
-        "free_time_suggestion": suggestion_payload,
+        "calendar_linked": False,  # System calendar only - handled client-side
+        "next_free": None,
+        "free_time_suggestion": None,
         "quick_recommendations": quick_recs,
     }), 200
 

@@ -210,7 +210,6 @@ struct OnboardingSurveyView: View {
                 dietaryRestrictions: selectedDietaryRestrictions,
                 maxWalkMinutes: maxWalkMinutes,
                 hobbies: hobbies.isEmpty ? nil : hobbies,
-                googleCalendarEnabled: false,
                 notificationsEnabled: false,
                 usePreferencesForPersonalization: true
             )

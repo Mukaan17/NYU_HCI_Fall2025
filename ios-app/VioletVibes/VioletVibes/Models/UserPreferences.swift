@@ -20,7 +20,6 @@ struct UserPreferences: Codable, Equatable {
     var dietaryRestrictions: Set<String> // Vegetarian, Vegan, Halal, Kosher, etc.
     var maxWalkMinutes: Int? // 5, 10, 15, 20, or nil for no preference
     var hobbies: String?
-    var googleCalendarEnabled: Bool
     var notificationsEnabled: Bool
     var usePreferencesForPersonalization: Bool
     
@@ -31,7 +30,6 @@ struct UserPreferences: Codable, Equatable {
         dietaryRestrictions: Set<String> = [],
         maxWalkMinutes: Int? = nil,
         hobbies: String? = nil,
-        googleCalendarEnabled: Bool = false,
         notificationsEnabled: Bool = false,
         usePreferencesForPersonalization: Bool = true
     ) {
@@ -41,7 +39,6 @@ struct UserPreferences: Codable, Equatable {
         self.dietaryRestrictions = dietaryRestrictions
         self.maxWalkMinutes = maxWalkMinutes
         self.hobbies = hobbies
-        self.googleCalendarEnabled = googleCalendarEnabled
         self.notificationsEnabled = notificationsEnabled
         self.usePreferencesForPersonalization = usePreferencesForPersonalization
     }
@@ -185,9 +182,6 @@ extension UserPreferences {
             return merged
         }
         
-        if let calendarEnabled = settings.google_calendar_enabled {
-            merged.googleCalendarEnabled = calendarEnabled
-        }
         
         if let notificationsEnabled = settings.notifications_enabled {
             merged.notificationsEnabled = notificationsEnabled

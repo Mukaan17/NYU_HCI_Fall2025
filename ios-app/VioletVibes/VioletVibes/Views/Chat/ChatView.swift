@@ -148,15 +148,8 @@ struct ChatView: View {
                         .scaleEffect(0.8)
                         .tint(Theme.Colors.textPrimary)
                 } else if let systemFreeTime = calendarViewModel.timeUntilFormatted(), !calendarViewModel.events.isEmpty {
-                    // Priority 1: System calendar has data
+                    // System calendar has data
                     Text(systemFreeTime)
-                        .themeFont(size: .base, weight: .semiBold)
-                        .foregroundColor(Theme.Colors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                } else if let googleFreeTime = dashboardViewModel.nextFreeBlock, (dashboardViewModel.calendarLinked || session.googleCalendarLinked) {
-                    // Priority 2: Google Calendar from backend (user's login email)
-                    Text(formatFreeTimeBlock(googleFreeTime))
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
@@ -167,18 +160,8 @@ struct ChatView: View {
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
-                } else if !dashboardViewModel.calendarLinked && !session.googleCalendarLinked {
-                    // No system calendar events AND Google Calendar not linked
-                    // Show "Calendar not linked" to prompt user to link Google Calendar
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 15))
-                        Text("Calendar not linked")
-                            .themeFont(size: .base, weight: .semiBold)
-                    }
-                    .foregroundColor(Theme.Colors.textSecondary)
                 } else {
-                    // Free all day (no events in either calendar, but Google Calendar is linked)
+                    // No events - free all day
                     Text("Free all day")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
@@ -371,16 +354,7 @@ struct ChatView: View {
             // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
-                isPresented: $showCalendarSummary,
-                calendarLinked: dashboardViewModel.calendarLinked || session.googleCalendarLinked,
-                onCalendarLinked: {
-                    // Reload dashboard when calendar is linked
-                    Task {
-                        if let jwt = session.jwt {
-                            await dashboardViewModel.loadDashboard(jwt: jwt)
-                        }
-                    }
-                }
+                isPresented: $showCalendarSummary
             )
         }
     }

@@ -99,27 +99,6 @@ struct AccountSettingsView: View {
                                 }
                             )
                             
-                            // Google Calendar Permission
-                            PermissionToggleRow(
-                                icon: "📅",
-                                title: "Google Calendar",
-                                description: "Allow VioletVibes to read your free time from Google Calendar to recommend events when you're available?",
-                                isEnabled: $calendarPermission,
-                                onToggle: { enabled in
-                                    if enabled {
-                                        Task {
-                                            await requestCalendarPermission()
-                                            await saveCalendarPreference(enabled)
-                                        }
-                                    } else {
-                                        Task {
-                                            await saveCalendarPreference(false)
-                                        }
-                                        showSettingsAlert(for: "Calendar")
-                                    }
-                                }
-                            )
-                            
                             // Notification Permission
                             PermissionToggleRow(
                                 icon: "🔔",
@@ -478,12 +457,6 @@ struct AccountSettingsView: View {
         }
     }
     
-    private func saveCalendarPreference(_ enabled: Bool) async {
-        var preferences = await storage.userPreferences
-        preferences.googleCalendarEnabled = enabled
-        await storage.saveUserPreferences(preferences)
-    }
-    
     private func saveNotificationPreference(_ enabled: Bool) async {
         var preferences = await storage.userPreferences
         preferences.notificationsEnabled = enabled
@@ -659,7 +632,6 @@ struct AccountSettingsSectionView: View {
             await MainActor.run {
                 // Clear session state
                 session.jwt = nil
-                session.googleCalendarLinked = false
                 session.preferences = UserPreferences()
                 session.settings = nil
                 

@@ -68,13 +68,6 @@ struct PermissionsView: View {
                             )
                             
                             PermissionCard(
-                                icon: "📅",
-                                title: "Google Calendar Access",
-                                description: "Allow VioletVibes to read your free time from Google Calendar to recommend events when you're available?",
-                                isEnabled: calendarPermission
-                            )
-                            
-                            PermissionCard(
                                 icon: "🔔",
                                 title: "Push Notifications",
                                 description: "Enable notifications for personalized recommendations?",
@@ -179,7 +172,6 @@ struct PermissionsView: View {
         
         // Save permission states to UserPreferences
         var preferences = await storage.userPreferences
-        preferences.googleCalendarEnabled = calendar
         preferences.notificationsEnabled = notification
         await storage.saveUserPreferences(preferences)
         

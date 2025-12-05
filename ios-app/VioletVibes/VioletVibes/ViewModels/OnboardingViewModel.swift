@@ -13,7 +13,6 @@ final class OnboardingViewModel {
     var hasCompletedPermissions: Bool = false
     var hasLoggedIn: Bool = false
     var hasCompletedOnboardingSurvey: Bool = false
-    var hasCompletedCalendarOAuth: Bool = false
     
     private let storage = StorageService.shared
     
@@ -28,10 +27,8 @@ final class OnboardingViewModel {
             // Onboarding survey completion is now user-specific
             // Check from storage (which is user-scoped)
             hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
-            hasCompletedCalendarOAuth = await storage.hasCompletedCalendarOAuth
         } else {
             hasCompletedOnboardingSurvey = false
-            hasCompletedCalendarOAuth = false
         }
     }
     
@@ -63,13 +60,6 @@ final class OnboardingViewModel {
         }
     }
     
-    func markCalendarOAuthCompleted() {
-        Task { @MainActor in
-            await storage.setHasCompletedCalendarOAuth(true)
-            hasCompletedCalendarOAuth = true
-        }
-    }
-    
     func resetOnboarding() {
         Task { @MainActor in
             await storage.resetOnboarding()
@@ -77,7 +67,6 @@ final class OnboardingViewModel {
             hasCompletedPermissions = false
             hasLoggedIn = false
             hasCompletedOnboardingSurvey = false
-            hasCompletedCalendarOAuth = false
         }
     }
 }

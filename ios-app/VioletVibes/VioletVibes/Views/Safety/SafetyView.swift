@@ -299,6 +299,9 @@ struct SafetyView: View {
             // Set as selected place (this will trigger route in MapView)
             placeViewModel.setSelectedPlace(homePlace)
             
+            // Enable home-only mode to hide other pins
+            placeViewModel.setHomeOnlyMode(true)
+            
             // Switch to Map tab
             await MainActor.run {
                 tabCoordinator.selectedTab = .map

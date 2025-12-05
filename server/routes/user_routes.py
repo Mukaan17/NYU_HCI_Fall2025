@@ -24,6 +24,8 @@ def me():
             {
                 "id": user.id,
                 "email": user.email,
+                "first_name": user.first_name,
+                "home_address": user.get_home_address(),  # Decrypted
                 "preferences": user.get_preferences(),
                 "settings": user.get_settings(),
                 "recent_activity": user.get_recent_activity(),
@@ -172,6 +174,71 @@ def activity():
     except Exception as e:
         logger.error(
             f"Request {g.get('request_id', 'unknown')}: Error logging activity - {e}",
+            exc_info=True,
+        )
+        db.session.rollback()
+        return (
+            jsonify(
+                {
+                    "error": "Internal server error",
+                    "request_id": g.get("request_id", "unknown"),
+                }
+            ),
+            500,
+        )
+
+
+@user_bp.route("/profile", methods=["GET", "POST"])
+@require_auth
+def profile():
+    """
+    Get or update user profile (first_name, home_address).
+    GET: Returns current profile
+    POST: Updates profile with { "first_name": "...", "home_address": "..." }
+    """
+    try:
+        user = g.current_user
+        
+        if request.method == "GET":
+            logger.debug(
+                f"Request {g.get('request_id', 'unknown')}: Profile requested - {user.id}"
+            )
+            return jsonify({
+                "first_name": user.first_name,
+                "home_address": user.get_home_address(),  # Decrypted
+            })
+        
+        # POST: update profile
+        data = request.get_json(force=True) or {}
+        
+        # Update first name if provided
+        if "first_name" in data:
+            first_name = (data.get("first_name") or "").strip()
+            user.first_name = first_name if first_name else None
+        
+        # Update home address if provided (encrypted)
+        if "home_address" in data:
+            home_address = (data.get("home_address") or "").strip()
+            try:
+                user.set_home_address(home_address if home_address else None)
+            except Exception as e:
+                logger.error(f"Failed to encrypt home address: {e}")
+                return jsonify({"error": "Failed to save home address"}), 500
+        
+        db.session.commit()
+        
+        logger.info(
+            f"Request {g.get('request_id', 'unknown')}: Profile updated - {user.id}"
+        )
+        
+        return jsonify({
+            "first_name": user.first_name,
+            "home_address": user.get_home_address(),  # Decrypted
+        })
+        
+    except Exception as e:
+        logger.error(
+            f"Request {g.get('request_id', 'unknown')}: Error with profile - {e}",
             exc_info=True,
         )
         db.session.rollback()

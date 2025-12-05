@@ -1,6 +1,10 @@
 from models.db import db
 from datetime import datetime
 import json
+import logging
+from utils.encryption import encrypt_data, decrypt_data
+
+logger = logging.getLogger(__name__)
 
 class User(db.Model):
     __tablename__ = "users"
@@ -8,6 +12,10 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    
+    # User profile data
+    first_name = db.Column(db.String(100), nullable=True)  # User's first name
+    home_address_encrypted = db.Column(db.Text, nullable=True)  # Encrypted home address
 
     # Flexible JSON blobs
     preferences = db.Column(db.Text, default='{}')   # e.g. vibes, distance, etc.
@@ -77,4 +85,32 @@ class User(db.Model):
             parts.append(f"Interests include: {interests}")
 
         return ". ".join(parts)
+    
+    # Home address encryption/decryption
+    def get_home_address(self) -> str:
+        """Get decrypted home address."""
+        # Handle case where column doesn't exist yet (graceful migration)
+        if not hasattr(self, 'home_address_encrypted') or not self.home_address_encrypted:
+            return ""
+        try:
+            return decrypt_data(self.home_address_encrypted)
+        except Exception as e:
+            logger.warning(f"Failed to decrypt home address for user {self.id}: {e}")
+            return ""
+    
+    def set_home_address(self, address: str):
+        """Set encrypted home address."""
+        # Handle case where column doesn't exist yet (graceful migration)
+        if not hasattr(self, 'home_address_encrypted'):
+            logger.warning(f"home_address_encrypted column not found - migration may be needed")
+            return  # Skip if column doesn't exist
+        
+        if address:
+            try:
+                self.home_address_encrypted = encrypt_data(address)
+            except Exception as e:
+                logger.error(f"Failed to encrypt home address for user {self.id}: {e}")
+                raise
+        else:
+            self.home_address_encrypted = None
 

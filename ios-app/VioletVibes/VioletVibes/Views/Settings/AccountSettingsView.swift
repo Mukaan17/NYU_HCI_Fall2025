@@ -28,6 +28,8 @@ struct AccountSettingsView: View {
     private let contactsService = ContactsService.shared
     private let remindersService = RemindersService.shared
     private let storage = StorageService.shared
+    private let api = APIService.shared
+    @Environment(UserSession.self) private var userSession
     
     var body: some View {
         NavigationStack {
@@ -443,11 +445,28 @@ struct AccountSettingsView: View {
     
     private func saveHomeAddress() {
         Task {
-            await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
-            // Show haptic feedback
-            await MainActor.run {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
+            // Save to backend if user is logged in
+            if let jwt = userSession.jwt {
+                do {
+                    _ = try await api.saveUserProfile(
+                        firstName: nil, // Don't update first name here
+                        homeAddress: homeAddress.isEmpty ? nil : homeAddress,
+                        jwt: jwt
+                    )
+                    // Also save locally for offline access
+                    await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
+                    await MainActor.run {
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                    }
+                } catch {
+                    print("Failed to save home address to backend: \(error)")
+                    // Still save locally as fallback
+                    await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
+                }
+            } else {
+                // Not logged in, just save locally
+                await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
             }
         }
     }
@@ -620,9 +639,16 @@ struct AccountSettingsSectionView: View {
     
     private func logout() {
         Task {
+            // Clear current user's data before logging out
+            await storage.clearCurrentUserHomeAddress()
+            await storage.clearCurrentUserOnboardingStatus()
+            await storage.clearCurrentUserPreferences()
+            // Clear user account
+            await storage.saveUserAccount(UserAccount(email: "", firstName: "", hasLoggedIn: false))
             await storage.setHasLoggedIn(false)
             await MainActor.run {
                 onboardingViewModel.hasLoggedIn = false
+                onboardingViewModel.hasCompletedOnboardingSurvey = false
             }
         }
     }

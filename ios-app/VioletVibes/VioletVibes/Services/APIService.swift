@@ -28,7 +28,7 @@ actor APIService {
     
     // MARK: - Authentication
     
-    nonisolated func signup(email: String, password: String) async throws -> AuthResponse {
+    nonisolated func signup(email: String, password: String, firstName: String? = nil) async throws -> AuthResponse {
         guard let url = URL(string: "\(baseURL)/api/auth/signup") else {
             print("❌ Invalid URL: \(baseURL)/api/auth/signup")
             throw APIError.invalidURL
@@ -40,14 +40,17 @@ actor APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "email": email,
             "password": password
         ]
+        if let firstName = firstName, !firstName.isEmpty {
+            body["first_name"] = firstName
+        }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         
-        print("📤 Request body: email=\(email)")
+        print("📤 Request body: email=\(email), firstName=\(firstName ?? "nil")")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -419,6 +422,82 @@ actor APIService {
             // quick_recs returns { "category": "...", "places": [...] }
             let decoded = try JSONDecoder().decode(QuickRecsAPIResponse.self, from: data)
             return decoded.places
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - User Profile
+    nonisolated func fetchUserProfile(jwt: String) async throws -> UserProfileResponse {
+        guard let url = URL(string: "\(baseURL)/api/user/profile") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(UserProfileResponse.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
+    
+    nonisolated func saveUserProfile(
+        firstName: String?,
+        homeAddress: String?,
+        jwt: String
+    ) async throws -> UserProfileResponse {
+        guard let url = URL(string: "\(baseURL)/api/user/profile") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var payload: [String: Any] = [:]
+        if let firstName = firstName {
+            payload["first_name"] = firstName
+        }
+        if let homeAddress = homeAddress {
+            payload["home_address"] = homeAddress
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        do {
+            return try JSONDecoder().decode(UserProfileResponse.self, from: data)
         } catch {
             throw APIError.decodingError(error.localizedDescription)
         }

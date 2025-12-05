@@ -23,12 +23,17 @@ struct MapView: View {
     @State private var showMapsPicker = false
     @State private var pendingDestination: (coordinate: CLLocationCoordinate2D, name: String)? = nil
     @State private var dragDistance: CGFloat = 0
+    @State private var homeAddress: String? = nil
+    @State private var homeCoordinate: CLLocationCoordinate2D? = nil
+    @State private var isHomeSelected: Bool = false
+    @State private var isGeocodingHome: Bool = false
     private let geocodeThrottle: TimeInterval = 5.0 // Only geocode every 5 seconds
     private let tapThreshold: CGFloat = 10 // Pixels - if drag distance is less than this, it's a tap
     
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
     private let geocoder = CLGeocoder()
+    private let storage = StorageService.shared
     
     var body: some View {
         ZStack {
@@ -54,12 +59,43 @@ struct MapView: View {
         }
         .onChange(of: placeViewModel.selectedPlace) { oldValue, newValue in
             handlePlaceChange(oldValue: oldValue, newValue: newValue)
+            // Clear home selection when a place is selected
+            if newValue != nil {
+                isHomeSelected = false
+            }
+        }
+        .onChange(of: placeViewModel.showHomeOnly) { oldValue, newValue in
+            // When home-only mode is enabled, select home if coordinates are available
+            if newValue, let homeCoord = homeCoordinate {
+                isHomeSelected = true
+                viewModel.zoomToLocation(
+                    latitude: homeCoord.latitude,
+                    longitude: homeCoord.longitude,
+                    animated: true
+                )
+            }
+        }
+        .onChange(of: isHomeSelected) { oldValue, newValue in
+            // Clear place selection when home is selected
+            if newValue {
+                placeViewModel.clearSelectedPlace()
+            }
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
             handleLocationChange(oldLocation: oldValue, newLocation: newValue)
         }
         .onAppear {
             handleAppear()
+            loadHomeAddress()
+            // If in home-only mode, ensure home is selected
+            if placeViewModel.showHomeOnly, let homeCoord = homeCoordinate {
+                isHomeSelected = true
+                viewModel.zoomToLocation(
+                    latitude: homeCoord.latitude,
+                    longitude: homeCoord.longitude,
+                    animated: true
+                )
+            }
         }
         .task {
             handleTask()
@@ -80,16 +116,30 @@ struct MapView: View {
                 }
             }
             
-            // Only show pins for backend-suggested places
-            ForEach(placeViewModel.allPlaces) { place in
-                Annotation(place.name, coordinate: place.coordinate) {
+            // Only show pins for backend-suggested places (unless in home-only mode)
+            if !placeViewModel.showHomeOnly {
+                ForEach(placeViewModel.allPlaces) { place in
+                    Annotation(place.name, coordinate: place.coordinate) {
+                        Button(action: {
+                            handlePinTap(place: place)
+                        }) {
+                            CategoryPinView(
+                                place: place,
+                                isSelected: place.id == placeViewModel.selectedPlace?.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            
+            // Home pin (if home address is set)
+            if let homeCoord = homeCoordinate {
+                Annotation("Home", coordinate: homeCoord) {
                     Button(action: {
-                        handlePinTap(place: place)
+                        handleHomePinTap()
                     }) {
-                        CategoryPinView(
-                            place: place,
-                            isSelected: place.id == placeViewModel.selectedPlace?.id
-                        )
+                        HomePinView(isSelected: isHomeSelected)
                     }
                     .buttonStyle(.plain)
                 }
@@ -221,7 +271,9 @@ struct MapView: View {
     @ViewBuilder
     private var bottomSheetCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-            if let place = placeViewModel.selectedPlace {
+            if isHomeSelected {
+                homeCardContent
+            } else if let place = placeViewModel.selectedPlace {
                 placeCardContent(place: place)
             } else {
                 defaultCardContent
@@ -395,6 +447,83 @@ struct MapView: View {
             .foregroundColor(Theme.Colors.textSecondary)
     }
     
+    @ViewBuilder
+    private var homeCardContent: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "house.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Theme.Colors.gradientStart)
+                Text("Home")
+                    .themeFont(size: .`2xl`, weight: .semiBold)
+                    .foregroundColor(Theme.Colors.textPrimary)
+            }
+            
+            if let address = homeAddress {
+                Text(address)
+                    .themeFont(size: .sm)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+            
+            Text("Home base • NYU")
+                .themeFont(size: .base)
+                .foregroundColor(Theme.Colors.textSecondary)
+            
+            getHomeDirectionsButton
+        }
+    }
+    
+    @ViewBuilder
+    private var getHomeDirectionsButton: some View {
+        Button(action: {
+            handleGetHomeDirections()
+        }) {
+            HStack {
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Get Directions")
+                    .themeFont(size: .base, weight: .semiBold)
+            }
+            .foregroundColor(Theme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Theme.Spacing.md)
+            .background(
+                LinearGradient(
+                    colors: [Theme.Colors.gradientStart, Theme.Colors.gradientEnd],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(Theme.BorderRadius.md)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .stroke(Theme.Colors.border.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .confirmationDialog("Open Directions", isPresented: $showMapsPicker, titleVisibility: .visible) {
+            Button("Apple Maps") {
+                if let destination = pendingDestination {
+                    let userLocation = currentDeviceLocation ?? locationManager.location
+                    let origin = userLocation?.coordinate ?? CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng)
+                    openInAppleMaps(origin: origin, destination: destination.coordinate, destinationName: destination.name)
+                }
+                pendingDestination = nil
+            }
+            Button("Google Maps") {
+                if let destination = pendingDestination {
+                    let userLocation = currentDeviceLocation ?? locationManager.location
+                    let origin = userLocation?.coordinate ?? CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng)
+                    openInGoogleMaps(origin: origin, destination: destination.coordinate, destinationName: destination.name)
+                }
+                pendingDestination = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDestination = nil
+            }
+        }
+    }
+    
     // MARK: - Center to Location Button
     @ViewBuilder
     private var centerToLocationButton: some View {
@@ -431,9 +560,16 @@ struct MapView: View {
     
     // MARK: - Event Handlers
     private func handleMapTap() {
-        // Dismiss the selected place card when tapping on map
+        // Dismiss the selected place or home card when tapping on map
         if placeViewModel.selectedPlace != nil {
             placeViewModel.clearSelectedPlace()
+        }
+        if isHomeSelected {
+            isHomeSelected = false
+        }
+        // Exit home-only mode when user interacts with map
+        if placeViewModel.showHomeOnly {
+            placeViewModel.setHomeOnlyMode(false)
         }
     }
     
@@ -441,6 +577,9 @@ struct MapView: View {
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
         
+        // Clear home selection and exit home-only mode
+        isHomeSelected = false
+        placeViewModel.setHomeOnlyMode(false)
         placeViewModel.setSelectedPlace(place)
         
         // Zoom in on the selected pin
@@ -449,6 +588,24 @@ struct MapView: View {
             longitude: place.longitude,
             animated: true
         )
+    }
+    
+    private func handleHomePinTap() {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        
+        // Clear place selection
+        placeViewModel.clearSelectedPlace()
+        isHomeSelected = true
+        
+        // Zoom in on home location
+        if let homeCoord = homeCoordinate {
+            viewModel.zoomToLocation(
+                latitude: homeCoord.latitude,
+                longitude: homeCoord.longitude,
+                animated: true
+            )
+        }
     }
     
     private func handlePlaceChange(oldValue: SelectedPlace?, newValue: SelectedPlace?) {
@@ -558,6 +715,10 @@ struct MapView: View {
     }
     
     private func loadRecommendationsForMap() {
+        // Don't load recommendations if in home-only mode
+        guard !placeViewModel.showHomeOnly else {
+            return
+        }
         Task {
             // Fetch recommendations from multiple categories to get 20 total
             let apiService = APIService.shared
@@ -793,6 +954,55 @@ struct MapView: View {
             }
         }
     }
+    
+    // MARK: - Home Address Functions
+    private func loadHomeAddress() {
+        Task {
+            let address = await storage.homeAddress
+            await MainActor.run {
+                homeAddress = address
+                if let address = address, !address.isEmpty {
+                    geocodeHomeAddress(address)
+                }
+            }
+        }
+    }
+    
+    private func geocodeHomeAddress(_ address: String) {
+        guard !isGeocodingHome else { return }
+        isGeocodingHome = true
+        
+        Task {
+            do {
+                let placemarks = try await geocoder.geocodeAddressString(address)
+                
+                await MainActor.run {
+                    if let placemark = placemarks.first,
+                       let location = placemark.location {
+                        homeCoordinate = location.coordinate
+                    }
+                    isGeocodingHome = false
+                }
+            } catch {
+                await MainActor.run {
+                    print("Failed to geocode home address: \(error.localizedDescription)")
+                    isGeocodingHome = false
+                }
+            }
+        }
+    }
+    
+    private func handleGetHomeDirections() {
+        guard let homeCoord = homeCoordinate else { return }
+        
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        
+        // Store destination and show picker
+        let destinationName = homeAddress ?? "Home"
+        pendingDestination = (coordinate: homeCoord, name: destinationName)
+        showMapsPicker = true
+    }
 }
 
 // Location Blip View - Animated location indicator
@@ -865,6 +1075,33 @@ struct CategoryPinView: View {
             
             // Glyph icon
             Image(systemName: categoryInfo.glyph)
+                .foregroundColor(.white)
+                .font(.system(size: isSelected ? 18 : 16, weight: .semibold))
+        }
+        .shadow(color: .black.opacity(0.5), radius: 6, x: 0, y: 3)
+        .scaleEffect(isSelected ? 1.15 : 1.0)
+        .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+// Home Pin View - Shows home location with house glyph
+struct HomePinView: View {
+    let isSelected: Bool
+    
+    var body: some View {
+        ZStack {
+            // Background circle for opacity
+            Circle()
+                .fill(Color.white.opacity(0.95))
+                .frame(width: isSelected ? 40 : 36, height: isSelected ? 40 : 36)
+            
+            // Home-colored circle (using gradient start color)
+            Circle()
+                .fill(Theme.Colors.gradientStart)
+                .frame(width: isSelected ? 32 : 28, height: isSelected ? 32 : 28)
+            
+            // Home glyph icon
+            Image(systemName: "house.fill")
                 .foregroundColor(.white)
                 .font(.system(size: isSelected ? 18 : 16, weight: .semibold))
         }

@@ -20,7 +20,16 @@ final class OnboardingViewModel {
         hasSeenWelcome = await storage.hasSeenWelcome
         hasCompletedPermissions = await storage.hasCompletedPermissions
         hasLoggedIn = await storage.hasLoggedIn
-        hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
+        
+        // Check onboarding survey status from backend if user is logged in
+        // This ensures proper isolation between users
+        if hasLoggedIn {
+            // Onboarding survey completion is now user-specific
+            // Check from storage (which is user-scoped)
+            hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
+        } else {
+            hasCompletedOnboardingSurvey = false
+        }
     }
     
     func markWelcomeSeen() {

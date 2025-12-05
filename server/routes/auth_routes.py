@@ -38,8 +38,15 @@ def signup():
 
         # hash password
         pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+        
+        # Get first name from request (optional during signup)
+        first_name = (data.get("first_name") or "").strip()
 
         user = User(email=email, password_hash=pw_hash)
+        
+        # Set first name if provided
+        if first_name:
+            user.first_name = first_name
 
         # optional: set default prefs/settings
         user.set_preferences({
@@ -69,6 +76,8 @@ def signup():
             "user": {
                 "id": user.id,
                 "email": user.email,
+                "first_name": user.first_name,
+                "home_address": user.get_home_address(),  # Decrypted
                 "preferences": user.get_preferences(),
                 "settings": user.get_settings(),
             },
@@ -113,6 +122,8 @@ def login():
             "user": {
                 "id": user.id,
                 "email": user.email,
+                "first_name": user.first_name,
+                "home_address": user.get_home_address(),  # Decrypted
                 "preferences": user.get_preferences(),
                 "settings": user.get_settings(),
             },

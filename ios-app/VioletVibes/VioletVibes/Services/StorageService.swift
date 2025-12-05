@@ -64,13 +64,48 @@ actor StorageService {
         userDefaults.set(value, forKey: Keys.hasLoggedIn)
     }
     
-    // MARK: - Onboarding Survey
+    // MARK: - Onboarding Survey (User-Specific)
     var hasCompletedOnboardingSurvey: Bool {
-        get { userDefaults.bool(forKey: Keys.hasCompletedOnboardingSurvey) }
+        get {
+            // Get user-specific onboarding survey completion status
+            guard let userAccount = userAccount else {
+                return false
+            }
+            let userKey = "\(Keys.hasCompletedOnboardingSurvey)_\(userAccount.email)"
+            return userDefaults.bool(forKey: userKey)
+        }
     }
     
     func setHasCompletedOnboardingSurvey(_ value: Bool) {
-        userDefaults.set(value, forKey: Keys.hasCompletedOnboardingSurvey)
+        // Get user-specific onboarding survey completion status key
+        guard let userAccount = userAccount else {
+            return // Can't save without a user account
+        }
+        let userKey = "\(Keys.hasCompletedOnboardingSurvey)_\(userAccount.email)"
+        userDefaults.set(value, forKey: userKey)
+    }
+    
+    /// Clear onboarding survey status for the current user (used during logout)
+    func clearCurrentUserOnboardingStatus() {
+        if let userAccount = userAccount {
+            let userKey = "\(Keys.hasCompletedOnboardingSurvey)_\(userAccount.email)"
+            userDefaults.removeObject(forKey: userKey)
+        }
+        // Also clear legacy global onboarding status if it exists
+        userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
+    }
+    
+    /// Clear onboarding survey status for all users (used during reset)
+    func clearAllOnboardingStatuses() {
+        // Remove all onboarding survey keys (in case of migration)
+        let keys = userDefaults.dictionaryRepresentation().keys
+        for key in keys {
+            if key.hasPrefix(Keys.hasCompletedOnboardingSurvey + "_") {
+                userDefaults.removeObject(forKey: key)
+            }
+        }
+        // Also clear legacy global onboarding status
+        userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
     }
     
     // MARK: - Reset Onboarding
@@ -82,19 +117,59 @@ actor StorageService {
         userDefaults.removeObject(forKey: Keys.userAccount)
         userDefaults.removeObject(forKey: Keys.userPreferences)
         userDefaults.removeObject(forKey: Keys.userSession)
+        // Clear user-specific home address
+        clearAllHomeAddresses()
+        // Also clear legacy global home address if it exists
+        userDefaults.removeObject(forKey: Keys.homeAddress)
     }
     
-    // MARK: - Home Address
+    // MARK: - Home Address (User-Specific)
     var homeAddress: String? {
-        get { userDefaults.string(forKey: Keys.homeAddress) }
+        get {
+            // Get user-specific home address key
+            guard let userAccount = userAccount else {
+                return nil
+            }
+            let userKey = "\(Keys.homeAddress)_\(userAccount.email)"
+            return userDefaults.string(forKey: userKey)
+        }
     }
     
     func setHomeAddress(_ address: String?) {
-        if let address = address {
-            userDefaults.set(address, forKey: Keys.homeAddress)
-        } else {
-            userDefaults.removeObject(forKey: Keys.homeAddress)
+        // Get user-specific home address key
+        guard let userAccount = userAccount else {
+            return // Can't save address without a user account
         }
+        let userKey = "\(Keys.homeAddress)_\(userAccount.email)"
+        
+        if let address = address {
+            userDefaults.set(address, forKey: userKey)
+        } else {
+            userDefaults.removeObject(forKey: userKey)
+        }
+    }
+    
+    /// Clear home address for the current user (used during logout)
+    func clearCurrentUserHomeAddress() {
+        if let userAccount = userAccount {
+            let userKey = "\(Keys.homeAddress)_\(userAccount.email)"
+            userDefaults.removeObject(forKey: userKey)
+        }
+        // Also clear legacy global home address if it exists
+        userDefaults.removeObject(forKey: Keys.homeAddress)
+    }
+    
+    /// Clear home address for all users (used during reset)
+    func clearAllHomeAddresses() {
+        // Remove all home address keys (in case of migration)
+        let keys = userDefaults.dictionaryRepresentation().keys
+        for key in keys {
+            if key.hasPrefix(Keys.homeAddress + "_") {
+                userDefaults.removeObject(forKey: key)
+            }
+        }
+        // Also clear legacy global home address
+        userDefaults.removeObject(forKey: Keys.homeAddress)
     }
     
     // MARK: - Trusted Contacts
@@ -166,30 +241,65 @@ actor StorageService {
         setTrustedContacts(contacts)
     }
     
-    // MARK: - User Account
+    // MARK: - User Account (User-Specific)
     var userAccount: UserAccount? {
         get {
-            guard let data = userDefaults.data(forKey: Keys.userAccount),
-                  let account = try? JSONDecoder().decode(UserAccount.self, from: data) else {
-                return nil
+            // Try to get current user account from global key first (for backward compatibility)
+            if let data = userDefaults.data(forKey: Keys.userAccount),
+               let account = try? JSONDecoder().decode(UserAccount.self, from: data) {
+                return account
             }
-            return account
+            return nil
         }
     }
     
     func saveUserAccount(_ account: UserAccount) {
         if let data = try? JSONEncoder().encode(account) {
+            // Save to global key (current user)
             userDefaults.set(data, forKey: Keys.userAccount)
+            
+            // Migrate old global home address to user-specific key if it exists
+            if let oldAddress = userDefaults.string(forKey: Keys.homeAddress), !oldAddress.isEmpty {
+                let userKey = "\(Keys.homeAddress)_\(account.email)"
+                userDefaults.set(oldAddress, forKey: userKey)
+                // Remove old global key
+                userDefaults.removeObject(forKey: Keys.homeAddress)
+            }
+            
+            // Migrate old global onboarding survey status to user-specific key if it exists
+            let oldOnboardingStatus = userDefaults.bool(forKey: Keys.hasCompletedOnboardingSurvey)
+            if oldOnboardingStatus {
+                let userKey = "\(Keys.hasCompletedOnboardingSurvey)_\(account.email)"
+                userDefaults.set(true, forKey: userKey)
+                // Remove old global key
+                userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
+            }
         } else {
             userDefaults.removeObject(forKey: Keys.userAccount)
         }
     }
     
-    // MARK: - User Preferences
+    // MARK: - User Preferences (User-Specific)
     var userPreferences: UserPreferences {
         get {
-            guard let data = userDefaults.data(forKey: Keys.userPreferences),
+            // Get user-specific preferences
+            guard let userAccount = userAccount else {
+                return UserPreferences() // Return default if no user account
+            }
+            let userKey = "\(Keys.userPreferences)_\(userAccount.email)"
+            
+            guard let data = userDefaults.data(forKey: userKey),
                   let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) else {
+                // Try legacy global key for backward compatibility
+                if let data = userDefaults.data(forKey: Keys.userPreferences),
+                   let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) {
+                    // Migrate to user-specific key
+                    if let migratedData = try? JSONEncoder().encode(preferences) {
+                        userDefaults.set(migratedData, forKey: userKey)
+                        userDefaults.removeObject(forKey: Keys.userPreferences)
+                    }
+                    return preferences
+                }
                 return UserPreferences()
             }
             return preferences
@@ -197,11 +307,29 @@ actor StorageService {
     }
     
     func saveUserPreferences(_ preferences: UserPreferences) {
-        if let data = try? JSONEncoder().encode(preferences) {
-            userDefaults.set(data, forKey: Keys.userPreferences)
-        } else {
-            userDefaults.removeObject(forKey: Keys.userPreferences)
+        // Get user-specific preferences key
+        guard let userAccount = userAccount else {
+            return // Can't save preferences without a user account
         }
+        let userKey = "\(Keys.userPreferences)_\(userAccount.email)"
+        
+        if let data = try? JSONEncoder().encode(preferences) {
+            userDefaults.set(data, forKey: userKey)
+            // Also remove legacy global key if it exists
+            userDefaults.removeObject(forKey: Keys.userPreferences)
+        } else {
+            userDefaults.removeObject(forKey: userKey)
+        }
+    }
+    
+    /// Clear preferences for the current user (used during logout)
+    func clearCurrentUserPreferences() {
+        if let userAccount = userAccount {
+            let userKey = "\(Keys.userPreferences)_\(userAccount.email)"
+            userDefaults.removeObject(forKey: userKey)
+        }
+        // Also clear legacy global preferences if they exist
+        userDefaults.removeObject(forKey: Keys.userPreferences)
     }
     
     // MARK: - Session Storage (jwt + googleCalendarLinked)

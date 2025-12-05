@@ -19,3 +19,4 @@ tenacity==8.2.3
 gunicorn==21.2.0
 psycopg2-binary==2.9.9
 polyline==2.0.1
+cryptography==42.0.5

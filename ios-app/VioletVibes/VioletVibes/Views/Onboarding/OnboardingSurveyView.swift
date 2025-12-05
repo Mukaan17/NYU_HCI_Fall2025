@@ -7,6 +7,7 @@ import SwiftUI
 
 struct OnboardingSurveyView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(UserSession.self) private var userSession
     @State private var selectedCategories: Set<String> = []
     @State private var budgetSelection: BudgetOption = .noPreference
     @State private var selectedDietaryRestrictions: Set<String> = []
@@ -15,6 +16,7 @@ struct OnboardingSurveyView: View {
     @State private var isSaving = false
     
     private let storage = StorageService.shared
+    private let api = APIService.shared
     
     // Category options
     private let categoryOptions = [
@@ -213,6 +215,17 @@ struct OnboardingSurveyView: View {
                 usePreferencesForPersonalization: true
             )
             
+            // Save preferences to backend if user is logged in
+            if let jwt = userSession.jwt {
+                do {
+                    _ = try await api.saveUserPreferences(preferences: preferences, jwt: jwt)
+                } catch {
+                    print("Failed to save preferences to backend: \(error)")
+                    // Continue anyway - preferences saved locally
+                }
+            }
+            
+            // Also save locally
             await storage.saveUserPreferences(preferences)
             await storage.setHasCompletedOnboardingSurvey(true)
             

@@ -62,6 +62,8 @@ struct NYCEvent: Codable, Sendable {
 struct AuthUserPayload: Codable, Sendable {
     let id: Int
     let email: String
+    let first_name: String?
+    let home_address: String?
     let preferences: BackendPreferencesPayload?
     let settings: BackendSettingsPayload?
 }
@@ -121,5 +123,12 @@ struct CalendarEvent: Codable, Sendable {
     let start: String?
     let end: String?
     let location: String?
+}
+
+// MARK: - User Profile Response
+
+struct UserProfileResponse: Codable, Sendable {
+    let first_name: String?
+    let home_address: String?
 }
 

@@ -465,18 +465,68 @@ struct LoginView: View {
                     storage: storage
                 )
                 
-                // Save user account
-                let userAccount = UserAccount(
+                // Save user data from backend response (includes first_name and home_address)
+                // This ensures we have the latest data from database
+                var userAccount = UserAccount(
                     email: authResponse.user.email,
-                    firstName: firstName.isEmpty ? "User" : firstName.trimmingCharacters(in: .whitespaces),
+                    firstName: authResponse.user.first_name ?? "User",
                     hasLoggedIn: true
                 )
                 await storage.saveUserAccount(userAccount)
+                
+                // Save home address from backend if available (encrypted, now decrypted)
+                if let homeAddress = authResponse.user.home_address, !homeAddress.isEmpty {
+                    await storage.setHomeAddress(homeAddress)
+                }
+                
+                // Check if user has completed onboarding survey
+                // If preferences exist and have meaningful data, assume onboarding is complete
+                if let prefs = authResponse.user.preferences {
+                    // Check if preferences have meaningful data (not just defaults)
+                    // This indicates the user has completed the onboarding survey
+                    let hasMeaningfulPrefs = (prefs.preferred_vibes != nil && !(prefs.preferred_vibes?.isEmpty ?? true)) ||
+                                            (prefs.dietary_restrictions != nil && !(prefs.dietary_restrictions?.isEmpty ?? true)) ||
+                                            prefs.max_walk_minutes_default != nil ||
+                                            (prefs.interests != nil && !(prefs.interests?.isEmpty ?? true))
+                    await storage.setHasCompletedOnboardingSurvey(hasMeaningfulPrefs)
+                } else {
+                    // No preferences means onboarding not completed
+                    await storage.setHasCompletedOnboardingSurvey(false)
+                }
+                
                 await storage.setHasLoggedIn(true)
+                
+                // Fetch latest profile data from backend to ensure we have current data
+                if let jwt = userSession.jwt {
+                    do {
+                        let profile = try await api.fetchUserProfile(jwt: jwt)
+                        // Update user account with latest first_name if different
+                        if let firstName = profile.first_name, firstName != userAccount.firstName {
+                            userAccount = UserAccount(
+                                email: userAccount.email,
+                                firstName: firstName,
+                                hasLoggedIn: true
+                            )
+                            await storage.saveUserAccount(userAccount)
+                        }
+                        // Update home address if different
+                        let currentAddress = await storage.homeAddress
+                        if let homeAddress = profile.home_address, homeAddress != currentAddress {
+                            await storage.setHomeAddress(homeAddress)
+                        }
+                    } catch {
+                        print("Failed to fetch user profile: \(error)")
+                        // Continue with data from login response
+                    }
+                }
                 
                 await MainActor.run {
                     isLoggingIn = false
                     onboardingViewModel.markLoggedIn()
+                    // Refresh onboarding status to reflect backend data
+                    Task {
+                        await onboardingViewModel.checkOnboardingStatus()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -527,8 +577,12 @@ struct LoginView: View {
         
         Task {
             do {
-                // Call real API
-                let authResponse = try await api.signup(email: sanitizedEmail, password: sanitizedPassword)
+                // Call real API with first name
+                let authResponse = try await api.signup(
+                    email: sanitizedEmail,
+                    password: sanitizedPassword,
+                    firstName: firstName.isEmpty ? nil : firstName.trimmingCharacters(in: .whitespaces)
+                )
                 
                 // Apply auth result to session
                 await session.applyAuthResult(
@@ -538,18 +592,33 @@ struct LoginView: View {
                     storage: storage
                 )
                 
-                // Save user account
-                let userAccount = UserAccount(
+                // Save user data from backend response (includes first_name and home_address)
+                // This ensures we have the latest data from database
+                var userAccount = UserAccount(
                     email: authResponse.user.email,
-                    firstName: firstName.trimmingCharacters(in: .whitespaces),
+                    firstName: authResponse.user.first_name ?? firstName.trimmingCharacters(in: .whitespaces),
                     hasLoggedIn: true
                 )
                 await storage.saveUserAccount(userAccount)
+                
+                // Save home address from backend if available (encrypted, now decrypted)
+                if let homeAddress = authResponse.user.home_address, !homeAddress.isEmpty {
+                    await storage.setHomeAddress(homeAddress)
+                }
+                
+                // New users haven't completed onboarding survey yet
+                // (They'll complete it after signup)
+                await storage.setHasCompletedOnboardingSurvey(false)
+                
                 await storage.setHasLoggedIn(true)
                 
                 await MainActor.run {
                     isSigningUp = false
                     onboardingViewModel.markLoggedIn()
+                    // Refresh onboarding status
+                    Task {
+                        await onboardingViewModel.checkOnboardingStatus()
+                    }
                 }
             } catch {
                 await MainActor.run {

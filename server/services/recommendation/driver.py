@@ -36,24 +36,38 @@ def build_chat_response(
     from services.recommendation.intent import classify_intent_llm
     intent = classify_intent_llm(message, memory)
     
-    # If it's a follow-up (place or general), use context-aware response
-    if intent in ["followup_place", "followup_general"] and memory.last_places:
-        # User is asking about previous recommendations or context
-        # Use contextual reply with previous results
+    # If it's general chat (greetings, thanks), return text-only response without cards
+    if intent == "general_chat":
         from services.recommendation.llm_reply import generate_contextual_reply
         memory.add_message("user", message)
-        reply = generate_contextual_reply(message, memory.last_places, memory)
+        reply = generate_contextual_reply(message, [], memory)
         memory.add_message("assistant", reply)
         return {
             "debug_vibe": intent,
             "latency": round(time.time() - t0, 2),
-            "places": memory.last_places[:3],
+            "places": [],  # No cards for conversational messages
             "reply": reply,
             "weather": current_weather(),
         }
     
-    # If it's a request for new recommendations (alternatives), still do a new search
-    # but use context to avoid repeating previous results
+    # If it's a follow-up (place or general), use context-aware response WITHOUT new cards
+    if intent in ["followup_place", "followup_general"] and memory.last_places:
+        # User is asking about previous recommendations or context
+        # Return text-only response - don't show cards again for follow-up questions
+        from services.recommendation.llm_reply import generate_contextual_reply
+        memory.add_message("user", message)
+        reply = generate_contextual_reply(message, [], memory)  # Pass empty items to avoid showing cards
+        memory.add_message("assistant", reply)
+        return {
+            "debug_vibe": intent,
+            "latency": round(time.time() - t0, 2),
+            "places": [],  # No cards for follow-up questions
+            "reply": reply,
+            "weather": current_weather(),
+        }
+    
+    # If it's a request for new recommendations (alternatives), do a new search
+    # This will return new cards with different results
     if intent == "new_recommendation" and memory.all_results:
         # User wants alternatives - exclude previously shown places
         previous_names = {p.get("name", "").lower() for p in memory.last_places}
@@ -119,7 +133,7 @@ def build_chat_response(
     # STEP 7 — Combine places + events
     items = final_places + normalized_events
 
-    # STEP 7.5 — Handle empty results with context-aware reply
+    # STEP 7.5 — Handle empty results with context-aware reply (no cards)
     if not items:
         # Add user message to history
         memory.add_message("user", message)
@@ -134,7 +148,7 @@ def build_chat_response(
         return {
             "debug_vibe": vibe,
             "latency": round(time.time() - t0, 2),
-            "places": [],
+            "places": [],  # No cards when no results found
             "reply": reply,
             "weather": current_weather(),
         }
@@ -148,6 +162,25 @@ def build_chat_response(
 
     # STEP 9 — Sort
     items.sort(key=lambda x: x.get("score", 0), reverse=True)
+    
+    # STEP 9.5 — Filter out previously shown places for "new_recommendation" intent
+    if intent == "new_recommendation" and memory.last_places:
+        previous_names = {p.get("name", "").lower() for p in memory.last_places}
+        items = [item for item in items if item.get("name", "").lower() not in previous_names]
+        
+        # If all items were filtered out, return empty response
+        if not items:
+            memory.add_message("user", message)
+            from services.recommendation.llm_reply import generate_contextual_reply
+            reply = generate_contextual_reply(message, [], memory)
+            memory.add_message("assistant", reply)
+            return {
+                "debug_vibe": vibe,
+                "latency": round(time.time() - t0, 2),
+                "places": [],  # No new alternatives found
+                "reply": reply,
+                "weather": current_weather(),
+            }
 
     # Update memory with top results (for future follow-ups if needed)
     memory.set_places(items[:3])
@@ -161,11 +194,15 @@ def build_chat_response(
     
     # STEP 12 — Add assistant reply to history
     memory.add_message("assistant", reply)
+    
+    # STEP 13 — Only return cards if this is an actual recommendation request
+    # Don't show cards for conversational messages or follow-ups
+    should_show_cards = intent in ["recommendation", "new_recommendation"] and len(items) > 0
 
     return {
         "debug_vibe": vibe,
         "latency": round(time.time() - t0, 2),
-        "places": items[:3],
+        "places": items[:3] if should_show_cards else [],  # Only show cards for actual recommendations
         "reply": reply,
         "weather": current_weather(),
     }

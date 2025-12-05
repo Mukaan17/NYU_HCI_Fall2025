@@ -83,7 +83,7 @@ final class ChatViewModel {
             )
             
             await MainActor.run {
-                // Add AI text reply
+                // Always add AI text reply (for both conversational and recommendation messages)
                 let aiMessage = ChatMessage(
                     id: Int(Date().timeIntervalSince1970) + 1,
                     type: .text,
@@ -94,7 +94,9 @@ final class ChatViewModel {
                 
                 messages.append(aiMessage)
                 
-                // Add recommendations if present
+                // Only add recommendation cards if places are present and not empty
+                // Backend now returns empty array for conversational messages (greetings, follow-ups, etc.)
+                // This prevents card displacement for non-recommendation messages
                 if let places = response.places, !places.isEmpty {
                     let recommendations = places.enumerated().map { index, place in
                         // Use a unique ID based on timestamp and index to avoid duplicates
@@ -123,6 +125,8 @@ final class ChatViewModel {
                     
                     messages.append(recommendationsMessage)
                 }
+                // If places is nil or empty, we only show the text reply (no cards)
+                // This is the desired behavior for conversational messages
                 
                 isTyping = false
             }

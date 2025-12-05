@@ -237,7 +237,12 @@ struct ChatView: View {
     
     @ViewBuilder
     private func messageView(for message: ChatMessage) -> some View {
-        if message.type == .recommendations, let recommendations = message.recommendations {
+        // Only display recommendation cards if they exist and are not empty
+        // Backend now returns empty places array for conversational messages,
+        // so cards will only appear for actual recommendation requests
+        if message.type == .recommendations, 
+           let recommendations = message.recommendations,
+           !recommendations.isEmpty {
             VStack(spacing: Theme.Spacing.`2xl`) {
                 ForEach(recommendations) { recommendation in
                     RecommendationCard(recommendation: recommendation) {
@@ -258,6 +263,7 @@ struct ChatView: View {
             .padding(.horizontal, Theme.Spacing.`2xl`)
             .padding(.top, Theme.Spacing.`2xl`)
         } else if let content = message.content {
+            // Display text message (for both user messages and AI conversational/recommendation text replies)
             MessageBubble(message: message, content: content)
                 .padding(.horizontal, Theme.Spacing.`2xl`)
         }

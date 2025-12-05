@@ -62,6 +62,8 @@ struct RootView: View {
                 LoginView()
             } else if !onboardingViewModel.hasCompletedOnboardingSurvey {
                 OnboardingSurveyView()
+            } else if !onboardingViewModel.hasCompletedCalendarOAuth {
+                GoogleCalendarOAuthView()
             } else {
                 MainTabView()
             }

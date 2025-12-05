@@ -161,8 +161,15 @@ struct ChatView: View {
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                } else if !dashboardViewModel.calendarLinked && calendarViewModel.events.isEmpty {
-                    // No calendar data available and Google Calendar not linked
+                } else if !calendarViewModel.events.isEmpty {
+                    // System calendar has events but no upcoming free time (all events are past or ongoing)
+                    Text("Free all day")
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(1)
+                } else if !dashboardViewModel.calendarLinked {
+                    // No system calendar events AND Google Calendar not linked
+                    // Show "Calendar not linked" to prompt user to link Google Calendar
                     HStack(spacing: Theme.Spacing.sm) {
                         Image(systemName: "calendar.badge.exclamationmark")
                             .font(.system(size: 15))
@@ -171,7 +178,7 @@ struct ChatView: View {
                     }
                     .foregroundColor(Theme.Colors.textSecondary)
                 } else {
-                    // Free all day (no events in either calendar)
+                    // Free all day (no events in either calendar, but Google Calendar is linked)
                     Text("Free all day")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)

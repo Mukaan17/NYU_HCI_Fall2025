@@ -26,6 +26,7 @@ actor StorageService {
         static let hasCompletedPermissions = "hasCompletedPermissions"
         static let hasLoggedIn = "hasLoggedIn"
         static let hasCompletedOnboardingSurvey = "hasCompletedOnboardingSurvey"
+        static let hasCompletedCalendarOAuth = "hasCompletedCalendarOAuth"
         static let homeAddress = "homeAddress"
         static let trustedContacts = "trustedContacts"
         static let userAccount = "userAccount"
@@ -106,6 +107,27 @@ actor StorageService {
         }
         // Also clear legacy global onboarding status
         userDefaults.removeObject(forKey: Keys.hasCompletedOnboardingSurvey)
+    }
+    
+    // MARK: - Calendar OAuth (User-Specific)
+    var hasCompletedCalendarOAuth: Bool {
+        get {
+            // Get user-specific calendar OAuth completion status
+            guard let userAccount = userAccount else {
+                return false
+            }
+            let userKey = "\(Keys.hasCompletedCalendarOAuth)_\(userAccount.email)"
+            return userDefaults.bool(forKey: userKey)
+        }
+    }
+    
+    func setHasCompletedCalendarOAuth(_ value: Bool) {
+        // Get user-specific calendar OAuth completion status key
+        guard let userAccount = userAccount else {
+            return // Can't save without a user account
+        }
+        let userKey = "\(Keys.hasCompletedCalendarOAuth)_\(userAccount.email)"
+        userDefaults.set(value, forKey: userKey)
     }
     
     // MARK: - Reset Onboarding

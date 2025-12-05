@@ -124,6 +124,7 @@ def check_https():
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.calendar_routes import calendar_bp
+from routes.calendar_oauth_routes import calendar_oauth_bp
 from routes.migration_routes import migration_bp
 from routes.purge_routes import purge_bp
 from routes.dashboard_routes import dashboard_bp
@@ -133,6 +134,7 @@ from routes.weather_routes import weather_bp
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(user_bp, url_prefix="/api/user")
 app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
+app.register_blueprint(calendar_oauth_bp, url_prefix="/api/calendar")
 app.register_blueprint(migration_bp, url_prefix="/api")
 app.register_blueprint(purge_bp, url_prefix="/api")
 app.register_blueprint(dashboard_bp, url_prefix="/api")

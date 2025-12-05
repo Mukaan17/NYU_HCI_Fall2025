@@ -503,6 +503,7 @@ struct AccountSettingsView: View {
 // MARK: - Account Settings Section View
 struct AccountSettingsSectionView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(UserSession.self) private var session
     @State private var firstName: String = ""
     @State private var showChangePassword = false
     @State private var showLogoutAlert = false
@@ -639,14 +640,29 @@ struct AccountSettingsSectionView: View {
     
     private func logout() {
         Task {
-            // Clear current user's data before logging out
+            // CRITICAL: Clear ALL current user's data before logging out to prevent state leakage
             await storage.clearCurrentUserHomeAddress()
             await storage.clearCurrentUserOnboardingStatus()
             await storage.clearCurrentUserPreferences()
+            await storage.clearCurrentUserTrustedContacts()
+            await storage.clearCurrentUserWelcomeStatus()
+            await storage.clearCurrentUserPermissionsStatus()
+            await storage.clearCurrentUserCalendarOAuthStatus()
+            
+            // CRITICAL: Clear user session to prevent state leakage
+            await storage.clearUserSession()
+            
             // Clear user account
             await storage.saveUserAccount(UserAccount(email: "", firstName: "", hasLoggedIn: false))
             await storage.setHasLoggedIn(false)
+            
             await MainActor.run {
+                // Clear session state
+                session.jwt = nil
+                session.googleCalendarLinked = false
+                session.preferences = UserPreferences()
+                session.settings = nil
+                
                 onboardingViewModel.hasLoggedIn = false
                 onboardingViewModel.hasCompletedOnboardingSurvey = false
             }

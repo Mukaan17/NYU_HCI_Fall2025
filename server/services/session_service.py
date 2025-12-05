@@ -27,14 +27,22 @@ def save_user_session(user_id: int, session_data: Dict[str, Any]) -> bool:
     Save user session data to Redis (cache) and Postgres (persistence).
     
     Args:
-        user_id: User ID
+        user_id: User ID (CRITICAL: must be the authenticated user's ID)
         session_data: Dictionary containing session data (e.g., google_calendar_linked)
     
     Returns:
         True if successful, False otherwise
     """
     try:
-        # Save to Redis for fast access
+        # CRITICAL: Verify user exists and get user object
+        user = User.query.get(user_id)
+        if not user:
+            logger.error(f"Attempted to save session for non-existent user {user_id}")
+            return False
+        
+        logger.info(f"Saving session for user {user_id} (email: {user.email})")
+        
+        # Save to Redis for fast access (user-specific key)
         redis_client = get_redis_client()
         if redis_client:
             session_key = get_user_session_key(user_id)
@@ -43,23 +51,26 @@ def save_user_session(user_id: int, session_data: Dict[str, Any]) -> bool:
                 SESSION_EXPIRY_SECONDS,
                 json.dumps(session_data)
             )
-            logger.debug(f"Session saved to Redis for user {user_id}")
+            logger.debug(f"Session saved to Redis with key '{session_key}' for user {user_id}")
         
         # Persist to Postgres (via User model)
-        user = User.query.get(user_id)
-        if user:
-            settings = user.get_settings()
-            # Update calendar linked status in settings
-            if 'google_calendar_linked' in session_data:
-                settings['google_calendar_enabled'] = session_data['google_calendar_linked']
-                settings['calendar_integration_enabled'] = session_data['google_calendar_linked']
+        settings = user.get_settings()
+        # Update calendar linked status in settings
+        # CRITICAL: Use google_refresh_token as source of truth - if it exists, calendar is linked
+        # This prevents state leakage between users
+        if 'google_calendar_linked' in session_data:
+            # Always use the actual database state as source of truth
+            actual_linked_status = bool(user.google_refresh_token)
+            if settings.get('google_calendar_enabled') != actual_linked_status:
+                settings['google_calendar_enabled'] = actual_linked_status
+                settings['calendar_integration_enabled'] = actual_linked_status
                 user.set_settings(settings)
-                # Note: google_refresh_token is already stored in user.google_refresh_token
-                # We use that as the source of truth for calendar linked status
-            
-            from models.db import db
-            db.session.commit()
-            logger.debug(f"Session persisted to Postgres for user {user_id}")
+                logger.info(f"Updated calendar status in Postgres for user {user_id}: {actual_linked_status}")
+            else:
+                logger.debug(f"Calendar status already correct in Postgres for user {user_id}: {actual_linked_status}")
+        
+        from models.db import db
+        db.session.commit()
         
         return True
     except Exception as e:
@@ -72,45 +83,56 @@ def get_user_session(user_id: int) -> Optional[Dict[str, Any]]:
     Get user session data from Redis (cache) or Postgres (persistence).
     
     Args:
-        user_id: User ID
+        user_id: User ID (CRITICAL: must be the authenticated user's ID)
     
     Returns:
         Dictionary with session data, or None if not found
     """
     try:
-        # Try Redis first (fast)
+        # CRITICAL: Verify user exists
+        user = User.query.get(user_id)
+        if not user:
+            logger.warning(f"Attempted to get session for non-existent user {user_id}")
+            return None
+        
+        # Try Redis first (fast) - using user-specific key
         redis_client = get_redis_client()
         if redis_client:
             session_key = get_user_session_key(user_id)
             cached_data = redis_client.get(session_key)
             if cached_data:
                 session_data = json.loads(cached_data)
-                logger.debug(f"Session loaded from Redis for user {user_id}")
+                logger.debug(f"Session loaded from Redis (key: '{session_key}') for user {user_id} (email: {user.email})")
+                # Verify the cached data matches the database state
+                actual_linked = bool(user.google_refresh_token)
+                if session_data.get('google_calendar_linked') != actual_linked:
+                    logger.warning(f"Redis cache mismatch for user {user_id}: cached={session_data.get('google_calendar_linked')}, actual={actual_linked}. Updating cache.")
+                    session_data['google_calendar_linked'] = actual_linked
+                    session_data['google_calendar_enabled'] = actual_linked
+                    session_data['calendar_integration_enabled'] = actual_linked
+                    redis_client.setex(session_key, SESSION_EXPIRY_SECONDS, json.dumps(session_data))
                 return session_data
         
         # Fallback to Postgres (source of truth)
-        user = User.query.get(user_id)
-        if user:
-            settings = user.get_settings()
-            session_data = {
-                'google_calendar_linked': bool(user.google_refresh_token),
-                'google_calendar_enabled': settings.get('google_calendar_enabled', False),
-                'calendar_integration_enabled': settings.get('calendar_integration_enabled', False),
-            }
-            
-            # Cache in Redis for next time
-            if redis_client:
-                session_key = get_user_session_key(user_id)
-                redis_client.setex(
-                    session_key,
-                    SESSION_EXPIRY_SECONDS,
-                    json.dumps(session_data)
-                )
-            
-            logger.debug(f"Session loaded from Postgres for user {user_id}")
-            return session_data
+        settings = user.get_settings()
+        session_data = {
+            'google_calendar_linked': bool(user.google_refresh_token),
+            'google_calendar_enabled': settings.get('google_calendar_enabled', False),
+            'calendar_integration_enabled': settings.get('calendar_integration_enabled', False),
+        }
         
-        return None
+        # Cache in Redis for next time (user-specific key)
+        if redis_client:
+            session_key = get_user_session_key(user_id)
+            redis_client.setex(
+                session_key,
+                SESSION_EXPIRY_SECONDS,
+                json.dumps(session_data)
+            )
+            logger.debug(f"Session cached in Redis (key: '{session_key}') for user {user_id}")
+        
+        logger.debug(f"Session loaded from Postgres for user {user_id} (email: {user.email}) - calendar_linked: {session_data['google_calendar_linked']}")
+        return session_data
     except Exception as e:
         logger.error(f"Error loading session for user {user_id}: {e}", exc_info=True)
         return None
@@ -121,18 +143,32 @@ def update_calendar_linked_status(user_id: int, linked: bool) -> bool:
     Update Google Calendar linked status in session.
     
     Args:
-        user_id: User ID
+        user_id: User ID (CRITICAL: must be the authenticated user's ID)
         linked: Whether calendar is linked
     
     Returns:
         True if successful, False otherwise
     """
     try:
+        # CRITICAL: Verify user exists
+        user = User.query.get(user_id)
+        if not user:
+            logger.error(f"Attempted to update calendar status for non-existent user {user_id}")
+            return False
+        
+        logger.info(f"Updating calendar linked status for user {user_id} (email: {user.email}) to {linked}")
+        
         # Get current session or create new one
         session_data = get_user_session(user_id) or {}
-        session_data['google_calendar_linked'] = linked
-        session_data['google_calendar_enabled'] = linked
-        session_data['calendar_integration_enabled'] = linked
+        # CRITICAL: Always use database state as source of truth
+        actual_linked = bool(user.google_refresh_token)
+        session_data['google_calendar_linked'] = actual_linked
+        session_data['google_calendar_enabled'] = actual_linked
+        session_data['calendar_integration_enabled'] = actual_linked
+        
+        # Log if there's a mismatch
+        if actual_linked != linked:
+            logger.warning(f"Calendar status mismatch for user {user_id}: requested={linked}, actual={actual_linked}. Using actual database state.")
         
         return save_user_session(user_id, session_data)
     except Exception as e:

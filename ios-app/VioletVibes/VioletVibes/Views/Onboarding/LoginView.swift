@@ -400,6 +400,11 @@ struct LoginView: View {
             return
         }
         
+        // CRITICAL: Clear any existing session before logging in to prevent state leakage
+        Task {
+            await storage.clearUserSession()
+        }
+        
         // Sanitize inputs one more time before sending
         let sanitizedEmail = sanitizeEmail(email)
         let sanitizedPassword = sanitizePassword(password)
@@ -413,6 +418,16 @@ struct LoginView: View {
         isLoggingIn = true
         
         Task {
+            // CRITICAL: Clear ALL previous user's data before logging in to prevent state leakage
+            await storage.clearUserSession()
+            await storage.clearCurrentUserHomeAddress()
+            await storage.clearCurrentUserOnboardingStatus()
+            await storage.clearCurrentUserPreferences()
+            await storage.clearCurrentUserTrustedContacts()
+            await storage.clearCurrentUserWelcomeStatus()
+            await storage.clearCurrentUserPermissionsStatus()
+            await storage.clearCurrentUserCalendarOAuthStatus()
+            
             do {
                 // Call real API
                 let authResponse = try await api.login(email: sanitizedEmail, password: sanitizedPassword)
@@ -536,6 +551,16 @@ struct LoginView: View {
         isSigningUp = true
         
         Task {
+            // CRITICAL: Clear ALL previous user's data before signing up to prevent state leakage
+            await storage.clearUserSession()
+            await storage.clearCurrentUserHomeAddress()
+            await storage.clearCurrentUserOnboardingStatus()
+            await storage.clearCurrentUserPreferences()
+            await storage.clearCurrentUserTrustedContacts()
+            await storage.clearCurrentUserWelcomeStatus()
+            await storage.clearCurrentUserPermissionsStatus()
+            await storage.clearCurrentUserCalendarOAuthStatus()
+            
             do {
                 // Call real API with first name
                 let authResponse = try await api.signup(

@@ -30,12 +30,15 @@ def dashboard():
     user = g.current_user
     req_id = g.get("request_id", "unknown")
 
-    logger.info(f"[{req_id}] Dashboard request from user {user.id}")
+    logger.info(f"[{req_id}] Dashboard request from user {user.id} (email: {user.email})")
 
+    # CRITICAL: Always check the current user's google_refresh_token
+    # This ensures calendar status is user-specific and doesn't leak between users
     if not user.google_refresh_token:
-        logger.warning(f"[{req_id}] Dashboard load without Google linked")
+        logger.debug(f"[{req_id}] User {user.id} does not have Google Calendar linked")
         linked_calendar = False
     else:
+        logger.debug(f"[{req_id}] User {user.id} has Google Calendar linked")
         linked_calendar = True
 
     # ------------------------------------------------------

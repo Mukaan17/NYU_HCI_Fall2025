@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_URL</key>
-	<string>https://violet-vibes-uf2g7.ondigitalocean.app</string>
+	<string>https://violet-vibes.app</string>
 	<!-- 
 		Production backend URL: https://violet-vibes-uf2g7.ondigitalocean.app
 		For local development, temporarily change to: http://localhost:5001

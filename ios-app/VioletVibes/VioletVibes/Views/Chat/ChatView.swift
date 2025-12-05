@@ -148,10 +148,13 @@ struct ChatView: View {
                     Text(freeTimeText)
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 } else {
                     Text("Free all day")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(1)
                 }
             }
             .padding(.horizontal, Theme.Spacing.xl)

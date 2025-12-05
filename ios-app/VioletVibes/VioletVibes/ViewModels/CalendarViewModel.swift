@@ -89,6 +89,7 @@ final class CalendarViewModel {
         }
         
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
         let timeString = formatter.string(from: nextEvent.0)
         

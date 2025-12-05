@@ -56,6 +56,21 @@ struct WeatherDropdownOverlay: View {
                         .contentShape(Rectangle())
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea()
+                        // Block vertical scrolling on the background (outside dropdown)
+                        // This prevents underlying ScrollView from scrolling when dragging outside dropdown
+                        .highPriorityGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    // Only block vertical drags on the background
+                                    let verticalMovement = abs(value.translation.height)
+                                    let horizontalMovement = abs(value.translation.width)
+                                    
+                                    // Block vertical drags to prevent underlying ScrollView scrolling
+                                    if verticalMovement > horizontalMovement && verticalMovement > 5 {
+                                        // Consume vertical gesture
+                                    }
+                                }
+                        )
                     
                     // Dropdown content - fixed height, no vertical scrolling
                     VStack(spacing: Theme.Spacing.md) {
@@ -93,7 +108,6 @@ struct WeatherDropdownOverlay: View {
                                 .padding(.horizontal, Theme.Spacing.sm)
                             }
                             .scrollBounceBehavior(.basedOnSize)
-                            .scrollDisabled(false) // Enable horizontal scrolling
                             .frame(height: 100)
                         } else {
                             HStack {
@@ -109,6 +123,7 @@ struct WeatherDropdownOverlay: View {
                     }
                     .padding(Theme.Spacing.md)
                     .frame(width: dropdownWidth, height: 180) // Fixed frame - no expansion, padding included
+                    .fixedSize(horizontal: false, vertical: true) // Prevent vertical expansion
                     .clipped() // Prevent content from overflowing
                     .background(Theme.Colors.glassBackgroundLight) // More opaque
                     .overlay(
@@ -127,10 +142,11 @@ struct WeatherDropdownOverlay: View {
                 }
                 .contentShape(Rectangle())
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .gesture(
+                // Handle taps outside the dropdown - use simultaneousGesture so it doesn't block ScrollView
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onEnded { value in
-                            // Check if tap is outside dropdown frame
+                            // Check if tap/drag ended outside dropdown frame
                             if !dropdownFrame.contains(value.location) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     isExpanded = false

@@ -497,7 +497,7 @@ struct LoginView: View {
                 await storage.setHasLoggedIn(true)
                 
                 // Fetch latest profile data from backend to ensure we have current data
-                if let jwt = userSession.jwt {
+                if let jwt = session.jwt {
                     do {
                         let profile = try await api.fetchUserProfile(jwt: jwt)
                         // Update user account with latest first_name if different

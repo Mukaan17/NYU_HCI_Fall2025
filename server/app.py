@@ -121,12 +121,14 @@ from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.calendar_routes import calendar_bp
 from routes.migration_routes import migration_bp
+from routes.purge_routes import purge_bp
 
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(user_bp, url_prefix="/api/user")
 app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
 app.register_blueprint(migration_bp, url_prefix="/api")
+app.register_blueprint(purge_bp, url_prefix="/api")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 

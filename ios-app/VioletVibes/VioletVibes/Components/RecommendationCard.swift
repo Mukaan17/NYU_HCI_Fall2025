@@ -90,8 +90,8 @@ struct RecommendationCard: View {
                     // Gradient overlay
                     LinearGradient(
                         colors: [
-                            Theme.Colors.glassBackground,
-                            Theme.Colors.glassBackgroundDark
+                            Theme.Colors.glassBackground.opacity(0.5),
+                            Theme.Colors.glassBackgroundDark.opacity(0.5)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

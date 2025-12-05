@@ -8,6 +8,10 @@ import UIKit
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var tapCount = 0
+    @State private var showConfetti = false
+    @State private var lastTapTime: Date?
+    @State private var logoPosition: CGPoint = .zero
     
     var body: some View {
         NavigationStack {
@@ -40,40 +44,69 @@ struct AboutView: View {
                 }
                 .allowsHitTesting(false)
                 
-                ScrollView {
-                    VStack(spacing: Theme.Spacing.`4xl`) {
-                        // App Icon/Logo
-                        Group {
-                            if let appIcon = UIImage(named: "AppIcon") ?? getAppIcon() {
-                                Image(uiImage: appIcon)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 120, height: 120)
-                                    .clipShape(RoundedRectangle(cornerRadius: 26))
-                                    .shadow(color: Theme.Colors.gradientStart.opacity(0.3), radius: 20, x: 0, y: 10)
-                            } else {
-                                // Fallback if app icon not found
-                                ZStack {
-                                    Circle()
-                                        .fill(Theme.Colors.accentPurple.opacity(0.2))
+                ZStack {
+                    // Confetti overlay
+                    if showConfetti {
+                        ConfettiView(isActive: $showConfetti, emitterPosition: logoPosition)
+                            .allowsHitTesting(false)
+                            .ignoresSafeArea()
+                    }
+                    
+                    ScrollView {
+                        VStack(spacing: Theme.Spacing.`4xl`) {
+                            // App Icon/Logo
+                            Group {
+                                if let appIcon = UIImage(named: "AppIcon") ?? getAppIcon() {
+                                    Image(uiImage: appIcon)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
                                         .frame(width: 120, height: 120)
-                                        .blur(radius: 40)
-                                    
-                                    Circle()
-                                        .fill(Theme.Colors.backgroundCard)
-                                        .frame(width: 120, height: 120)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(Theme.Colors.border, lineWidth: 1)
-                                        )
-                                    
-                                    Image(systemName: "app.fill")
-                                        .font(.system(size: 60))
-                                        .foregroundColor(Theme.Colors.gradientStart)
+                                        .clipShape(RoundedRectangle(cornerRadius: 26))
+                                        .shadow(color: Theme.Colors.gradientStart.opacity(0.3), radius: 20, x: 0, y: 10)
+                                } else {
+                                    // Fallback if app icon not found
+                                    ZStack {
+                                        Circle()
+                                            .fill(Theme.Colors.accentPurple.opacity(0.2))
+                                            .frame(width: 120, height: 120)
+                                            .blur(radius: 40)
+                                        
+                                        Circle()
+                                            .fill(Theme.Colors.backgroundCard)
+                                            .frame(width: 120, height: 120)
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(Theme.Colors.border, lineWidth: 1)
+                                            )
+                                        
+                                        Image(systemName: "app.fill")
+                                            .font(.system(size: 60))
+                                            .foregroundColor(Theme.Colors.gradientStart)
+                                    }
                                 }
                             }
-                        }
-                        .padding(.top, Theme.Spacing.`4xl`)
+                            .padding(.top, Theme.Spacing.`4xl`)
+                            .overlay(
+                                GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear {
+                                            // Calculate logo position in screen coordinates
+                                            logoPosition = CGPoint(
+                                                x: geometry.frame(in: .global).midX,
+                                                y: geometry.frame(in: .global).midY
+                                            )
+                                        }
+                                        .onChange(of: geometry.frame(in: .global)) { oldValue, newValue in
+                                            logoPosition = CGPoint(
+                                                x: newValue.midX,
+                                                y: newValue.midY
+                                            )
+                                        }
+                                }
+                            )
+                            .onTapGesture {
+                                handleLogoTap()
+                            }
                         
                         // App Name
                         Text("Violet Vibes")
@@ -109,8 +142,9 @@ struct AboutView: View {
                             }
                         }
                         .padding(.horizontal, Theme.Spacing.`2xl`)
+                        }
+                        .padding(.bottom, Theme.Spacing.`4xl`)
                     }
-                    .padding(.bottom, Theme.Spacing.`4xl`)
                 }
             }
             .navigationTitle("About")
@@ -149,6 +183,36 @@ struct AboutView: View {
         }
         
         return nil
+    }
+    
+    private func handleLogoTap() {
+        let now = Date()
+        
+        // Reset counter if more than 2 seconds have passed since last tap
+        if let lastTap = lastTapTime, now.timeIntervalSince(lastTap) > 2.0 {
+            tapCount = 0
+        }
+        
+        tapCount += 1
+        lastTapTime = now
+        
+        // Haptic feedback for each tap
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        // Trigger confetti on 8th tap
+        if tapCount >= 8 {
+            // Success haptic
+            let notificationFeedback = UINotificationFeedbackGenerator()
+            notificationFeedback.notificationOccurred(.success)
+            
+            // Show confetti
+            showConfetti = true
+            
+            // Reset counter
+            tapCount = 0
+            lastTapTime = nil
+        }
     }
 }
 

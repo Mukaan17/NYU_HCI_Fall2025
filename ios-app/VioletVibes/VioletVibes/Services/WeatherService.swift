@@ -9,21 +9,29 @@ import CoreLocation
 actor WeatherService {
     static let shared = WeatherService()
     
+    private let apiService = APIService.shared
+    
     private init() {}
     
     func getWeather(lat: Double, lon: Double) async -> Weather? {
-        guard let apiKey = getOpenWeatherKey() else {
-            print("OpenWeather API key not found. Please add OPENWEATHER_KEY to Config.plist or environment variables.")
-            return nil
-        }
+        // Get base URL from APIService
+        let baseURL: String = await {
+            if let apiURL = ProcessInfo.processInfo.environment["API_URL"], !apiURL.isEmpty {
+                return apiURL
+            } else if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
+                      let config = NSDictionary(contentsOfFile: path),
+                      let url = config["API_URL"] as? String,
+                      !url.isEmpty {
+                return url
+            } else {
+                return "http://localhost:5001"
+            }
+        }()
         
-        let baseURL = "https://api.openweathermap.org/data/2.5/weather"
-        var urlComponents = URLComponents(string: baseURL)!
+        var urlComponents = URLComponents(string: "\(baseURL)/api/weather")!
         urlComponents.queryItems = [
             URLQueryItem(name: "lat", value: String(lat)),
-            URLQueryItem(name: "lon", value: String(lon)),
-            URLQueryItem(name: "appid", value: apiKey),
-            URLQueryItem(name: "units", value: "imperial")
+            URLQueryItem(name: "lon", value: String(lon))
         ]
         
         guard let url = urlComponents.url else {
@@ -55,61 +63,25 @@ actor WeatherService {
         }
     }
     
-    private func getOpenWeatherKey() -> String? {
-        // Try environment variable first
-        if let key = ProcessInfo.processInfo.environment["OPENWEATHER_KEY"], !key.isEmpty {
-            print("🔑 Found OPENWEATHER_KEY from environment variable")
-            return key
-        }
-        
-        // Try Config.plist - Method 1: Using path
-        if let path = Bundle.main.path(forResource: "Config", ofType: "plist") {
-            print("📄 Found Config.plist at path: \(path)")
-            if let config = NSDictionary(contentsOfFile: path) {
-                print("📋 Config.plist loaded successfully")
-                if let key = config["OPENWEATHER_KEY"] as? String, !key.isEmpty {
-                    print("🔑 Found OPENWEATHER_KEY in Config.plist: \(String(key.prefix(8)))...")
-                    return key
-                } else {
-                    print("⚠️ OPENWEATHER_KEY not found in Config.plist or is empty")
-                }
-            } else {
-                print("❌ Failed to load Config.plist as NSDictionary")
-            }
-        } else {
-            print("❌ Config.plist not found in bundle")
-            // Try alternative method using URL
-            if let url = Bundle.main.url(forResource: "Config", withExtension: "plist") {
-                print("📄 Found Config.plist at URL: \(url)")
-                if let config = NSDictionary(contentsOf: url) {
-                    print("📋 Config.plist loaded successfully via URL")
-                    if let key = config["OPENWEATHER_KEY"] as? String, !key.isEmpty {
-                        print("🔑 Found OPENWEATHER_KEY in Config.plist: \(String(key.prefix(8)))...")
-                        return key
-                    }
-                }
-            } else {
-                print("❌ Config.plist not found in bundle (tried both path and URL methods)")
-                print("💡 Make sure Config.plist is added to the target's 'Copy Bundle Resources' build phase")
-            }
-        }
-        
-        return nil
-    }
-    
     func getForecast(lat: Double, lon: Double) async -> [HourlyForecast]? {
-        guard let apiKey = getOpenWeatherKey() else {
-            print("OpenWeather API key not found. Please add OPENWEATHER_KEY to Config.plist or environment variables.")
-            return nil
-        }
+        // Get base URL from APIService
+        let baseURL: String = await {
+            if let apiURL = ProcessInfo.processInfo.environment["API_URL"], !apiURL.isEmpty {
+                return apiURL
+            } else if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
+                      let config = NSDictionary(contentsOfFile: path),
+                      let url = config["API_URL"] as? String,
+                      !url.isEmpty {
+                return url
+            } else {
+                return "http://localhost:5001"
+            }
+        }()
         
-        let baseURL = "https://api.openweathermap.org/data/2.5/forecast"
-        var urlComponents = URLComponents(string: baseURL)!
+        var urlComponents = URLComponents(string: "\(baseURL)/api/weather/forecast")!
         urlComponents.queryItems = [
             URLQueryItem(name: "lat", value: String(lat)),
-            URLQueryItem(name: "lon", value: String(lon)),
-            URLQueryItem(name: "appid", value: apiKey),
-            URLQueryItem(name: "units", value: "imperial")
+            URLQueryItem(name: "lon", value: String(lon))
         ]
         
         guard let url = urlComponents.url else {
@@ -131,25 +103,34 @@ actor WeatherService {
                 }
             }
             
-            let decoder = JSONDecoder()
-            let forecastResponse = try decoder.decode(ForecastResponse.self, from: data)
+            // Parse backend response format
+            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            guard let forecastList = json?["forecast"] as? [[String: Any]] else {
+                print("Invalid forecast response format")
+                return nil
+            }
             
-            // Convert to HourlyForecast array, filtering to show only future hours
+            // Convert backend format to HourlyForecast array
             let now = Date()
-            let forecasts = forecastResponse.list
-                .filter { item in
-                    let itemDate = Date(timeIntervalSince1970: item.dt)
-                    return itemDate >= now
-                }
-                .prefix(24) // Limit to next 24 hours
-                .map { item -> HourlyForecast in
-                    let itemDate = Date(timeIntervalSince1970: item.dt)
-                    let temp = Int(round(item.main.temp))
-                    let weatherCondition = item.weather.first?.main ?? "Clear"
+            let forecasts = forecastList
+                .compactMap { item -> HourlyForecast? in
+                    guard let dt = item["dt"] as? TimeInterval else { return nil }
+                    let itemDate = Date(timeIntervalSince1970: dt)
+                    
+                    // Only include future hours
+                    guard itemDate >= now else { return nil }
+                    
+                    let main = item["main"] as? [String: Any] ?? [:]
+                    let weatherArray = item["weather"] as? [[String: Any]] ?? []
+                    let weather = weatherArray.first ?? [:]
+                    let wind = item["wind"] as? [String: Any] ?? [:]
+                    
+                    let temp = Int(round(main["temp"] as? Double ?? 0))
+                    let weatherCondition = (weather["main"] as? String ?? "Clear").lowercased()
                     let emoji = weatherConditionToEmoji(weatherCondition)
-                    let description = item.weather.first?.description.capitalized ?? "Clear"
-                    let humidity = item.main.humidity
-                    let windSpeed = item.wind?.speed
+                    let description = (weather["description"] as? String ?? "Clear").capitalized
+                    let humidity = main["humidity"] as? Int ?? 0
+                    let windSpeed = wind["speed"] as? Double
                     
                     return HourlyForecast(
                         time: itemDate,
@@ -160,6 +141,7 @@ actor WeatherService {
                         windSpeed: windSpeed
                     )
                 }
+                .prefix(24) // Limit to next 24 hours
             
             print("✅ Forecast loaded: \(forecasts.count) hours")
             return Array(forecasts)

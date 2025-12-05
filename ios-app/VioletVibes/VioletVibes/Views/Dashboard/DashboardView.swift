@@ -317,7 +317,7 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showCalendarSummary) {
             CalendarSummaryModal(
-                events: calendarViewModel.eventsUntilNext(),
+                events: calendarViewModel.events,
                 isPresented: $showCalendarSummary
             )
         }
@@ -340,10 +340,8 @@ struct DashboardView: View {
             // Load weather on task start (app launch/restart)
             await weatherManager.loadWeather(locationManager: locationManager)
             
-            // Load calendar events if calendar is linked
-            if session.googleCalendarLinked {
-                await calendarViewModel.loadTodayEvents(jwt: session.jwt)
-            }
+            // Load calendar events from system calendar
+            await calendarViewModel.loadTodayEvents()
             
             // Load recommendations from backend
             let weatherString = weatherManager.weather?.emoji
@@ -400,18 +398,8 @@ struct DashboardView: View {
                     try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                     await weatherManager.loadWeather(locationManager: locationManager)
                     
-                    // Reload calendar events if calendar is linked
-                    if session.googleCalendarLinked {
-                        await calendarViewModel.loadTodayEvents(jwt: session.jwt)
-                    }
-                }
-            }
-        }
-        .onChange(of: session.googleCalendarLinked) { oldValue, newValue in
-            // Load calendar events when calendar link status changes
-            if newValue {
-                Task {
-                    await calendarViewModel.loadTodayEvents(jwt: session.jwt)
+                    // Reload calendar events from system calendar
+                    await calendarViewModel.loadTodayEvents()
                 }
             }
         }

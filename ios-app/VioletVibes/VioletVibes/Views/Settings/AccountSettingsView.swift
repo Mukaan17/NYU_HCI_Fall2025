@@ -252,32 +252,82 @@ struct AccountSettingsView: View {
                         
                         // Home Address Section
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
-                            Text("Home Address")
-                                .themeFont(size: .`2xl`, weight: .bold)
-                                .foregroundColor(Theme.Colors.textPrimary)
+                            HStack {
+                                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                    Text("Home Address")
+                                        .themeFont(size: .`2xl`, weight: .bold)
+                                        .foregroundColor(Theme.Colors.textPrimary)
+                                    
+                                    Text("Used for safe route home feature")
+                                        .themeFont(size: .sm)
+                                        .foregroundColor(Theme.Colors.textSecondary)
+                                }
+                                
+                                Spacer()
+                                
+                                // Saved indicator
+                                if !homeAddress.isEmpty {
+                                    HStack(spacing: Theme.Spacing.xs) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(Theme.Colors.accentGreen)
+                                            .font(.system(size: 16))
+                                        Text("Saved")
+                                            .themeFont(size: .sm, weight: .medium)
+                                            .foregroundColor(Theme.Colors.accentGreen)
+                                    }
+                                    .padding(.horizontal, Theme.Spacing.md)
+                                    .padding(.vertical, Theme.Spacing.xs)
+                                    .background(Theme.Colors.accentGreen.opacity(0.15))
+                                    .cornerRadius(Theme.BorderRadius.md)
+                                }
+                            }
                             
-                            Text("Used for safe route home feature")
-                                .themeFont(size: .sm)
-                                .foregroundColor(Theme.Colors.textSecondary)
-                            
-                            LocationPickerView(address: $homeAddress)
-                            
-                            Button(action: {
-                                saveHomeAddress()
-                            }) {
-                                Text("Save Address")
-                                    .themeFont(size: .base, weight: .semiBold)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
+                            // Address display or input
+                            if !homeAddress.isEmpty {
+                                // Show saved address with option to edit
+                                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                                    HStack {
+                                        Image(systemName: "house.fill")
+                                            .foregroundColor(Theme.Colors.gradientStart)
+                                            .font(.system(size: 18))
+                                        
+                                        Text(homeAddress)
+                                            .themeFont(size: .base)
+                                            .foregroundColor(Theme.Colors.textPrimary)
+                                            .lineLimit(2)
+                                        
+                                        Spacer()
+                                        
+                                        Button(action: {
+                                            homeAddress = ""
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(Theme.Colors.textSecondary)
+                                                .font(.system(size: 20))
+                                        }
+                                    }
                                     .padding(Theme.Spacing.`2xl`)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [Theme.Colors.gradientStart, Theme.Colors.gradientEnd],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                    .background(Theme.Colors.glassBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                            .stroke(Theme.Colors.border, lineWidth: 1)
                                     )
                                     .cornerRadius(Theme.BorderRadius.md)
+                                    
+                                    Button(action: {
+                                        homeAddress = ""
+                                    }) {
+                                        Text("Change Address")
+                                            .themeFont(size: .sm, weight: .medium)
+                                            .foregroundColor(Theme.Colors.gradientStart)
+                                    }
+                                }
+                            } else {
+                                // Address input
+                                LocationPickerView(address: $homeAddress, onAddressSelected: {
+                                    // Auto-save when address is selected
+                                    saveHomeAddress()
+                                })
                             }
                         }
                         .padding(Theme.Spacing.`3xl`)
@@ -394,6 +444,11 @@ struct AccountSettingsView: View {
     private func saveHomeAddress() {
         Task {
             await storage.setHomeAddress(homeAddress.isEmpty ? nil : homeAddress)
+            // Show haptic feedback
+            await MainActor.run {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            }
         }
     }
     

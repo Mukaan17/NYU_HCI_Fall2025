@@ -316,10 +316,8 @@ struct ChatView: View {
             // Load weather on task start (app launch/restart)
             await weatherManager.loadWeather(locationManager: locationManager)
             
-            // Load calendar events if calendar is linked
-            if session.googleCalendarLinked {
-                await calendarViewModel.loadTodayEvents(jwt: session.jwt)
-            }
+            // Load calendar events from system calendar
+            await calendarViewModel.loadTodayEvents()
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
             // Reload weather when location changes
@@ -329,17 +327,9 @@ struct ChatView: View {
                 }
             }
         }
-        .onChange(of: session.googleCalendarLinked) { oldValue, newValue in
-            // Load calendar events when calendar link status changes
-            if newValue {
-                Task {
-                    await calendarViewModel.loadTodayEvents(jwt: session.jwt)
-                }
-            }
-        }
         .sheet(isPresented: $showCalendarSummary) {
             CalendarSummaryModal(
-                events: calendarViewModel.eventsUntilNext(),
+                events: calendarViewModel.events,
                 isPresented: $showCalendarSummary
             )
         }

@@ -19,6 +19,7 @@ final class MapViewModel {
     var isLoadingRoute: Bool = false
     var isNavigating: Bool = false
     var navigationDestination: CLLocationCoordinate2D? = nil
+    var shouldFitRoute: Bool = true // Control whether route calculation should adjust camera
     
     private let apiService = APIService.shared
     
@@ -76,6 +77,29 @@ final class MapViewModel {
         }
     }
     
+    func zoomToLocation(latitude: Double, longitude: Double, animated: Bool = true) {
+        // Clear throttling for immediate zoom
+        lastLocationUpdate = nil
+        
+        // Offset center downward (decrease latitude) so pin appears above the card
+        // By moving the map center south, the pin (at the original latitude) appears higher on screen
+        let offsetLatitude = latitude - 0.0005 // Offset by ~55 meters south to position pin above card
+        
+        // Use smaller span for zoomed-in view
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: offsetLatitude, longitude: longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+        )
+        
+        if animated {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                cameraPosition = .region(region)
+            }
+        } else {
+            cameraPosition = .region(region)
+        }
+    }
+    
     func fetchRoute(originLat: Double? = nil, originLng: Double? = nil, destinationLat: Double, destinationLng: Double) async {
         isLoadingRoute = true
         
@@ -100,8 +124,8 @@ final class MapViewModel {
                     routeDistance = response.distance_text
                     isLoadingRoute = false
                     
-                    // Update camera to show entire route
-                    if !coordinates.isEmpty {
+                    // Update camera to show entire route only if shouldFitRoute is true
+                    if !coordinates.isEmpty && shouldFitRoute {
                         updateCameraToFitRoute(coordinates: coordinates)
                     }
                 }
@@ -146,8 +170,8 @@ final class MapViewModel {
                     routeMode = "walking"
                     isLoadingRoute = false
                     
-                    // Update camera to show entire route
-                    if !coordinates.isEmpty {
+                    // Update camera to show entire route only if shouldFitRoute is true
+                    if !coordinates.isEmpty && shouldFitRoute {
                         updateCameraToFitRoute(coordinates: coordinates)
                     }
                 }

@@ -7,22 +7,26 @@ import os
 
 from models.db import db, bcrypt
 
-# ROUTES
-from routes.auth_routes import auth_bp
-from routes.user_routes import user_bp
-from routes.calendar_routes import calendar_bp
-
 # SERVICES
 from utils.cache import init_requests_cache
-from utils.config import get_allowed_origins, validate_config
+from utils.config import get_allowed_origins, validate_config, get_jwt_secret
+from utils.limiter import init_limiter
+import utils.limiter as limiter_module
+from utils.validation import (
+    validate_coordinates, validate_limit, validate_days
+)
+from middleware.security import add_security_headers, enforce_https
 from services.directions_service import get_walking_directions
 from services.recommendation.driver import build_chat_response
 from services.recommendation.quick_recommendations import get_quick_recommendations
 from services.scrapers.engage_events_service import fetch_engage_events
 from services.recommendation.context import ConversationContext
+from services.weather_service import get_weather_by_coords, get_forecast_by_coords
 from utils.auth import decode_token
+from utils.context_manager import ConversationContextManager
 from models.users import User
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,9 @@ TANDON_LNG = -73.9866
 
 app = Flask(__name__)
 
+# Set maximum request size
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024  # 1 MB
+
 load_dotenv()
 
 # Validate configuration
@@ -48,18 +55,32 @@ except ValueError as e:
     # In production, this should fail. In development, continue with warnings.
 
 # CORS configuration - environment-aware
+env = os.getenv("FLASK_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+is_production = env in ("production", "prod")
+
 try:
     allowed_origins = get_allowed_origins()
     CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
     logger.info(f"CORS configured with origins: {allowed_origins}")
 except ValueError as e:
-    logger.warning(f"CORS configuration error: {e}. Using wildcard for development.")
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    if is_production:
+        # Fail fast in production - never use wildcard
+        logger.error(f"CORS configuration error in production: {e}")
+        raise ValueError(f"CORS configuration required in production: {e}")
+    else:
+        # Development: allow wildcard with warning
+        logger.warning(f"CORS configuration error: {e}. Using wildcard for development.")
+        CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 init_requests_cache()
 
-# Secret key for JWT
-app.config["SECRET_KEY"] = os.getenv("JWT_SECRET", "dev-secret-change-me")
+# Secret key for Flask (uses JWT_SECRET, but JWT tokens use get_jwt_secret() which validates)
+# In production, JWT_SECRET must be set (validated by get_jwt_secret())
+if is_production:
+    # In production, get_jwt_secret() will raise error if JWT_SECRET not set
+    app.config["SECRET_KEY"] = get_jwt_secret()
+else:
+    app.config["SECRET_KEY"] = os.getenv("JWT_SECRET", "dev-secret-change-me")
 
 # Database config - supports both SQLite (dev) and PostgreSQL (production)
 database_url = os.getenv("DATABASE_URL")
@@ -75,8 +96,30 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 bcrypt.init_app(app)
 
+# Initialize rate limiter early (routes will import it)
+init_limiter(app)
+limiter = limiter_module.limiter
+
 with app.app_context():
     db.create_all()
+
+# Register security middleware
+@app.after_request
+def security_headers(response):
+    """Add security headers to all responses."""
+    return add_security_headers(response)
+
+@app.before_request
+def check_https():
+    """Enforce HTTPS in production."""
+    result = enforce_https()
+    if result:
+        return result
+
+# Import routes (limiter is already initialized)
+from routes.auth_routes import auth_bp
+from routes.user_routes import user_bp
+from routes.calendar_routes import calendar_bp
 
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -90,10 +133,8 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 # CHAT ROUTE
 # ─────────────────────────────────────────────────────────────
 
-memory = ConversationContext()
-
-
 @app.route("/api/chat", methods=["POST"])
+@limiter_module.limiter.limit("10 per minute")
 def chat():
     try:
         data = request.get_json(force=True) or {}
@@ -105,15 +146,28 @@ def chat():
         # Try to get user from JWT
         token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
         user = None
+        user_id = None
+        session_id = None
 
         if token:
             try:
                 payload = decode_token(token)
                 user = User.query.get(payload.get("sub"))
+                if user:
+                    user_id = str(user.id)
             except Exception:
                 user = None
+        
+        # If no authenticated user, use session-based context
+        if not user_id:
+            # Try to get session ID from request or generate one
+            session_id = request.headers.get("X-Session-ID") or str(uuid.uuid4())
+        
+        # Get or create user-scoped conversation context
+        context_manager = ConversationContextManager(user_id=user_id, session_id=session_id)
+        memory = context_manager.get_context()
 
-        print("MEMORY STATE:", memory.history)
+        logger.debug(f"Chat request - user: {user_id or 'anonymous'}, session: {session_id}, message length: {len(user_message)}")
 
         prefs = user.get_preferences() if user else {}
 
@@ -122,11 +176,19 @@ def chat():
             memory,
             user_profile=prefs,
         )
+        
+        # Save context after conversation
+        context_manager.save_context(memory)
 
-        return jsonify(result)
+        # Include session ID in response for anonymous users
+        response_data = result.copy()
+        if not user_id and session_id:
+            response_data["session_id"] = session_id
+
+        return jsonify(response_data)
 
     except Exception as e:
-        print("CHAT ERROR:", e)
+        logger.error(f"Chat endpoint error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -135,15 +197,22 @@ def chat():
 # ─────────────────────────────────────────────────────────────
 
 @app.route("/api/quick_recs", methods=["GET"])
+@limiter_module.limiter.limit("30 per minute")
 def quick_recs():
     try:
         category = (request.args.get("category") or "explore").lower()
-        limit = int(request.args.get("limit", 10))
+        
+        # Validate limit parameter
+        limit_raw = request.args.get("limit", 10)
+        is_valid, limit, error_msg = validate_limit(limit_raw)
+        if not is_valid:
+            logger.warning(f"Invalid limit parameter: {limit_raw}, using clamped value: {limit}")
+        
         vibe = request.args.get("vibe")  # Optional vibe parameter
         result = get_quick_recommendations(category, limit=limit, vibe=vibe)
         return jsonify(result)
     except Exception as e:
-        print("QUICK_RECS ERROR:", e)
+        logger.error(f"Quick recommendations endpoint error: {e}", exc_info=True)
         return jsonify({"error": "Unable to fetch quick recommendations"}), 500
 
 
@@ -152,13 +221,18 @@ def quick_recs():
 # ─────────────────────────────────────────────────────────────
 
 @app.route("/api/nyu_engage_events", methods=["GET"])
+@limiter_module.limiter.limit("20 per minute")
 def nyu_engage_events():
     try:
-        days = int(request.args.get("days", 7))
+        days_raw = request.args.get("days", 7)
+        is_valid, days, error_msg = validate_days(days_raw)
+        if not is_valid:
+            logger.warning(f"Invalid days parameter: {days_raw}, using clamped value: {days}")
+        
         data = fetch_engage_events(days_ahead=days)
         return jsonify({"engage_events": data})
     except Exception as e:
-        print("ENGAGE EVENTS ERROR:", e)
+        logger.error(f"Engage events endpoint error: {e}", exc_info=True)
         return jsonify({"error": "Unable to fetch NYU Engage events"}), 500
 
 
@@ -167,25 +241,110 @@ def nyu_engage_events():
 # ─────────────────────────────────────────────────────────────
 
 @app.route("/api/directions", methods=["GET"])
+@limiter_module.limiter.limit("30 per minute")
 def directions():
-    lat = float(request.args.get("lat"))
-    lng = float(request.args.get("lng"))
-    
-    # Accept optional origin coordinates (for user's current location)
-    # Default to 2 MetroTech if not provided
-    origin_lat = float(request.args.get("origin_lat", 40.693393))
-    origin_lng = float(request.args.get("origin_lng", -73.98555))
+    try:
+        # Validate destination coordinates
+        lat_raw = request.args.get("lat")
+        lng_raw = request.args.get("lng")
+        
+        if not lat_raw or not lng_raw:
+            return jsonify({"error": "Latitude and longitude are required"}), 400
+        
+        is_valid, error_msg = validate_coordinates(float(lat_raw), float(lng_raw))
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
+        lat = float(lat_raw)
+        lng = float(lng_raw)
+        
+        # Validate origin coordinates (optional, default to 2 MetroTech)
+        origin_lat_raw = request.args.get("origin_lat", "40.693393")
+        origin_lng_raw = request.args.get("origin_lng", "-73.98555")
+        
+        is_valid, error_msg = validate_coordinates(float(origin_lat_raw), float(origin_lng_raw))
+        if not is_valid:
+            return jsonify({"error": f"Invalid origin coordinates: {error_msg}"}), 400
+        
+        origin_lat = float(origin_lat_raw)
+        origin_lng = float(origin_lng_raw)
 
-    result = get_walking_directions(origin_lat, origin_lng, lat, lng)
+        result = get_walking_directions(origin_lat, origin_lng, lat, lng)
 
-    if not result:
+        if not result:
+            return jsonify({"error": "Directions failed"}), 500
+
+        # Ensure mode is included in response for frontend
+        if "mode" not in result:
+            result["mode"] = "walking"  # Default fallback
+
+        return jsonify(result)
+    except ValueError as e:
+        logger.error(f"Directions endpoint validation error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Directions endpoint error: {e}", exc_info=True)
         return jsonify({"error": "Directions failed"}), 500
 
-    # Ensure mode is included in response for frontend
-    if "mode" not in result:
-        result["mode"] = "walking"  # Default fallback
 
-    return jsonify(result)
+# ─────────────────────────────────────────────────────────────
+# WEATHER ENDPOINTS
+# ─────────────────────────────────────────────────────────────
+
+@app.route("/api/weather", methods=["GET"])
+@limiter_module.limiter.limit("30 per minute")
+def weather():
+    """Get current weather by coordinates."""
+    try:
+        lat_raw = request.args.get("lat")
+        lon_raw = request.args.get("lon")
+        
+        if not lat_raw or not lon_raw:
+            return jsonify({"error": "Latitude and longitude are required"}), 400
+        
+        is_valid, error_msg = validate_coordinates(float(lat_raw), float(lon_raw))
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
+        lat = float(lat_raw)
+        lon = float(lon_raw)
+        
+        result = get_weather_by_coords(lat, lon)
+        return jsonify(result)
+    except ValueError as e:
+        logger.error(f"Weather endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Weather endpoint error: {e}", exc_info=True)
+        return jsonify({"error": "Unable to fetch weather"}), 500
+
+
+@app.route("/api/weather/forecast", methods=["GET"])
+@limiter_module.limiter.limit("30 per minute")
+def weather_forecast():
+    """Get weather forecast by coordinates."""
+    try:
+        lat_raw = request.args.get("lat")
+        lon_raw = request.args.get("lon")
+        
+        if not lat_raw or not lon_raw:
+            return jsonify({"error": "Latitude and longitude are required"}), 400
+        
+        is_valid, error_msg = validate_coordinates(float(lat_raw), float(lon_raw))
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
+        lat = float(lat_raw)
+        lon = float(lon_raw)
+        
+        result = get_forecast_by_coords(lat, lon)
+        return jsonify({"forecast": result})
+    except ValueError as e:
+        logger.error(f"Weather forecast endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Weather forecast endpoint error: {e}", exc_info=True)
+        return jsonify({"error": "Unable to fetch weather forecast"}), 500
 
 
 # ─────────────────────────────────────────────────────────────

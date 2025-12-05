@@ -12,15 +12,29 @@ from utils.config import get_jwt_secret
 logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = "HS256"
-JWT_EXP_DAYS = 7
+JWT_EXP_HOURS = 24  # Reduced from 7 days to 24 hours for better security
+REFRESH_TOKEN_EXP_DAYS = 30  # Refresh tokens last 30 days
 
 
-def generate_token(user: User) -> str:
+def generate_token(user: User, is_refresh: bool = False) -> str:
+    """
+    Generate JWT token for user.
+    
+    Args:
+        user: User object
+        is_refresh: If True, generate refresh token with longer expiration
+    
+    Returns:
+        JWT token string
+    """
+    exp_delta = datetime.timedelta(days=REFRESH_TOKEN_EXP_DAYS) if is_refresh else datetime.timedelta(hours=JWT_EXP_HOURS)
+    
     payload = {
         "sub": user.id,
         "email": user.email,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=JWT_EXP_DAYS),
+        "exp": datetime.datetime.utcnow() + exp_delta,
         "iat": datetime.datetime.utcnow(),
+        "type": "refresh" if is_refresh else "access"
     }
     jwt_secret = get_jwt_secret()
     token = jwt.encode(payload, jwt_secret, algorithm=JWT_ALGORITHM)
@@ -28,6 +42,18 @@ def generate_token(user: User) -> str:
     if isinstance(token, bytes):
         token = token.decode("utf-8")
     return token
+
+
+def generate_token_pair(user: User) -> tuple[str, str]:
+    """
+    Generate both access and refresh tokens.
+    
+    Returns:
+        Tuple of (access_token, refresh_token)
+    """
+    access_token = generate_token(user, is_refresh=False)
+    refresh_token = generate_token(user, is_refresh=True)
+    return access_token, refresh_token
 
 
 def decode_token(token: str):

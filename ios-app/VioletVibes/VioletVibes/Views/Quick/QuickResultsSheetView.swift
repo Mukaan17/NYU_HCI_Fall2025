@@ -89,7 +89,7 @@ struct QuickResultsSheetView: View {
                             }
                             .listRowBackground(
                                 RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                                    .fill(.regularMaterial)
+                                    .fill(.ultraThinMaterial)
                                     .padding(.vertical, Theme.Spacing.xs)
                             )
                             .listRowSeparator(.hidden)
@@ -117,7 +117,7 @@ struct QuickResultsSheetView: View {
             // Liquid glass background for sheet
             ZStack {
                 RoundedRectangle(cornerRadius: 0)
-                    .fill(.regularMaterial)
+                    .fill(.ultraThinMaterial)
                 
                 LinearGradient(
                     colors: [
@@ -283,12 +283,12 @@ struct QuickResultRow: View {
             .background {
                 ZStack {
                     RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                        .fill(.regularMaterial)
+                        .fill(.ultraThinMaterial)
                     
                     LinearGradient(
                         colors: [
-                            Theme.Colors.gradientStart.opacity(0.1),
-                            Theme.Colors.gradientEnd.opacity(0.05)
+                            Theme.Colors.gradientStart.opacity(0.05),
+                            Theme.Colors.gradientEnd.opacity(0.02)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

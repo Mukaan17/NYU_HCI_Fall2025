@@ -40,6 +40,9 @@ struct Theme {
         static let accentErrorMedium = Color(hex: "ff3b30").opacity(0.2)
         static let accentErrorBorder = Color(hex: "ff3b30").opacity(0.5)
         
+        static let accentGreen = Color(hex: "34c759")
+        static let accentGreenMedium = Color(hex: "34c759").opacity(0.2)
+        
         static let glassBackground = Color(hex: "1c2541").opacity(0.6)
         static let glassBackgroundLight = Color(hex: "1c2541").opacity(0.8)
         static let glassBackgroundDark = Color(hex: "151e38").opacity(0.6)

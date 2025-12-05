@@ -6,6 +6,7 @@ import logging
 from models.db import db
 from utils.auth import require_auth
 from services.recommendation.preference_utils import sanitize_preferences
+from utils.validation import validate_activity_payload_size
 
 logger = logging.getLogger(__name__)
 user_bp = Blueprint("user", __name__)
@@ -151,6 +152,14 @@ def activity():
                 f"Request {g.get('request_id', 'unknown')}: Activity missing type field"
             )
             return jsonify({"error": "Missing 'type' field"}), 400
+        
+        # Validate activity payload size
+        is_valid, error_msg = validate_activity_payload_size(data)
+        if not is_valid:
+            logger.warning(
+                f"Request {g.get('request_id', 'unknown')}: Activity payload too large - {user.id}"
+            )
+            return jsonify({"error": error_msg}), 400
 
         user.add_activity(data)
         db.session.commit()

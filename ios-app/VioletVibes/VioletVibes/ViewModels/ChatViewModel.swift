@@ -15,16 +15,40 @@ final class ChatViewModel {
     private let apiService = APIService.shared
     
     init() {
-        // Initialize with welcome message
+        // Initialize with welcome message - will be updated with user's first name
         messages = [
             ChatMessage(
                 id: 1,
                 type: .text,
                 role: .ai,
-                content: "Hey Tandon! I'm VioletVibes. Tell me what you're in the mood for — drinks, food, coffee, or something fun.",
+                content: "Hey! I'm VioletVibes. Tell me what you're in the mood for — drinks, food, coffee, or something fun.",
                 timestamp: Date()
             )
         ]
+        
+        // Load user's first name and update welcome message
+        Task {
+            await loadWelcomeMessage()
+        }
+    }
+    
+    private func loadWelcomeMessage() async {
+        let storage = StorageService.shared
+        if let account = await storage.userAccount, !account.firstName.isEmpty {
+            let firstName = account.firstName
+            await MainActor.run {
+                // Update the first message with user's first name
+                if !messages.isEmpty {
+                    messages[0] = ChatMessage(
+                        id: 1,
+                        type: .text,
+                        role: .ai,
+                        content: "Hey \(firstName)! I'm VioletVibes. Tell me what you're in the mood for — drinks, food, coffee, or something fun.",
+                        timestamp: messages[0].timestamp
+                    )
+                }
+            }
+        }
     }
     
     func sendMessage(

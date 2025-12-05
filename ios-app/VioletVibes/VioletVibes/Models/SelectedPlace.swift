@@ -15,16 +15,18 @@ struct SelectedPlace: Identifiable, Codable, Sendable, Equatable {
     var distance: String?
     var address: String?
     var image: String?
+    var rating: String?
+    var category: String?
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
     
     enum CodingKeys: String, CodingKey {
-        case name, latitude, longitude, walkTime, distance, address, image
+        case name, latitude, longitude, walkTime, distance, address, image, rating, category
     }
     
-    init(name: String, latitude: Double, longitude: Double, walkTime: String? = nil, distance: String? = nil, address: String? = nil, image: String? = nil) {
+    init(name: String, latitude: Double, longitude: Double, walkTime: String? = nil, distance: String? = nil, address: String? = nil, image: String? = nil, rating: String? = nil, category: String? = nil) {
         self.name = name
         self.latitude = latitude
         self.longitude = longitude
@@ -32,6 +34,8 @@ struct SelectedPlace: Identifiable, Codable, Sendable, Equatable {
         self.distance = distance
         self.address = address
         self.image = image
+        self.rating = rating
+        self.category = category
     }
     
     static func == (lhs: SelectedPlace, rhs: SelectedPlace) -> Bool {
@@ -42,7 +46,9 @@ struct SelectedPlace: Identifiable, Codable, Sendable, Equatable {
         lhs.walkTime == rhs.walkTime &&
         lhs.distance == rhs.distance &&
         lhs.address == rhs.address &&
-        lhs.image == rhs.image
+        lhs.image == rhs.image &&
+        lhs.rating == rhs.rating &&
+        lhs.category == rhs.category
     }
 }
 

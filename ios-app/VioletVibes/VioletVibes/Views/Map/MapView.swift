@@ -6,6 +6,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import UIKit
 
 struct MapView: View {
     @Environment(PlaceViewModel.self) private var placeViewModel
@@ -21,7 +22,9 @@ struct MapView: View {
     @State private var lastGeocodeTime: Date? = nil
     @State private var showMapsPicker = false
     @State private var pendingDestination: (coordinate: CLLocationCoordinate2D, name: String)? = nil
+    @State private var dragDistance: CGFloat = 0
     private let geocodeThrottle: TimeInterval = 5.0 // Only geocode every 5 seconds
+    private let tapThreshold: CGFloat = 10 // Pixels - if drag distance is less than this, it's a tap
     
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
@@ -30,6 +33,21 @@ struct MapView: View {
     var body: some View {
         ZStack {
             mapContent
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            // Track total drag distance
+                            dragDistance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
+                        }
+                        .onEnded { _ in
+                            // If drag distance is small, treat as tap
+                            if dragDistance < tapThreshold {
+                                handleMapTap()
+                            }
+                            // Reset drag distance
+                            dragDistance = 0
+                        }
+                )
             addressBadge
             bottomSheet
             centerToLocationButton
@@ -62,26 +80,23 @@ struct MapView: View {
                 }
             }
             
-            // Destination annotation
-            if let place = placeViewModel.selectedPlace {
+            // Only show pins for backend-suggested places
+            ForEach(placeViewModel.allPlaces) { place in
                 Annotation(place.name, coordinate: place.coordinate) {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(Theme.Colors.gradientStart)
-                        .font(.system(size: 32))
-                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    Button(action: {
+                        handlePinTap(place: place)
+                    }) {
+                        CategoryPinView(
+                            place: place,
+                            isSelected: place.id == placeViewModel.selectedPlace?.id
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             
-            // Route polyline
-            if !viewModel.polylineCoordinates.isEmpty {
-                MapPolyline(coordinates: viewModel.polylineCoordinates)
-                    .stroke(
-                        viewModel.routeMode == "transit" ? Theme.Colors.accentBlue : Theme.Colors.gradientStart,
-                        lineWidth: viewModel.routeMode == "transit" ? 6 : 5
-                    )
-            }
         }
-        .mapStyle(.standard(elevation: .flat))
+        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .ignoresSafeArea()
     }
     
@@ -230,16 +245,38 @@ struct MapView: View {
             placeImage(url: imageURL)
         }
         
-        Text(place.name)
-            .themeFont(size: .`2xl`, weight: .semiBold)
-            .foregroundColor(Theme.Colors.textPrimary)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Text(place.name)
+                .themeFont(size: .`2xl`, weight: .semiBold)
+                .foregroundColor(Theme.Colors.textPrimary)
+            
+            // Address
+            if let address = place.address {
+                Text(address)
+                    .themeFont(size: .sm)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+            
+            // Rating (if available from recommendation)
+            if let rating = getRatingForPlace(place) {
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.yellow)
+                    Text(rating)
+                        .themeFont(size: .sm, weight: .medium)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+            }
+        }
         
         routeInfoView(place: place)
         getDirectionsButton(place: place)
-        
-        if viewModel.isLoadingRoute {
-            loadingRouteIndicator
-        }
+    }
+    
+    private func getRatingForPlace(_ place: SelectedPlace) -> String? {
+        return place.rating
     }
     
     @ViewBuilder
@@ -269,26 +306,17 @@ struct MapView: View {
     
     @ViewBuilder
     private func routeInfoView(place: SelectedPlace) -> some View {
-        if !viewModel.polylineCoordinates.isEmpty, let duration = viewModel.routeDuration {
+        if let walkTime = place.walkTime, let distance = place.distance {
             HStack(spacing: Theme.Spacing.sm) {
-                Image(systemName: viewModel.routeMode == "transit" ? "tram.fill" : "figure.walk")
+                Image(systemName: "figure.walk")
                     .font(.system(size: 14))
-                    .foregroundColor(viewModel.routeMode == "transit" ? Theme.Colors.accentBlue : Theme.Colors.gradientStart)
-                Text(duration)
+                    .foregroundColor(Theme.Colors.gradientStart)
+                Text("\(walkTime) • \(distance)")
                     .themeFont(size: .base)
                     .foregroundColor(Theme.Colors.textSecondary)
-                if let distance = viewModel.routeDistance {
-                    Text("• \(distance)")
-                        .themeFont(size: .base)
-                        .foregroundColor(Theme.Colors.textSecondary)
-                }
             }
-        } else if let walkTime = place.walkTime, let distance = place.distance {
-            Text("\(walkTime) • \(distance)")
-                .themeFont(size: .base)
-                .foregroundColor(Theme.Colors.textSecondary)
         } else {
-            Text("Home base • NYU Tandon")
+            Text("Home base • NYU")
                 .themeFont(size: .base)
                 .foregroundColor(Theme.Colors.textSecondary)
         }
@@ -358,11 +386,11 @@ struct MapView: View {
     
     @ViewBuilder
     private var defaultCardContent: some View {
-        Text("2 MetroTech Center")
+        Text(currentLocationAddress ?? "2 MetroTech Center")
             .themeFont(size: .`2xl`, weight: .semiBold)
             .foregroundColor(Theme.Colors.textPrimary)
         
-        Text("Home base • NYU Tandon")
+        Text("Home base • NYU")
             .themeFont(size: .base)
             .foregroundColor(Theme.Colors.textSecondary)
     }
@@ -402,14 +430,39 @@ struct MapView: View {
     }
     
     // MARK: - Event Handlers
+    private func handleMapTap() {
+        // Dismiss the selected place card when tapping on map
+        if placeViewModel.selectedPlace != nil {
+            placeViewModel.clearSelectedPlace()
+        }
+    }
+    
+    private func handlePinTap(place: SelectedPlace) {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        
+        placeViewModel.setSelectedPlace(place)
+        
+        // Zoom in on the selected pin
+        viewModel.zoomToLocation(
+            latitude: place.latitude,
+            longitude: place.longitude,
+            animated: true
+        )
+    }
+    
     private func handlePlaceChange(oldValue: SelectedPlace?, newValue: SelectedPlace?) {
         guard oldValue?.id != newValue?.id else { return }
         
         if let place = newValue {
             currentLocationAddress = nil
-            viewModel.updateRegion(latitude: place.latitude, longitude: place.longitude, animated: true)
+            // Use zoomToLocation to ensure pin appears above the card
+            viewModel.zoomToLocation(
+                latitude: place.latitude,
+                longitude: place.longitude,
+                animated: true
+            )
         } else {
-            viewModel.clearRoute()
             if let location = locationManager.location {
                 geocodingTask?.cancel()
                 geocodingTask = Task {
@@ -497,6 +550,59 @@ struct MapView: View {
                 if let location = locationManager.location ?? LocationService.shared.location {
                     await geocodeLocation(location)
                 }
+            }
+        }
+        
+        // Load recommendations and convert to places for map pins
+        loadRecommendationsForMap()
+    }
+    
+    private func loadRecommendationsForMap() {
+        Task {
+            // Fetch recommendations from multiple categories to get 20 total
+            let apiService = APIService.shared
+            var allPlaces: [SelectedPlace] = []
+            
+            // Categories to fetch from
+            let categories = ["explore", "quick_bites", "chill_cafes", "events"]
+            let limitPerCategory = 5 // 5 per category = 20 total
+            
+            do {
+                // Fetch from each category
+                for category in categories {
+                    do {
+                        let response = try await apiService.getQuickRecommendations(category: category, limit: limitPerCategory)
+                        
+                        // Convert recommendations to SelectedPlace objects with category
+                        let places = response.places.compactMap { rec -> SelectedPlace? in
+                            guard let lat = rec.lat, let lng = rec.lng else { return nil }
+                            return SelectedPlace(
+                                name: rec.title,
+                                latitude: lat,
+                                longitude: lng,
+                                walkTime: rec.walkTime,
+                                distance: rec.distance,
+                                address: rec.description,
+                                image: rec.image,
+                                rating: rec.popularity,
+                                category: response.category
+                            )
+                        }
+                        
+                        allPlaces.append(contentsOf: places)
+                    } catch {
+                        print("Failed to load recommendations for category \(category): \(error)")
+                    }
+                }
+                
+                // Limit to 20 total
+                let limitedPlaces = Array(allPlaces.prefix(20))
+                
+                await MainActor.run {
+                    placeViewModel.setAllPlaces(limitedPlaces)
+                }
+            } catch {
+                print("Failed to load recommendations for map: \(error)")
             }
         }
     }
@@ -720,6 +826,51 @@ struct LocationBlipView: View {
                 pulseOpacity = 0.0
             }
         }
+    }
+}
+
+// Category Pin View - Shows different colors and glyphs based on category
+struct CategoryPinView: View {
+    let place: SelectedPlace
+    let isSelected: Bool
+    
+    private var categoryInfo: (color: Color, glyph: String) {
+        let category = place.category?.lowercased() ?? "explore"
+        
+        switch category {
+        case "quick_bites", "food":
+            return (Color(hex: "FF6B6B"), "fork.knife")
+        case "chill_cafes", "cafe", "coffee":
+            return (Theme.Colors.gradientBlueStart, "cup.and.saucer.fill")
+        case "events", "event":
+            return (Theme.Colors.accentGreen, "calendar")
+        case "explore", "explore_places":
+            return (Theme.Colors.gradientStart, "mappin.circle.fill")
+        default:
+            return (Theme.Colors.gradientStart, "mappin.circle.fill")
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Background circle for opacity
+            Circle()
+                .fill(Color.white.opacity(0.95))
+                .frame(width: isSelected ? 40 : 36, height: isSelected ? 40 : 36)
+            
+            // Category-colored circle
+            Circle()
+                .fill(categoryInfo.color)
+                .frame(width: isSelected ? 32 : 28, height: isSelected ? 32 : 28)
+            
+            // Glyph icon
+            Image(systemName: categoryInfo.glyph)
+                .foregroundColor(.white)
+                .font(.system(size: isSelected ? 18 : 16, weight: .semibold))
+        }
+        .shadow(color: .black.opacity(0.5), radius: 6, x: 0, y: 3)
+        .scaleEffect(isSelected ? 1.15 : 1.0)
+        .animation(.spring(response: 0.3), value: isSelected)
     }
 }
 

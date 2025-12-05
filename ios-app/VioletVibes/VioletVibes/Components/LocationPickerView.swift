@@ -8,35 +8,57 @@ import MapKit
 
 struct LocationPickerView: View {
     @Binding var address: String
+    var onAddressSelected: (() -> Void)? = nil
     @State private var searchText: String = ""
     @State private var searchCompleter = MKLocalSearchCompleter()
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var isSearching = false
+    @State private var isGeocoding = false
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             // Text Field
-            TextField("Enter address", text: $searchText)
-                .themeFont(size: .base)
-                .foregroundColor(Theme.Colors.textPrimary)
-                .padding(Theme.Spacing.`2xl`)
-                .background(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                        .stroke(isTextFieldFocused ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
-                )
-                .cornerRadius(Theme.BorderRadius.md)
-                .focused($isTextFieldFocused)
-                .onChange(of: searchText) { oldValue, newValue in
-                    // Debounce search
-                    Task {
-                        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-                        if searchText == newValue {
-                            performSearch(query: newValue)
+            HStack {
+                TextField("Enter address (e.g., 123 Main St)", text: $searchText)
+                    .themeFont(size: .base)
+                    .foregroundColor(Theme.Colors.textPrimary)
+                    .focused($isTextFieldFocused)
+                    .onSubmit {
+                        // When user presses return, try to geocode the entered text
+                        if !searchText.isEmpty {
+                            geocodeAddress(searchText)
                         }
                     }
+                    .onChange(of: searchText) { oldValue, newValue in
+                        // Debounce search
+                        Task {
+                            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                            if searchText == newValue {
+                                performSearch(query: newValue)
+                            }
+                        }
+                    }
+                
+                if isGeocoding {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .padding(.trailing, Theme.Spacing.md)
                 }
+            }
+            .padding(Theme.Spacing.`2xl`)
+            .background(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                    .stroke(isTextFieldFocused ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
+            )
+            .cornerRadius(Theme.BorderRadius.md)
+            .onChange(of: isTextFieldFocused) { oldValue, newValue in
+                // When field loses focus and user has typed something, try to geocode
+                if !newValue && oldValue && !searchText.isEmpty && searchResults.isEmpty && !isGeocoding {
+                    geocodeAddress(searchText)
+                }
+            }
             
             // Search Results
             if !searchResults.isEmpty && isTextFieldFocused {
@@ -115,6 +137,9 @@ struct LocationPickerView: View {
                 searchText = formattedAddress
                 searchResults = []
                 isTextFieldFocused = false
+                
+                // Call callback if provided (for auto-save)
+                onAddressSelected?()
             }
         }
     }
@@ -140,6 +165,45 @@ struct LocationPickerView: View {
         }
         
         return addressComponents.joined(separator: " ")
+    }
+    
+    private func geocodeAddress(_ addressString: String) {
+        guard !addressString.isEmpty else { return }
+        
+        isGeocoding = true
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = addressString
+        request.resultTypes = .address
+        
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            DispatchQueue.main.async {
+                self.isGeocoding = false
+                
+                if let error = error {
+                    print("Geocoding error: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let response = response, let mapItem = response.mapItems.first else {
+                    // If no results, keep the user's input as-is
+                    return
+                }
+                
+                // Format the full address
+                let formattedAddress = self.formatAddress(from: mapItem)
+                
+                // Update the address binding
+                self.address = formattedAddress
+                self.searchText = formattedAddress
+                self.searchResults = []
+                self.isTextFieldFocused = false
+                
+                // Call callback if provided (for auto-save)
+                self.onAddressSelected?()
+            }
+        }
     }
 }
 

@@ -130,7 +130,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
             {/* Fallback: Blur Glass Background */}
             <BlurView
               intensity={Platform.OS === "ios" ? 40 : 30}
-              tint="systemChromeMaterialDark"
+              tint="light"
               style={styles.blurContainer}
             >
               <View style={styles.glassOverlay} />
@@ -138,7 +138,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
 
             {/* Gradient Overlay */}
             <LinearGradient
-              colors={["rgba(28, 37, 65, 0.6)", "rgba(21, 30, 56, 0.7)"]}
+              colors={["rgba(28, 37, 65, 0.3)", "rgba(21, 30, 56, 0.35)"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.gradientOverlay}
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   glassOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(28, 37, 65, 0.3)",
+    backgroundColor: "rgba(28, 37, 65, 0.15)",
   },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,

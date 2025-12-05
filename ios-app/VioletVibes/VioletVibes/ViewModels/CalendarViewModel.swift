@@ -8,10 +8,35 @@ import Observation
 
 @Observable
 final class CalendarViewModel {
-    private let apiService = APIService.shared
+    private let calendarService = CalendarService.shared
+    private var calendarChangeObserver: NSObjectProtocol?
     var events: [CalendarEvent] = []
     var isLoading = false
     var error: String? = nil
+    
+    init() {
+        // Observe calendar changes
+        setupCalendarChangeObserver()
+    }
+    
+    deinit {
+        if let observer = calendarChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    private func setupCalendarChangeObserver() {
+        calendarChangeObserver = NotificationCenter.default.addObserver(
+            forName: .calendarDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Automatically refresh events when calendar changes
+            Task { @MainActor in
+                await self?.loadTodayEvents()
+            }
+        }
+    }
     
     // Calculate time until next event
     func timeUntilNextEvent() -> String? {
@@ -108,22 +133,28 @@ final class CalendarViewModel {
         }
     }
     
-    func loadTodayEvents(jwt: String?) async {
-        guard let jwt = jwt, !jwt.isEmpty else {
-            error = "Not authenticated"
+    func loadTodayEvents(jwt: String? = nil) async {
+        // Check if we have calendar permission
+        var hasPermission = await calendarService.checkPermissionStatus()
+        
+        // Request permission if not granted
+        if !hasPermission {
+            hasPermission = await calendarService.requestPermission()
+        }
+        
+        // If still no permission, set error and return
+        guard hasPermission else {
+            error = "Calendar access denied"
+            events = []
+            isLoading = false
             return
         }
         
         isLoading = true
         error = nil
         
-        do {
-            let response = try await apiService.fetchTodayCalendarEvents(jwt: jwt)
-            events = response.events
-        } catch {
-            self.error = error.localizedDescription
-            events = []
-        }
+        // Fetch events directly from system calendar
+        events = calendarService.fetchTodayEvents()
         
         isLoading = false
     }

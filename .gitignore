@@ -17,3 +17,5 @@ node_modules/
 
 
 .DS_Store
+server/instance/violetvibes.db
+server/instance/violetvibes.db

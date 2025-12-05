@@ -345,7 +345,12 @@ def _preference_match_score(place: Dict[str, Any],
     all_text = " ".join([name] + types)
 
     # ----- Diet preferences -----
-    diet = (prefs.get("diet") or prefs.get("dietary") or "").lower()
+    # Handle both string and dict values for diet
+    diet_raw = prefs.get("diet") or prefs.get("dietary") or ""
+    if isinstance(diet_raw, dict):
+        diet = str(diet_raw.get("value", diet_raw.get("name", ""))).lower() if diet_raw else ""
+    else:
+        diet = str(diet_raw).lower() if diet_raw else ""
     if diet:
         weight_sum += 1.0
         is_vegan_friendly = any(k in all_text for k in ["vegan", "plant-based"])
@@ -360,7 +365,13 @@ def _preference_match_score(place: Dict[str, Any],
             score += 0.6
 
     # ----- Budget / price -----
-    budget = (prefs.get("budget") or prefs.get("price") or "").lower()
+    # Handle both string and dict values for budget/price
+    budget_raw = prefs.get("budget") or prefs.get("price") or ""
+    if isinstance(budget_raw, dict):
+        # If it's a dict, try to extract a string value (e.g., {"value": "cheap"})
+        budget = str(budget_raw.get("value", budget_raw.get("name", ""))).lower() if budget_raw else ""
+    else:
+        budget = str(budget_raw).lower() if budget_raw else ""
     price_level = place.get("price_level")  # Google Places: 0–4
     if budget and price_level is not None:
         weight_sum += 1.0

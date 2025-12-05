@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { PlaceProvider } from "../context/PlaceContext";
 import { ChatProvider } from "../context/ChatContext";
+import { AuthProvider } from "../context/AuthContext";
 
 export default function RootLayout() {
   const segments = useSegments();
@@ -33,12 +34,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <PlaceProvider>
-        <ChatProvider>
-          <StatusBar style="light" translucent backgroundColor="transparent" />
-          <Slot />
-        </ChatProvider>
-      </PlaceProvider>
+      <AuthProvider>
+        <PlaceProvider>
+          <ChatProvider>
+            <StatusBar style="light" translucent backgroundColor="transparent" />
+            <Slot />
+          </ChatProvider>
+        </PlaceProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

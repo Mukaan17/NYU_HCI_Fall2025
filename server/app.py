@@ -4,6 +4,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
+import pytz
 
 from models.db import db, bcrypt
 
@@ -18,7 +19,10 @@ from utils.validation import (
 from middleware.security import add_security_headers, enforce_https
 from services.directions_service import get_walking_directions
 from services.recommendation.driver import build_chat_response
-from services.recommendation.quick_recommendations import get_quick_recommendations
+from services.recommendation.quick_recommendations import (
+    get_quick_recommendations,
+    get_top_recommendations_for_user,
+)
 from services.scrapers.engage_events_service import fetch_engage_events
 from services.recommendation.context import ConversationContext
 from services.weather_service import get_weather_by_coords, get_forecast_by_coords
@@ -122,6 +126,8 @@ from routes.user_routes import user_bp
 from routes.calendar_routes import calendar_bp
 from routes.migration_routes import migration_bp
 from routes.purge_routes import purge_bp
+from routes.dashboard_routes import dashboard_bp
+from routes.weather_routes import weather_bp
 
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -129,6 +135,8 @@ app.register_blueprint(user_bp, url_prefix="/api/user")
 app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
 app.register_blueprint(migration_bp, url_prefix="/api")
 app.register_blueprint(purge_bp, url_prefix="/api")
+app.register_blueprint(dashboard_bp, url_prefix="/api")
+app.register_blueprint(weather_bp, url_prefix="/api")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -218,6 +226,59 @@ def quick_recs():
     except Exception as e:
         logger.error(f"Quick recommendations endpoint error: {e}", exc_info=True)
         return jsonify({"error": "Unable to fetch quick recommendations"}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+# TOP RECOMMENDATIONS (preferences + context for dashboard)
+# ─────────────────────────────────────────────────────────────
+
+@app.route("/api/top_recommendations", methods=["GET"])
+@limiter_module.limiter.limit("20 per minute")
+def top_recommendations():
+    """
+    Get personalized top recommendations based on user preferences and context.
+    Optional JWT token for personalized preferences.
+    """
+    try:
+        # Optional JWT for personalized preferences
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        user = None
+
+        if token:
+            try:
+                payload = decode_token(token)
+                user = User.query.get(payload.get("sub"))
+            except Exception as e:
+                logger.debug(f"Failed to decode token for top recommendations: {e}")
+                user = None
+
+        prefs = user.get_preferences() if user else {}
+
+        # Simple context from server (time of day) + optional weather hint from client
+        tz = pytz.timezone("America/New_York")
+        now = datetime.now(tz)
+
+        context = {
+            "hour": now.hour,
+            "weather": (request.args.get("weather") or "").strip(),
+        }
+
+        # Validate limit parameter
+        limit_raw = request.args.get("limit", 3)
+        is_valid, limit, error_msg = validate_limit(limit_raw, max_value=10, min_value=1)
+        if not is_valid:
+            logger.warning(f"Invalid limit parameter: {limit_raw}, using clamped value: {limit}")
+
+        result = get_top_recommendations_for_user(
+            prefs=prefs,
+            context=context,
+            limit=limit,
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Top recommendations endpoint error: {e}", exc_info=True)
+        return jsonify({"error": "Unable to fetch top recommendations"}), 500
 
 
 # ─────────────────────────────────────────────────────────────

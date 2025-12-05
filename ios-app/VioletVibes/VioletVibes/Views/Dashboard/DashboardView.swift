@@ -131,8 +131,9 @@ struct DashboardView: View {
                         // Badges - Centered horizontally
                         HStack(spacing: Theme.Spacing.lg) {
                             // Weather Badge - Clickable with loading state
+                            // Prefer dashboard weather, fallback to weatherManager
                             Group {
-                            if let weather = weatherManager.weather {
+                            if let weather = viewModel.dashboardWeather ?? weatherManager.weather {
                                     Button(action: {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             isWeatherExpanded.toggle()
@@ -192,35 +193,61 @@ struct DashboardView: View {
                                 weatherButtonFrame = frame
                             }
                             
-                            // Schedule Badge - Clickable, shows calendar summary
+                            // Schedule Badge - Combined calendar status and free time
+                            // Priority: 1) System calendar, 2) Google Calendar from backend
+                            // Shows "Calendar not linked" if Google Calendar not connected and system calendar unavailable
                             Button(action: {
+                                // Always show calendar summary modal (shows system calendar events)
                                 showCalendarSummary = true
                             }) {
                                 Group {
                                     if calendarViewModel.isLoading {
+                                        // Loading state
                                         ProgressView()
                                             .scaleEffect(0.8)
                                             .tint(Theme.Colors.textPrimary)
-                                    } else if let freeTimeText = calendarViewModel.timeUntilFormatted() {
-                                        Text(freeTimeText)
+                                    } else if let systemFreeTime = calendarViewModel.timeUntilFormatted(), !calendarViewModel.events.isEmpty {
+                                        // Priority 1: System calendar has data
+                                        Text(systemFreeTime)
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
-                                            .minimumScaleFactor(0.8)
+                                            .minimumScaleFactor(0.75)
+                                    } else if let googleFreeTime = viewModel.nextFreeBlock, viewModel.calendarLinked {
+                                        // Priority 2: Google Calendar from backend (user's login email)
+                                        Text(formatFreeTimeBlock(googleFreeTime))
+                                            .themeFont(size: .base, weight: .semiBold)
+                                            .foregroundColor(Theme.Colors.textPrimary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.75)
+                                    } else if !viewModel.calendarLinked && calendarViewModel.events.isEmpty {
+                                        // No calendar data available and Google Calendar not linked
+                                        HStack(spacing: Theme.Spacing.sm) {
+                                            Image(systemName: "calendar.badge.exclamationmark")
+                                                .font(.system(size: 15))
+                                            Text("Calendar not linked")
+                                                .themeFont(size: .base, weight: .semiBold)
+                                        }
+                                        .foregroundColor(Theme.Colors.textSecondary)
                                     } else {
+                                        // Free all day (no events in either calendar)
                                         Text("Free all day")
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
                                     }
                                 }
-                                .padding(.horizontal, Theme.Spacing.xl)
-                                .padding(.vertical, Theme.Spacing.sm)
-                                .frame(minHeight: 40) // Fixed minimum height
+                                .padding(.horizontal, Theme.Spacing.`2xl`)
+                                .padding(.vertical, Theme.Spacing.md)
+                                .frame(minHeight: 44) // Increased minimum height for better spacing
                                 .background(Theme.Colors.glassBackground)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: Theme.BorderRadius.full)
-                                        .stroke(Theme.Colors.border, lineWidth: 1)
+                                        .stroke(
+                                            // Use full opacity if we have calendar data (system or Google), reduced if not linked
+                                            (calendarViewModel.events.isEmpty && !viewModel.calendarLinked) ? Theme.Colors.border.opacity(0.5) : Theme.Colors.border,
+                                            lineWidth: 1
+                                        )
                                 )
                                 .cornerRadius(Theme.BorderRadius.full)
                             }
@@ -234,6 +261,37 @@ struct DashboardView: View {
                             vibeButtonFrame = frame
                         }
                         .padding(.bottom, Theme.Spacing.`4xl`)
+                        
+                        // Free-Time Suggestion Card
+                        if let suggestion = viewModel.freeTimeSuggestion, suggestion.should_suggest {
+                            FreeTimeSuggestionCard(
+                                suggestion: suggestion,
+                                nextFree: viewModel.nextFreeBlock,
+                                onViewDetails: {
+                                    // Navigate to map with selected place
+                                    let suggestionItem = suggestion.suggestion
+                                    let place = SelectedPlace(
+                                        name: suggestionItem.name ?? "Suggested Place",
+                                        latitude: 40.693393, // Default if no location
+                                        longitude: -73.98555,
+                                        walkTime: nil,
+                                        distance: nil,
+                                        address: suggestionItem.address ?? suggestionItem.location,
+                                        image: suggestionItem.photo_url
+                                    )
+                                    placeViewModel.setSelectedPlace(place)
+                                    tabCoordinator.selectedTab = .map
+                                },
+                                onGetDirections: {
+                                    // Open maps link
+                                    let suggestionItem = suggestion.suggestion
+                                    if let mapsLink = suggestionItem.maps_link, !mapsLink.isEmpty,
+                                       let url = URL(string: mapsLink) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }
+                            )
+                        }
                         
                         // Quick Actions
                         VStack(alignment: .leading, spacing: Theme.Spacing.`2xl`) {
@@ -319,6 +377,7 @@ struct DashboardView: View {
             AccountSettingsView()
         }
         .sheet(isPresented: $showCalendarSummary) {
+            // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
                 isPresented: $showCalendarSummary
@@ -409,7 +468,7 @@ struct DashboardView: View {
         .onChange(of: selectedVibe) { oldValue, newValue in
             // Reload recommendations when vibe changes
             Task {
-                let weatherString = weatherManager.weather?.emoji
+                let weatherString = viewModel.dashboardWeather?.emoji ?? weatherManager.weather?.emoji
                 let vibeString = newValue?.backendValue
                 await viewModel.loadRecommendations(
                     jwt: session.jwt,
@@ -418,6 +477,35 @@ struct DashboardView: View {
                     vibe: vibeString
                 )
             }
+        }
+    }
+    
+    // Helper function to format free time block
+    private func formatFreeTimeBlock(_ block: FreeTimeBlock) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        guard let startDate = formatter.date(from: block.start),
+              let endDate = formatter.date(from: block.end) else {
+            return "Free time available"
+        }
+        
+        let now = Date()
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        timeFormatter.dateFormat = "h:mm a"
+        
+        if startDate <= now && endDate > now {
+            // Currently in free time block
+            let endTime = timeFormatter.string(from: endDate)
+            return "Free until \(endTime)"
+        } else if startDate > now {
+            // Future free time block
+            let startTime = timeFormatter.string(from: startDate)
+            let endTime = timeFormatter.string(from: endDate)
+            return "Free \(startTime)-\(endTime)"
+        } else {
+            return "Free time available"
         }
     }
 }

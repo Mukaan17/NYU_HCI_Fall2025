@@ -13,16 +13,140 @@ final class DashboardViewModel {
     var isLoading: Bool = false
     var errorMessage: String? = nil
     
+    // Dashboard data properties
+    var dashboardData: DashboardAPIResponse? = nil
+    var freeTimeSuggestion: FreeTimeSuggestion? = nil
+    var nextFreeBlock: FreeTimeBlock? = nil
+    var calendarLinked: Bool = false
+    var dashboardWeather: Weather? = nil
+    
     private let apiService = APIService.shared
     
-    // Load recommendations from backend
-    func loadRecommendations(jwt: String? = nil, preferences: UserPreferences? = nil, weather: String? = nil, vibe: String? = nil) async {
+    // Load dashboard data from backend
+    func loadDashboard(jwt: String) async {
+        // Check for cancellation
+        try? Task.checkCancellation()
+        
         await MainActor.run {
             isLoading = true
             errorMessage = nil
         }
         
         do {
+            let dashboard = try await apiService.getDashboard(jwt: jwt)
+            
+            // Check for cancellation before processing
+            try Task.checkCancellation()
+            
+            await MainActor.run {
+                dashboardData = dashboard
+                
+                // Extract weather
+                dashboardWeather = dashboard.weather
+                
+                // Extract calendar linked status
+                calendarLinked = dashboard.calendar_linked ?? false
+                
+                // Extract next free block
+                nextFreeBlock = dashboard.next_free
+                
+                // Extract free-time suggestion
+                freeTimeSuggestion = dashboard.free_time_suggestion
+                
+                // Extract recommendations from all categories
+                var allRecommendations: [Recommendation] = []
+                
+                if let quickRecs = dashboard.quick_recommendations {
+                    // Combine recommendations from all categories
+                    for (category, recs) in quickRecs {
+                        allRecommendations.append(contentsOf: recs)
+                    }
+                }
+                
+                // Deduplicate recommendations
+                var deduplicated: [Recommendation] = []
+                var seenKeys = Set<String>()
+                
+                for rec in allRecommendations {
+                    let normalizedTitle = rec.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedLat = rec.lat.map { String(format: "%.4f", $0) } ?? "0"
+                    let normalizedLng = rec.lng.map { String(format: "%.4f", $0) } ?? "0"
+                    let uniqueKey = "\(normalizedTitle)-\(normalizedLat)-\(normalizedLng)"
+                    
+                    if seenKeys.contains(uniqueKey) {
+                        continue
+                    }
+                    seenKeys.insert(uniqueKey)
+                    
+                    var uniqueRec = rec
+                    if uniqueRec.id == 0 {
+                        uniqueRec = Recommendation(
+                            id: abs(uniqueKey.hashValue) % Int.max,
+                            title: rec.title,
+                            description: rec.description,
+                            distance: rec.distance,
+                            walkTime: rec.walkTime,
+                            lat: rec.lat,
+                            lng: rec.lng,
+                            popularity: rec.popularity,
+                            image: rec.image
+                        )
+                    }
+                    
+                    deduplicated.append(uniqueRec)
+                }
+                
+                // Use top 3 recommendations for main display
+                recommendations = Array(deduplicated.prefix(3))
+                
+                isLoading = false
+                print("✅ Loaded dashboard data: \(deduplicated.count) total recommendations")
+            }
+        } catch {
+            print("❌ Failed to load dashboard: \(error)")
+            await MainActor.run {
+                isLoading = false
+                errorMessage = "Dashboard unavailable"
+            }
+        }
+    }
+    
+    // Load recommendations from backend (with fallback chain)
+    func loadRecommendations(jwt: String? = nil, preferences: UserPreferences? = nil, weather: String? = nil, vibe: String? = nil) async {
+        // Check for cancellation
+        try? Task.checkCancellation()
+        
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        // Try dashboard first if JWT is available
+        if let jwt = jwt {
+            do {
+                await loadDashboard(jwt: jwt)
+                // Check for cancellation
+                try Task.checkCancellation()
+                // If dashboard loaded successfully, we're done
+                if !recommendations.isEmpty {
+                    return
+                }
+            } catch is CancellationError {
+                // Task was cancelled, exit gracefully
+                await MainActor.run {
+                    isLoading = false
+                }
+                return
+            } catch {
+                print("⚠️ Dashboard load failed, falling back to top recommendations: \(error)")
+            }
+        }
+        
+        // Fallback to top recommendations
+        do {
+            // Check for cancellation
+            try Task.checkCancellation()
+            
             // Try to get top recommendations from backend
             let topRecs = try await apiService.getTopRecommendations(
                 limit: 3,
@@ -31,6 +155,9 @@ final class DashboardViewModel {
                 weather: weather,
                 vibe: vibe
             )
+            
+            // Check for cancellation before processing
+            try Task.checkCancellation()
             
             await MainActor.run {
                 if topRecs.isEmpty {
@@ -79,6 +206,12 @@ final class DashboardViewModel {
                 }
                 isLoading = false
             }
+        } catch is CancellationError {
+            // Task was cancelled, exit gracefully
+            await MainActor.run {
+                isLoading = false
+            }
+            return
         } catch {
             // Log the error and fallback to sample recommendations
             print("❌ Failed to load recommendations: \(error)")

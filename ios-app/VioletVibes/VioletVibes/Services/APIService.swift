@@ -132,6 +132,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -359,6 +367,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -381,16 +397,15 @@ actor APIService {
         weather: String? = nil,
         vibe: String? = nil
     ) async throws -> [Recommendation] {
-        // Use the existing quick_recs endpoint with "explore" category for top recommendations
-        var comps = URLComponents(string: "\(baseURL)/api/quick_recs")!
+        // Use the new top_recommendations endpoint
+        var comps = URLComponents(string: "\(baseURL)/api/top_recommendations")!
         var items: [URLQueryItem] = [
-            URLQueryItem(name: "category", value: "explore"),
-            URLQueryItem(name: "limit", value: "\(limit)")
+            URLQueryItem(name: "limit", value: "\(min(limit, 10))")  // Max 10 per backend
         ]
         
-        // Add vibe parameter if provided
-        if let vibe = vibe {
-            items.append(URLQueryItem(name: "vibe", value: vibe))
+        // Add weather parameter if provided
+        if let weather = weather {
+            items.append(URLQueryItem(name: "weather", value: weather))
         }
         
         comps.queryItems = items
@@ -411,6 +426,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -419,7 +442,7 @@ actor APIService {
         }
         
         do {
-            // quick_recs returns { "category": "...", "places": [...] }
+            // top_recommendations returns { "category": "top", "places": [...] }
             let decoded = try JSONDecoder().decode(QuickRecsAPIResponse.self, from: data)
             return decoded.places
         } catch {
@@ -444,6 +467,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -489,6 +520,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -520,6 +559,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -559,6 +606,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -590,6 +645,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -628,6 +691,14 @@ actor APIService {
         }
         
         guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
                 throw APIError.serverError(msg)
@@ -723,6 +794,147 @@ actor APIService {
         
         let decoder = JSONDecoder()
         return try decoder.decode(NotificationCheckResponse.self, from: data)
+    }
+    
+    // MARK: - Calendar Free Time
+    nonisolated func getFreeTimeBlocks(jwt: String) async throws -> FreeTimeBlocksResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/free_time") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(FreeTimeBlocksResponse.self, from: data)
+    }
+    
+    nonisolated func getNextFreeBlock(jwt: String) async throws -> NextFreeBlockResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/next_free_block") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(NextFreeBlockResponse.self, from: data)
+    }
+    
+    nonisolated func getNextFreeWithRecommendation(jwt: String) async throws -> NextFreeRecommendationResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/next_free") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(NextFreeRecommendationResponse.self, from: data)
+    }
+    
+    nonisolated func getFullRecommendation(jwt: String) async throws -> FullRecommendationResponse {
+        guard let url = URL(string: "\(baseURL)/api/calendar/recommendation") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard http.statusCode == 200 else {
+            // Handle rate limiting (429)
+            if http.statusCode == 429 {
+                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+            }
+            // Handle authentication errors (401)
+            if http.statusCode == 401 {
+                throw APIError.serverError("Authentication required. Please log in again.")
+            }
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
+            }
+            throw APIError.invalidResponse
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(FullRecommendationResponse.self, from: data)
     }
     
     // MARK: - User Activity

@@ -26,6 +26,7 @@ import * as Haptics from "expo-haptics";
 import LiquidGlassButton from "../../components/LiquidGlassButton";
 import { colors, typography, spacing, borderRadius } from "../../constants/theme";
 import { router } from "expo-router";
+import { useAuth } from "../../context/AuthContext";
 
 const { width } = Dimensions.get("window");
 
@@ -140,6 +141,7 @@ function TextInputField({
 
 export default function Login() {
   const insets = useSafeAreaInsets();
+  const { login, signup } = useAuth();
   const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -228,11 +230,14 @@ export default function Login() {
 
     setIsLoggingIn(true);
     try {
-      // Mock login - in production, call your API
+      // Real API login
+      await login(email, password);
+
+      // Save user account data
       const userAccount = {
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Will be replaced with actual user ID from API
         email,
-        firstName: "User", // Would come from API
+        firstName: "User", // Will be replaced with actual first name from API
         hasLoggedIn: true,
       };
 
@@ -243,7 +248,8 @@ export default function Login() {
       router.replace("/(onboarding)/survey");
     } catch (error) {
       console.error("Login error:", error);
-      Alert.alert("Error", "Failed to log in. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to log in. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setIsLoggingIn(false);
     }
@@ -262,9 +268,12 @@ export default function Login() {
 
     setIsSigningUp(true);
     try {
-      // Mock signup - in production, call your API
+      // Real API signup
+      await signup(email, password, firstName.trim());
+
+      // Save user account data
       const userAccount = {
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Will be replaced with actual user ID from API
         email,
         firstName: firstName.trim(),
         hasLoggedIn: true,
@@ -277,7 +286,8 @@ export default function Login() {
       router.replace("/(onboarding)/survey");
     } catch (error) {
       console.error("Signup error:", error);
-      Alert.alert("Error", "Failed to sign up. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to sign up. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setIsSigningUp(false);
     }

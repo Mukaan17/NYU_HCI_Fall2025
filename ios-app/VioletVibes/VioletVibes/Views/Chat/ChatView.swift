@@ -17,6 +17,7 @@ struct ChatView: View {
     
     @FocusState private var isInputFocused: Bool
     @State private var calendarViewModel = CalendarViewModel()
+    @State private var dashboardViewModel = DashboardViewModel()
     @State private var isWeatherExpanded = false
     @State private var showCalendarSummary = false
     @State private var selectedVibe: VibeOption? = availableVibes.first
@@ -137,33 +138,57 @@ struct ChatView: View {
     
     private var scheduleBadge: some View {
         Button(action: {
+            // Always show calendar summary modal (shows system calendar events)
             showCalendarSummary = true
         }) {
             Group {
                 if calendarViewModel.isLoading {
+                    // Loading state
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(Theme.Colors.textPrimary)
-                } else if let freeTimeText = calendarViewModel.timeUntilFormatted() {
-                    Text(freeTimeText)
+                } else if let systemFreeTime = calendarViewModel.timeUntilFormatted(), !calendarViewModel.events.isEmpty {
+                    // Priority 1: System calendar has data
+                    Text(systemFreeTime)
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
+                } else if let googleFreeTime = dashboardViewModel.nextFreeBlock, dashboardViewModel.calendarLinked {
+                    // Priority 2: Google Calendar from backend (user's login email)
+                    Text(formatFreeTimeBlock(googleFreeTime))
+                        .themeFont(size: .base, weight: .semiBold)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                } else if !dashboardViewModel.calendarLinked && calendarViewModel.events.isEmpty {
+                    // No calendar data available and Google Calendar not linked
+                    HStack(spacing: Theme.Spacing.sm) {
+                        Image(systemName: "calendar.badge.exclamationmark")
+                            .font(.system(size: 15))
+                        Text("Calendar not linked")
+                            .themeFont(size: .base, weight: .semiBold)
+                    }
+                    .foregroundColor(Theme.Colors.textSecondary)
                 } else {
+                    // Free all day (no events in either calendar)
                     Text("Free all day")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, Theme.Spacing.xl)
-            .padding(.vertical, Theme.Spacing.sm)
-            .frame(minHeight: 40) // Fixed minimum height
+            .padding(.horizontal, Theme.Spacing.`2xl`)
+            .padding(.vertical, Theme.Spacing.md)
+            .frame(minHeight: 44) // Increased minimum height for better spacing
             .background(Theme.Colors.glassBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.BorderRadius.full)
-                    .stroke(Theme.Colors.border, lineWidth: 1)
+                    .stroke(
+                        // Use full opacity if we have calendar data (system or Google), reduced if not linked
+                        (calendarViewModel.events.isEmpty && !dashboardViewModel.calendarLinked) ? Theme.Colors.border.opacity(0.5) : Theme.Colors.border,
+                        lineWidth: 1
+                    )
             )
             .cornerRadius(Theme.BorderRadius.full)
         }
@@ -321,6 +346,11 @@ struct ChatView: View {
             
             // Load calendar events from system calendar
             await calendarViewModel.loadTodayEvents()
+            
+            // Load dashboard data (includes Google Calendar) if user is authenticated
+            if let jwt = session.jwt {
+                await dashboardViewModel.loadDashboard(jwt: jwt)
+            }
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
             // Reload weather when location changes
@@ -331,10 +361,38 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showCalendarSummary) {
+            // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
                 isPresented: $showCalendarSummary
             )
+        }
+    }
+    
+    // Helper function to format free time block
+    private func formatFreeTimeBlock(_ block: FreeTimeBlock) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let startDate = formatter.date(from: block.start),
+              let endDate = formatter.date(from: block.end) else {
+            return "Free time available"
+        }
+
+        let now = Date()
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        timeFormatter.dateFormat = "h:mm a"
+
+        if startDate <= now && endDate > now {
+            let endTime = timeFormatter.string(from: endDate)
+            return "Free until \(endTime)"
+        } else if startDate > now {
+            let startTime = timeFormatter.string(from: startDate)
+            let endTime = timeFormatter.string(from: endDate)
+            return "Free \(startTime)-\(endTime)"
+        } else {
+            return "Free time available"
         }
     }
 }

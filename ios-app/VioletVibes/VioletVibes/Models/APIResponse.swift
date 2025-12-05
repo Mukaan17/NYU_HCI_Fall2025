@@ -75,12 +75,37 @@ struct AuthResponse: Codable, Sendable {
 
 // MARK: - Dashboard Response
 
+// Free time block structure
+struct FreeTimeBlock: Codable, Sendable {
+    let start: String  // ISO8601 date string
+    let end: String    // ISO8601 date string
+}
+
+// Suggestion item for events and places
+struct SuggestionItem: Codable, Sendable {
+    let name: String?
+    let start: String?  // ISO8601 for events
+    let location: String?
+    let description: String?
+    let address: String?
+    let maps_link: String?
+    let photo_url: String?
+}
+
+// Free time suggestion structure
+struct FreeTimeSuggestion: Codable, Sendable {
+    let should_suggest: Bool
+    let type: String  // "event" or "place"
+    let suggestion: SuggestionItem
+    let message: String
+}
+
 struct DashboardAPIResponse: Codable, Sendable {
-    let weather: Weather?
+    let weather: Weather?  // ✅ Already works - Weather model decodes {temp_f, desc, icon}
     let calendar_linked: Bool?
-    let next_free: String?
-    let free_time_suggestion: String?
-    let quick_recommendations: [String: [Recommendation]]?
+    let next_free: FreeTimeBlock?  // Changed from String?
+    let free_time_suggestion: FreeTimeSuggestion?  // Changed from String?
+    let quick_recommendations: [String: [Recommendation]]?  // ✅ Already correct
 }
 
 // MARK: - Notification Check Response
@@ -130,5 +155,42 @@ struct CalendarEvent: Codable, Sendable {
 struct UserProfileResponse: Codable, Sendable {
     let first_name: String?
     let home_address: String?
+}
+
+// MARK: - Calendar Free Time Responses
+
+struct FreeTimeBlocksResponse: Codable, Sendable {
+    let free_blocks: [FreeTimeBlock]
+    let error: String?
+}
+
+struct NextFreeBlockResponse: Codable, Sendable {
+    let status: String?
+    let free_block: FreeTimeBlockWithDuration?
+    let error: String?
+}
+
+struct FreeTimeBlockWithDuration: Codable, Sendable {
+    let start: String
+    let end: String
+    let duration_minutes: Int?
+}
+
+struct NextFreeRecommendationResponse: Codable, Sendable {
+    let has_free_time: Bool?
+    let next_free: FreeTimeBlock?
+    let suggestion: SuggestionItem?
+    let suggestion_type: String?
+    let message: String?
+    let error: String?
+}
+
+struct FullRecommendationResponse: Codable, Sendable {
+    let has_free_time: Bool?
+    let next_free: FreeTimeBlock?
+    let suggestion: SuggestionItem?
+    let suggestion_type: String?
+    let message: String?
+    let error: String?
 }
 

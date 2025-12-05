@@ -144,10 +144,30 @@ No external dependencies required.
 
 The app communicates with the Flask backend at these endpoints:
 
-- `POST /api/chat` - Send chat message
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/signup` - User signup
+
+### Dashboard & Recommendations
+- `GET /api/dashboard` - Get dashboard data (weather, calendar, recommendations) - **NEW**
+- `GET /api/top_recommendations` - Get personalized top recommendations - **NEW**
 - `GET /api/quick_recs?category={category}` - Get quick recommendations
+
+### Calendar
+- `GET /api/calendar/free_time` - Get all free time blocks - **NEW**
+- `GET /api/calendar/next_free_block` - Get next free block (simple) - **NEW**
+- `GET /api/calendar/next_free` - Get next free block with recommendation - **NEW**
+- `GET /api/calendar/recommendation` - Full recommendation engine - **NEW**
+
+### Weather
+- `GET /api/weather` - Get current weather - **NEW**
+
+### Other
+- `POST /api/chat` - Send chat message
 - `GET /api/directions?lat={lat}&lng={lng}` - Get walking directions
 - `GET /api/events` - Get nearby events
+
+See `API_INTEGRATION.md` for detailed API documentation.
 
 ## Notes
 

@@ -37,16 +37,22 @@ export default function Chat() {
   const { setSelectedPlace } = usePlace();
   const { location } = useLocation();
   useEffect(() => {
+    let isMounted = true;
+    
     async function loadWeather() {
-      if (!location) return;
+      if (!location || !isMounted) return;
 
       const w = await getWeather(location.latitude, location.longitude);
-      if (w) {
+      if (w && isMounted) {
         setTemp(w.temp);
         setWeatherEmoji(w.emoji);
       }
     }
     loadWeather();
+
+    return () => {
+      isMounted = false;
+    };
   }, [location]);
 
 

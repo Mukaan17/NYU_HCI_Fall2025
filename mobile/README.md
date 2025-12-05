@@ -108,12 +108,31 @@ After setting the environment variable, verify it's loaded:
 
 The app makes API calls to the following endpoints:
 
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/signup` - User signup
+
+### Dashboard & Recommendations
+- `GET /api/dashboard` - Get dashboard data (weather, calendar, recommendations)
+- `GET /api/top_recommendations` - Get personalized top recommendations
+- `GET /api/quick_recs` - Get quick recommendations by category
+
+### Calendar
+- `GET /api/calendar/free_time` - Get all free time blocks
+- `GET /api/calendar/next_free_block` - Get next free block (simple)
+- `GET /api/calendar/next_free` - Get next free block with recommendation
+- `GET /api/calendar/recommendation` - Full recommendation engine
+
+### Weather
+- `GET /api/weather` - Get current weather (Brooklyn, US)
+- `GET /api/weather?lat=X&lon=Y` - Get weather by coordinates
+
+### Other
 - `POST /api/chat` - Send chat messages
-- `GET /api/quick_recs` - Get quick recommendations
 - `GET /api/directions` - Get walking directions
 - `GET /api/nyu_engage_events` - Get events
 
-All endpoints use the base URL from `EXPO_PUBLIC_API_URL`.
+All endpoints use the base URL from `EXPO_PUBLIC_API_URL`. Most endpoints require JWT authentication (see `API_INTEGRATION.md` for details).
 
 ## Troubleshooting
 

@@ -8,6 +8,7 @@ import {
   Dimensions,
   Pressable,
   Platform,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -25,6 +26,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 import { LiquidGlassView, isLiquidGlassSupported } from "@callstack/liquid-glass";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
@@ -33,7 +35,13 @@ import { Modal } from "react-native";
 import RecommendationCard from "../../components/RecommendationCard";
 import { colors, typography, spacing, borderRadius } from "../../constants/theme";
 import useLocation from "../../hooks/useLocation";
-import { getWeather } from "../../utils/getWeather";
+import { getWeather, getSimpleWeather } from "../../utils/getWeather";
+import { useAuth } from "../../context/AuthContext";
+import { apiService } from "../../services/apiService";
+import { DashboardResponse, Recommendation, FreeTimeSuggestion } from "../../types/dashboard";
+import { handleApiError } from "../../utils/errorHandler";
+import { Alert } from "react-native";
+import { usePlace } from "../../context/PlaceContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -48,6 +56,8 @@ type QuickAction = {
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const { location } = useLocation();
+  const { token, isAuthenticated } = useAuth();
+  const { setSelectedPlace } = usePlace();
   const hasAnimated = useRef(false);
 
   const [temp, setTemp] = useState<number | null>(null);
@@ -55,6 +65,14 @@ export default function Dashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuScale = useSharedValue(0);
   const menuOpacity = useSharedValue(0);
+  
+  // Dashboard state
+  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [calendarLinked, setCalendarLinked] = useState(false);
+  const [nextFreeBlock, setNextFreeBlock] = useState<{ start: string; end: string } | null>(null);
+  const [freeTimeSuggestion, setFreeTimeSuggestion] = useState<FreeTimeSuggestion | null>(null);
 
   useEffect(() => {
     // Mark that initial animations have been shown
@@ -64,47 +82,120 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, []);
 
-  /* ---------------- WEATHER ---------------- */
+  /* ---------------- LOAD DASHBOARD DATA ---------------- */
   useEffect(() => {
-    async function loadWeather() {
-      if (!location) return;
+    let isMounted = true;
+    const abortController = new AbortController();
 
-      const w = await getWeather(location.latitude, location.longitude);
-      if (w) {
-        setTemp(w.temp);
-        setWeatherEmoji(w.emoji);
+    async function loadDashboard() {
+      if (!isAuthenticated || !token) {
+        // Fallback to location-based weather if not authenticated
+        if (location && isMounted) {
+          const w = await getWeather(location.latitude, location.longitude);
+          if (w && isMounted) {
+            setTemp(w.temp);
+            setWeatherEmoji(w.emoji);
+          }
+        }
+        return;
+      }
+
+      if (!isMounted) return;
+      setIsLoading(true);
+      try {
+        const data = await apiService.get<DashboardResponse>("/api/dashboard");
+        
+        if (!isMounted) return;
+        setDashboardData(data);
+
+        // Extract weather
+        if (data.weather && !data.weather.error && isMounted) {
+          setTemp(Math.round(data.weather.temp_f));
+          // Convert icon/desc to emoji
+          const desc = data.weather.desc?.toLowerCase() || "";
+          let emoji = "☀️";
+          if (desc.includes("cloud")) emoji = "☁️";
+          if (desc.includes("rain")) emoji = "🌧️";
+          if (desc.includes("snow")) emoji = "❄️";
+          if (desc.includes("storm")) emoji = "⛈️";
+          setWeatherEmoji(emoji);
+        } else if (location && isMounted) {
+          // Fallback to location-based weather
+          const w = await getWeather(location.latitude, location.longitude);
+          if (w && isMounted) {
+            setTemp(w.temp);
+            setWeatherEmoji(w.emoji);
+          }
+        }
+
+        if (!isMounted) return;
+
+        // Extract calendar data
+        setCalendarLinked(data.calendar_linked || false);
+        setNextFreeBlock(data.next_free);
+        setFreeTimeSuggestion(data.free_time_suggestion);
+
+        // Extract recommendations from all categories
+        const allRecs: Recommendation[] = [];
+        if (data.quick_recommendations) {
+          Object.values(data.quick_recommendations).forEach((categoryRecs) => {
+            allRecs.push(...categoryRecs);
+          });
+        }
+        // Use top 3 for main display
+        setRecommendations(allRecs.slice(0, 3));
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("Error loading dashboard:", error);
+        const friendlyError = handleApiError(error);
+        // Only show alert for critical errors
+        if (!friendlyError.retryable) {
+          Alert.alert(friendlyError.title, friendlyError.message);
+        }
+        
+        // Fallback to location-based weather
+        if (location && isMounted) {
+          const w = await getWeather(location.latitude, location.longitude);
+          if (w && isMounted) {
+            setTemp(w.temp);
+            setWeatherEmoji(w.emoji);
+          }
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
-    loadWeather();
-  }, [location]);
 
-  /* ---------- SAMPLE TOP RECOMMENDATIONS ---------- */
-  const recommendations = [
-    {
-      id: 1,
-      title: "Fulton Jazz Lounge",
-      description: "Live jazz tonight at 8 PM",
-      image: "https://via.placeholder.com/96",
-      walkTime: "7 min walk",
-      popularity: "High",
-    },
-    {
-      id: 2,
-      title: "Brooklyn Rooftop",
-      description: "Great vibes & skyline views",
-      image: "https://via.placeholder.com/96",
-      walkTime: "12 min walk",
-      popularity: "Medium",
-    },
-    {
-      id: 3,
-      title: "Butler Café",
-      description: "Great for study breaks",
-      image: "https://via.placeholder.com/96",
-      walkTime: "3 min walk",
-      popularity: "Low",
-    },
-  ];
+    loadDashboard();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
+  }, [isAuthenticated, token, location]);
+
+  /* ---------------- WEATHER FALLBACK ---------------- */
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Load weather if not loaded from dashboard
+    if (!temp && location) {
+      async function loadWeather() {
+        const w = await getWeather(location.latitude, location.longitude);
+        if (w && isMounted) {
+          setTemp(w.temp);
+          setWeatherEmoji(w.emoji);
+        }
+      }
+      loadWeather();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location, temp]);
 
   /* ---------------- QUICK ACTIONS ---------------- */
   const quickActions: QuickAction[] = [
@@ -292,7 +383,13 @@ export default function Dashboard() {
             </View>
 
             <View style={styles.scheduleBadge}>
-              <Text style={styles.scheduleText}>Free until 6:30 PM</Text>
+              <Text style={styles.scheduleText}>
+                {nextFreeBlock
+                  ? formatFreeTimeBlock(nextFreeBlock)
+                  : calendarLinked
+                  ? "Free all day"
+                  : "Calendar not linked"}
+              </Text>
             </View>
 
             <View style={styles.moodBadge}>
@@ -320,26 +417,94 @@ export default function Dashboard() {
             </View>
           </Animated.View>
 
+          {/* Free-Time Suggestion Card */}
+          {freeTimeSuggestion && freeTimeSuggestion.should_suggest && (
+            <Animated.View
+              entering={hasAnimated.current ? undefined : FadeInDown.delay(450)}
+              style={styles.suggestionCard}
+            >
+              <Text style={styles.suggestionMessage}>{freeTimeSuggestion.message}</Text>
+              {freeTimeSuggestion.suggestion.photo_url && (
+                <View style={styles.suggestionImageContainer}>
+                  <Image
+                    source={{ uri: freeTimeSuggestion.suggestion.photo_url }}
+                    style={styles.suggestionImage}
+                  />
+                </View>
+              )}
+              <Text style={styles.suggestionTitle}>{freeTimeSuggestion.suggestion.name}</Text>
+              {freeTimeSuggestion.suggestion.location && (
+                <Text style={styles.suggestionLocation}>{freeTimeSuggestion.suggestion.location}</Text>
+              )}
+              {freeTimeSuggestion.suggestion.description && (
+                <Text style={styles.suggestionDescription}>
+                  {freeTimeSuggestion.suggestion.description}
+                </Text>
+              )}
+              <View style={styles.suggestionActions}>
+                <Pressable
+                  style={styles.suggestionButton}
+                  onPress={() => {
+                    // Navigate to map with selected place
+                    const suggestion = freeTimeSuggestion.suggestion;
+                    setSelectedPlace({
+                      name: suggestion.name || "Suggested Place",
+                      latitude: 40.693393, // Default if no location
+                      longitude: -73.98555,
+                      walkTime: undefined,
+                      distance: undefined,
+                      address: suggestion.address || suggestion.location,
+                    });
+                    router.push("/(tabs)/map");
+                  }}
+                >
+                  <Text style={styles.suggestionButtonText}>View Details</Text>
+                </Pressable>
+                {freeTimeSuggestion.suggestion.maps_link && (
+                  <Pressable
+                    style={[styles.suggestionButton, styles.suggestionButtonPrimary]}
+                    onPress={() => {
+                      // Open maps link
+                      if (freeTimeSuggestion.suggestion.maps_link) {
+                        Linking.openURL(freeTimeSuggestion.suggestion.maps_link);
+                      }
+                    }}
+                  >
+                    <Text style={styles.suggestionButtonText}>Get Directions</Text>
+                  </Pressable>
+                )}
+              </View>
+            </Animated.View>
+          )}
+
           {/* Recommendations */}
           <Animated.View
             entering={hasAnimated.current ? undefined : FadeInDown.delay(500)}
             style={styles.recommendationsSection}
           >
             <Text style={styles.sectionTitle}>Top Recommendations</Text>
-            {recommendations.map((rec, index) => (
-              <Animated.View
-                key={rec.id}
-                entering={hasAnimated.current ? undefined : FadeInDown.delay(600 + index * 120)}
-              >
-                <RecommendationCard
-                  title={rec.title}
-                  description={rec.description}
-                  walkTime={rec.walkTime}
-                  popularity={rec.popularity}
-                  image={rec.image}
-                />
-              </Animated.View>
-            ))}
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading recommendations...</Text>
+              </View>
+            ) : recommendations.length === 0 ? (
+              <Text style={styles.emptyText}>No recommendations available</Text>
+            ) : (
+              recommendations.map((rec, index) => (
+                <Animated.View
+                  key={rec.id || index}
+                  entering={hasAnimated.current ? undefined : FadeInDown.delay(600 + index * 120)}
+                >
+                  <RecommendationCard
+                    title={rec.name || "Unknown"}
+                    description={rec.address || rec.description}
+                    walkTime={rec.walk_time}
+                    popularity={rec.rating ? `⭐ ${rec.rating}` : undefined}
+                    image={rec.photo_url}
+                  />
+                </Animated.View>
+              ))
+            )}
           </Animated.View>
         </ScrollView>
       </LinearGradient>
@@ -863,4 +1028,116 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.3)",
     fontWeight: "300",
   },
+  suggestionCard: {
+    backgroundColor: colors.glassBackground,
+    borderRadius: borderRadius.lg,
+    padding: spacing["2xl"],
+    marginBottom: spacing["4xl"],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  suggestionMessage: {
+    fontSize: typography.fontSize.lg,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
+    fontFamily: typography.fontFamily,
+  },
+  suggestionImageContainer: {
+    width: "100%",
+    height: 200,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+    marginBottom: spacing.lg,
+  },
+  suggestionImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  suggestionTitle: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily,
+  },
+  suggestionLocation: {
+    fontSize: typography.fontSize.base,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily,
+  },
+  suggestionDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing["2xl"],
+    fontFamily: typography.fontFamily,
+  },
+  suggestionActions: {
+    flexDirection: "row",
+    gap: spacing.lg,
+  },
+  suggestionButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.glassBackground,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  suggestionButtonPrimary: {
+    backgroundColor: colors.accentBlue,
+    borderColor: colors.accentBlueMedium,
+  },
+  suggestionButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semiBold,
+    color: colors.textPrimary,
+    fontFamily: typography.fontFamily,
+  },
+  loadingContainer: {
+    padding: spacing["2xl"],
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: typography.fontSize.base,
+    color: colors.textSecondary,
+    fontFamily: typography.fontFamily,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.textSecondary,
+    textAlign: "center",
+    padding: spacing["2xl"],
+    fontFamily: typography.fontFamily,
+  },
 });
+
+// Helper function to format free time block
+function formatFreeTimeBlock(block: { start: string; end: string }): string {
+  try {
+    const startDate = new Date(block.start);
+    const endDate = new Date(block.end);
+    const now = new Date();
+
+    const timeFormatter = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    if (startDate <= now && endDate > now) {
+      // Currently in free time block
+      return `Free until ${timeFormatter.format(endDate)}`;
+    } else if (startDate > now) {
+      // Future free time block
+      return `Free ${timeFormatter.format(startDate)}-${timeFormatter.format(endDate)}`;
+    } else {
+      return "Free time available";
+    }
+  } catch {
+    return "Free time available";
+  }
+}

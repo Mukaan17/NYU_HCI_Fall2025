@@ -4,7 +4,7 @@ region: nyc
 services:
   - name: api
     github:
-      repo: your-username/your-repo
+      repo: Mukaan17/NYU_HCI_Fall2025
       branch: main
       deploy_on_push: true
     

@@ -15,6 +15,7 @@ struct VioletVibesApp: App {
     @State private var locationManager = LocationManager()
     @State private var weatherManager = WeatherManager()
     @State private var userSession = UserSession()
+    @State private var appStateManager = AppStateManager()
     
     var body: some Scene {
         WindowGroup {
@@ -25,15 +26,8 @@ struct VioletVibesApp: App {
                 .environment(locationManager)
                 .environment(weatherManager)
                 .environment(userSession)
+                .environment(appStateManager)
                 .preferredColorScheme(.dark)
-                .task {
-                    // Load session on app start - this restores JWT from local storage
-                    let storage = StorageService.shared
-                    let loadedSession = await storage.loadUserSession()
-                    await MainActor.run {
-                        userSession.jwt = loadedSession.jwt
-                    }
-                }
         }
     }
 }
@@ -42,41 +36,40 @@ struct RootView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(LocationManager.self) private var locationManager
     @Environment(UserSession.self) private var userSession
+    @Environment(AppStateManager.self) private var appStateManager
     @Environment(\.scenePhase) private var scenePhase
-    @State private var isLoading = true
     @State private var previousScenePhase: ScenePhase = .active
     private let calendarNotificationService = CalendarNotificationService.shared
     
     var body: some View {
         Group {
-            if isLoading {
+            switch appStateManager.navigationState {
+            case .loading:
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Theme.Colors.background)
-            } else if !onboardingViewModel.hasSeenWelcome {
-                WelcomeView()
-            } else if !onboardingViewModel.hasCompletedPermissions {
-                PermissionsView()
-            } else if userSession.jwt == nil {
-                // Only show login if no JWT token exists (user not logged in)
-                LoginView()
-            } else if !onboardingViewModel.hasCompletedOnboardingSurvey {
-                OnboardingSurveyView()
-            } else {
-                MainTabView()
+                    
+            case .unauthenticated(let showWelcome):
+                if showWelcome {
+                    WelcomeView()
+                } else {
+                    LoginView()
+                }
+                
+            case .authenticated(let needsOnboarding):
+                if needsOnboarding {
+                    OnboardingSurveyView()
+                } else {
+                    MainTabView()
+                }
             }
         }
         .task {
-            await onboardingViewModel.checkOnboardingStatus()
-            
-            // If user has a JWT token, they're logged in - update onboarding status
-            if userSession.jwt != nil {
-                await MainActor.run {
-                    onboardingViewModel.hasLoggedIn = true
-                }
-            }
-            
-            isLoading = false
+            // Initialize app state (single source of truth)
+            await appStateManager.initialize(
+                userSession: userSession,
+                onboardingViewModel: onboardingViewModel
+            )
             
             // Start calendar notification monitoring if user is logged in
             if let jwt = userSession.jwt {

@@ -9,6 +9,7 @@ import UIKit
 
 struct WelcomeView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
+    @Environment(AppStateManager.self) private var appStateManager
     
     var body: some View {
         GeometryReader { geometry in
@@ -125,7 +126,9 @@ struct WelcomeView: View {
                     
     private var actionButton: some View {
                     PrimaryButton(title: "Let's Go") {
-                        onboardingViewModel.markWelcomeSeen()
+                        Task { @MainActor in
+                            await appStateManager.handleWelcomeCompleted(onboardingViewModel: onboardingViewModel)
+                        }
                     }
                     .padding(.horizontal, Theme.Spacing.`2xl`)
     }

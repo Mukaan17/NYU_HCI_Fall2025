@@ -8,12 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------
-# Normalize raw Google event object
+# Normalize calendar event object (works with any calendar format)
 # ------------------------------------------------------------
 def normalize_event(ev):
     """
-    Convert a Google Calendar event dict into parsed start/end datetimes.
+    Convert a calendar event dict (from system calendar or any source) into parsed start/end datetimes.
     Missing end → assume +1 hour.
+    Works with both system calendar and other calendar formats.
     """
     start_str = ev.get("start")
     end_str = ev.get("end")

@@ -2,6 +2,9 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 HEADERS = {
     "User-Agent": (
@@ -28,8 +31,7 @@ def fetch_nyc_parks_events(limit=20):
         
         # Handle 403 Forbidden errors gracefully
         if r.status_code == 403:
-            print(f"NYC Parks scraper error: 403 Client Error: Forbidden for url: {URL}")
-            print("   The website may be blocking automated requests. Consider using an API or different data source.")
+            logger.warning(f"NYC Parks scraper: 403 Forbidden - website may be blocking automated requests")
             return []
         
         r.raise_for_status()
@@ -71,14 +73,14 @@ def fetch_nyc_parks_events(limit=20):
 
     except requests.exceptions.HTTPError as e:
         if e.response and e.response.status_code == 403:
-            print(f"NYC Parks scraper error: 403 Client Error: Forbidden for url: {URL}")
+            logger.warning(f"NYC Parks scraper: 403 Forbidden - website may be blocking automated requests")
         else:
-            print(f"NYC Parks scraper HTTP error: {e}")
+            logger.warning(f"NYC Parks scraper HTTP error: {e}")
         return []
     except requests.exceptions.RequestException as e:
-        print(f"NYC Parks scraper request error: {e}")
+        logger.warning(f"NYC Parks scraper request error: {e}")
         return []
     except Exception as e:
-        print(f"NYC Parks scraper error: {e}")
+        logger.warning(f"NYC Parks scraper error: {e}")
         return []
 

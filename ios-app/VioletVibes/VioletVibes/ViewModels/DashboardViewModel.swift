@@ -50,6 +50,13 @@ final class DashboardViewModel {
                 // Extract weather
                 dashboardWeather = dashboard.weather
                 
+                // Debug logging for weather parsing
+                if let weather = dashboardWeather {
+                    print("🌤️ Dashboard weather parsed: \(weather.temp)°F \(weather.emoji)")
+                } else {
+                    print("⚠️ Dashboard weather is nil")
+                }
+                
                 // Extract calendar linked status from backend (source of truth)
                 // This ensures local state stays in sync with backend Postgres/Redis
                 calendarLinked = dashboard.calendar_linked ?? false

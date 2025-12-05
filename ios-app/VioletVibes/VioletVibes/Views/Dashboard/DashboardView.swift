@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Environment(WeatherManager.self) private var weatherManager
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(UserSession.self) private var session
+    @Environment(AppStateManager.self) private var appStateManager
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(TabCoordinator.self) private var tabCoordinator
     @Environment(\.scenePhase) private var scenePhase
@@ -145,7 +146,7 @@ struct DashboardView: View {
                                             }
                                         }
                                     }) {
-                                Text("\(weather.emoji) \(weather.temp)°F")
+                                Text("\(weather.emoji) \(formatTemperature(weather.temp))°F")
                                     .themeFont(size: .base, weight: .semiBold)
                                     .foregroundColor(Theme.Colors.textBlue)
                                     .padding(.horizontal, Theme.Spacing.xl)
@@ -353,10 +354,15 @@ struct DashboardView: View {
         .alert("Log Out", isPresented: $showLogoutAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Log Out", role: .destructive) {
-                onboardingViewModel.resetOnboarding()
+                Task { @MainActor in
+                    await appStateManager.handleLogout(
+                        userSession: session,
+                        onboardingViewModel: onboardingViewModel
+                    )
+                }
             }
         } message: {
-            Text("Are you sure you want to log out? You'll need to go through onboarding again.")
+            Text("Are you sure you want to log out?")
         }
         .sheet(isPresented: $showAboutView) {
             AboutView()
@@ -466,6 +472,12 @@ struct DashboardView: View {
                 )
             }
         }
+    }
+    
+    // Helper function to format temperature (handles negative temperatures correctly)
+    private func formatTemperature(_ temp: Int) -> String {
+        // Int already handles negative values correctly, just convert to string
+        return String(temp)
     }
     
     // Helper function to format free time block

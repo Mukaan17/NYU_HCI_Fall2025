@@ -88,10 +88,28 @@ def _get_directions_for_mode(
         logger.debug(f"Timeout getting {mode} directions from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")
         return None
     except requests.RequestException as e:
-        logger.debug(f"Error getting {mode} directions: {e}")
+        # Check if it's an I/O error on closed file (common with concurrent requests)
+        error_str = str(e).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"{mode.capitalize()} directions: connection closed during request (likely timeout/cancellation)")
+        else:
+            logger.debug(f"Error getting {mode} directions: {e}")
+        return None
+    except (OSError, IOError) as io_err:
+        # Handle I/O errors specifically (file descriptor issues)
+        error_str = str(io_err).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"{mode.capitalize()} directions: I/O error (connection closed)")
+        else:
+            logger.warning(f"{mode.capitalize()} directions I/O error: {io_err}")
         return None
     except Exception as ex:
-        logger.warning(f"{mode.capitalize()} directions error: {ex}")
+        # Check if it's an I/O error
+        error_str = str(ex).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"{mode.capitalize()} directions: connection closed during request")
+        else:
+            logger.warning(f"{mode.capitalize()} directions error: {ex}")
         return None
 
 
@@ -113,15 +131,14 @@ def get_walking_directions(
         return None
 
     # Fetch both walking and transit directions in parallel
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
     
     walking_result = None
     transit_result = None
     
     # Use ThreadPoolExecutor to fetch both in parallel
-    executor = None
-    try:
-        executor = ThreadPoolExecutor(max_workers=2)
+    # Use context manager to ensure proper cleanup - it will wait for tasks to complete
+    with ThreadPoolExecutor(max_workers=2) as executor:
         walking_future = executor.submit(
             _get_directions_for_mode, origin_lat, origin_lng, dest_lat, dest_lng, "walking"
         )
@@ -130,25 +147,31 @@ def get_walking_directions(
         )
         
         # Wait for both to complete (with timeout)
-        try:
-            walking_result = walking_future.result(timeout=4)
-        except FutureTimeoutError:
-            logger.debug("Timeout fetching walking directions")
-            walking_future.cancel()
-        except Exception as e:
-            logger.debug(f"Error fetching walking directions: {e}")
+        # Use as_completed to handle timeouts gracefully
+        futures = {walking_future: "walking", transit_future: "transit"}
         
         try:
-            transit_result = transit_future.result(timeout=4)
+            for future in as_completed(futures, timeout=5):
+                mode = futures[future]
+                try:
+                    result = future.result(timeout=0.1)  # Should be ready since as_completed returned it
+                    if mode == "walking":
+                        walking_result = result
+                    else:
+                        transit_result = result
+                except Exception as e:
+                    logger.debug(f"Error getting {mode} directions result: {e}")
         except FutureTimeoutError:
-            logger.debug("Timeout fetching transit directions")
-            transit_future.cancel()
-        except Exception as e:
-            logger.debug(f"Error fetching transit directions: {e}")
-    finally:
-        # Ensure executor is properly shut down
-        if executor:
-            executor.shutdown(wait=False)
+            # Timeout waiting for results - cancel remaining futures
+            logger.debug("Timeout waiting for directions results")
+            for future, mode in futures.items():
+                if not future.done():
+                    future.cancel()
+                    try:
+                        # Wait a bit for cancellation to propagate
+                        future.result(timeout=0.5)
+                    except:
+                        pass  # Expected for cancelled/timeout futures
 
     # Choose the shorter/quicker route
     best_result = None

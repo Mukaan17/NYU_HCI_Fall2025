@@ -64,7 +64,7 @@ actor StorageService {
     func setHasSeenWelcome(_ value: Bool) {
         guard let userAccount = userAccount else {
             // Fallback to global key if no user account
-            userDefaults.set(value, forKey: Keys.hasSeenWelcome)
+        userDefaults.set(value, forKey: Keys.hasSeenWelcome)
             return
         }
         let userKey = "\(Keys.hasSeenWelcome)_\(userAccount.email)"
@@ -99,7 +99,7 @@ actor StorageService {
     func setHasCompletedPermissions(_ value: Bool) {
         guard let userAccount = userAccount else {
             // Fallback to global key if no user account
-            userDefaults.set(value, forKey: Keys.hasCompletedPermissions)
+        userDefaults.set(value, forKey: Keys.hasCompletedPermissions)
             return
         }
         let userKey = "\(Keys.hasCompletedPermissions)_\(userAccount.email)"
@@ -356,8 +356,8 @@ actor StorageService {
                 if let migratedData = try? JSONEncoder().encode(contacts) {
                     userDefaults.set(migratedData, forKey: userKey)
                     userDefaults.removeObject(forKey: Keys.trustedContacts)
-                }
-                return contacts
+            }
+            return contacts
             }
             
             return []
@@ -367,10 +367,10 @@ actor StorageService {
     func setTrustedContacts(_ contacts: [TrustedContact]) {
         guard let userAccount = userAccount else {
             // Fallback to global key if no user account (shouldn't happen in normal flow)
-            if let data = try? JSONEncoder().encode(contacts) {
-                userDefaults.set(data, forKey: Keys.trustedContacts)
-            } else {
-                userDefaults.removeObject(forKey: Keys.trustedContacts)
+        if let data = try? JSONEncoder().encode(contacts) {
+            userDefaults.set(data, forKey: Keys.trustedContacts)
+        } else {
+            userDefaults.removeObject(forKey: Keys.trustedContacts)
             }
             return
         }
@@ -571,6 +571,7 @@ actor StorageService {
             "jwt": session.jwt ?? ""
         ]
         userDefaults.set(dict, forKey: userKey)
+        print("💾 Saved session to key: \(userKey)")
         
         // Also clear any old global session to prevent leakage
         if userKey != Keys.userSession {
@@ -581,28 +582,59 @@ actor StorageService {
     func loadUserSession() -> UserSession {
         let session = UserSession()
         
-        // Try to load from user-specific key first
-        var userKey: String? = nil
-        
-        // Try to get user ID from stored JWT
+        // Strategy 1: Try to load from global key first (for backward compatibility)
         if let globalDict = userDefaults.dictionary(forKey: Keys.userSession),
-           let jwt = globalDict["jwt"] as? String, !jwt.isEmpty,
-           let userID = extractUserIDFromJWT(jwt) {
-            userKey = "\(Keys.userSession)_\(userID)"
-        } else if let userAccount = userAccount {
-            // Fallback to email-based key
-            userKey = "\(Keys.userSession)_\(userAccount.email)"
+           let jwt = globalDict["jwt"] as? String, !jwt.isEmpty {
+            print("🔑 Loaded session from global key")
+            session.jwt = jwt
+            
+            // If we have a JWT, try to extract user ID and check for user-specific key
+            // This handles migration from global to user-specific storage
+            if let userID = extractUserIDFromJWT(jwt) {
+                let userKey = "\(Keys.userSession)_\(userID)"
+                if let userDict = userDefaults.dictionary(forKey: userKey),
+                   let userJWT = userDict["jwt"] as? String, !userJWT.isEmpty {
+                    // User-specific key exists, use that instead
+                    print("🔑 Migrated to user-specific session key: \(userKey)")
+                    session.jwt = userJWT
+                    return session
+                }
+            }
+            
+            // Global key has valid JWT, return it
+            return session
         }
         
-        // Load from user-specific key if available
-        if let key = userKey,
-           let dict = userDefaults.dictionary(forKey: key) {
-            session.jwt = dict["jwt"] as? String
-        } else if let dict = userDefaults.dictionary(forKey: Keys.userSession) {
-            // Fallback to global key (legacy support)
-            session.jwt = dict["jwt"] as? String
+        // Strategy 2: Try to load from userAccount-based key
+        if let userAccount = userAccount {
+            let userKey = "\(Keys.userSession)_\(userAccount.email)"
+            if let dict = userDefaults.dictionary(forKey: userKey),
+               let jwt = dict["jwt"] as? String, !jwt.isEmpty {
+                print("🔑 Loaded session from userAccount-based key: \(userKey)")
+                session.jwt = jwt
+                return session
+            }
         }
         
+        // Strategy 3: Try to find any user-specific session key by scanning
+        // This handles cases where userAccount isn't loaded yet but session exists
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let sessionKeyPrefix = "\(Keys.userSession)_"
+        
+        for key in allKeys {
+            if key.hasPrefix(sessionKeyPrefix) {
+                if let dict = userDefaults.dictionary(forKey: key),
+                   let jwt = dict["jwt"] as? String, !jwt.isEmpty {
+                    // Found a valid session, use it
+                    print("🔑 Loaded session from scanned key: \(key)")
+                    session.jwt = jwt
+                    return session
+                }
+            }
+        }
+        
+        // No session found
+        print("⚠️ No session found in storage")
         return session
     }
     
@@ -639,10 +671,13 @@ actor StorageService {
     
     /// Clear session for current user (called on logout)
     func clearUserSession() {
-        // Clear user-specific session
+        print("🗑️ Clearing user session...")
+        
+        // Clear user-specific session by email
         if let userAccount = userAccount {
             let userKey = "\(Keys.userSession)_\(userAccount.email)"
             userDefaults.removeObject(forKey: userKey)
+            print("🗑️ Cleared session key: \(userKey)")
         }
         
         // Also try to clear by JWT user ID if available
@@ -651,10 +686,25 @@ actor StorageService {
            let userID = extractUserIDFromJWT(jwt) {
             let userKey = "\(Keys.userSession)_\(userID)"
             userDefaults.removeObject(forKey: userKey)
+            print("🗑️ Cleared session key by user ID: \(userKey)")
         }
         
-        // Clear global session (legacy)
+        // Clear global session key as well
         userDefaults.removeObject(forKey: Keys.userSession)
+        print("🗑️ Cleared global session key")
+        
+        // Also scan and clear any remaining user-specific session keys
+        // This ensures no orphaned sessions remain
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let sessionKeyPrefix = "\(Keys.userSession)_"
+        for key in allKeys {
+            if key.hasPrefix(sessionKeyPrefix) {
+                userDefaults.removeObject(forKey: key)
+                print("🗑️ Cleared orphaned session key: \(key)")
+            }
+        }
+        
+        print("✅ Session clearing complete")
     }
 }
 

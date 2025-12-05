@@ -39,7 +39,9 @@ def dashboard():
 
     # ------------------------------------------------------
     # CALENDAR
-    # System calendar only - handled client-side
+    # System calendar is handled entirely client-side on iOS
+    # The backend does not fetch calendar data - it's managed by the device
+    # Calendar events are processed locally in the iOS app using EventKit
     # ------------------------------------------------------
 
     # ------------------------------------------------------

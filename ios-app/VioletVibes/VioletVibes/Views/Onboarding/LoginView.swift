@@ -6,9 +6,18 @@
 import SwiftUI
 import UIKit
 
+enum LoginField: Hashable {
+    case email
+    case password
+    case confirmPassword
+    case firstName
+}
+
 struct LoginView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(UserSession.self) private var session
+    @Environment(AppStateManager.self) private var appStateManager
+    @FocusState private var focusedField: LoginField?
     @State private var isSignUpMode: Bool = false
     @State private var email: String = ""
     @State private var firstName: String = ""
@@ -109,6 +118,8 @@ struct LoginView: View {
                             TextField("Enter your first name", text: $firstName)
                                 .textContentType(.givenName)
                                 .autocapitalization(.words)
+                                .submitLabel(.next)
+                                .focused($focusedField, equals: .firstName)
                                 .themeFont(size: .base)
                                 .foregroundColor(Theme.Colors.textPrimary)
                                 .padding(Theme.Spacing.`2xl`)
@@ -118,6 +129,10 @@ struct LoginView: View {
                                         .stroke(!firstName.isEmpty ? Theme.Colors.gradientStart.opacity(0.3) : Theme.Colors.border, lineWidth: 1)
                                 )
                                 .cornerRadius(Theme.BorderRadius.md)
+                                .onSubmit {
+                                    // Move focus to email field
+                                    focusedField = .email
+                                }
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
@@ -132,6 +147,8 @@ struct LoginView: View {
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
+                            .submitLabel(.next)
+                            .focused($focusedField, equals: .email)
                             .themeFont(size: .base)
                             .foregroundColor(Theme.Colors.textPrimary)
                             .padding(Theme.Spacing.`2xl`)
@@ -152,6 +169,10 @@ struct LoginView: View {
                                     isEmailValid = validateEmail(sanitized)
                                 }
                             }
+                            .onSubmit {
+                                // Move focus to password field
+                                focusedField = .password
+                            }
                     }
                     
                     // Password Field
@@ -162,6 +183,8 @@ struct LoginView: View {
                         
                         SecureField("Enter your password", text: $password)
                             .textContentType(isSignUpMode ? .newPassword : .password)
+                            .submitLabel(isSignUpMode ? .next : .go)
+                            .focused($focusedField, equals: .password)
                             .themeFont(size: .base)
                             .foregroundColor(Theme.Colors.textPrimary)
                             .padding(Theme.Spacing.`2xl`)
@@ -181,6 +204,17 @@ struct LoginView: View {
                                     isConfirmPasswordValid = validatePassword(confirmPassword) && sanitized == confirmPassword
                                 }
                             }
+                            .onSubmit {
+                                if isSignUpMode {
+                                    // Move to confirm password field
+                                    focusedField = .confirmPassword
+                                } else {
+                                    // On login mode, trigger login when return is pressed
+                                    if isEmailValid && isPasswordValid && !isLoggingIn {
+                                        handleEmailLogin()
+                                    }
+                                }
+                            }
                     }
                     
                     // Confirm Password Field (Sign Up Only)
@@ -192,6 +226,8 @@ struct LoginView: View {
                             
                             SecureField("Confirm your password", text: $confirmPassword)
                                 .textContentType(.newPassword)
+                                .submitLabel(.go)
+                                .focused($focusedField, equals: .confirmPassword)
                                 .themeFont(size: .base)
                                 .foregroundColor(Theme.Colors.textPrimary)
                                 .padding(Theme.Spacing.`2xl`)
@@ -207,6 +243,12 @@ struct LoginView: View {
                                         confirmPassword = sanitized
                                     }
                                     isConfirmPasswordValid = validatePassword(sanitized) && sanitized == password
+                                }
+                                .onSubmit {
+                                    // On sign up mode, trigger sign up when return is pressed
+                                    if isEmailValid && isPasswordValid && isConfirmPasswordValid && !firstName.isEmpty && !isSigningUp {
+                                        handleSignUp()
+                                    }
                                 }
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -252,12 +294,17 @@ struct LoginView: View {
                     )
                     
                     Spacer()
-                        .frame(height: 40)
+                        .frame(height: 100) // Increased bottom spacing to prevent keyboard from blocking button
                 }
                 .padding(.horizontal, Theme.Spacing.`2xl`)
+                .padding(.bottom, 20) // Additional bottom padding for keyboard
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) {
+                // Extra space at bottom to ensure button is visible above keyboard
+                Color.clear.frame(height: 0)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -418,14 +465,18 @@ struct LoginView: View {
         isLoggingIn = true
         
         Task {
-            // CRITICAL: Clear ALL previous user's data before logging in to prevent state leakage
+            // CRITICAL: Store onboarding status and previous email BEFORE clearing
+            // This allows us to preserve onboarding progress for returning users
+            let previousEmail = (await storage.userAccount)?.email
+            let hadSeenWelcome = await storage.hasSeenWelcome
+            let hadCompletedPermissions = await storage.hasCompletedPermissions
+            let hadCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
+            
             await storage.clearUserSession()
             await storage.clearCurrentUserHomeAddress()
-            await storage.clearCurrentUserOnboardingStatus()
             await storage.clearCurrentUserPreferences()
             await storage.clearCurrentUserTrustedContacts()
-            await storage.clearCurrentUserWelcomeStatus()
-            await storage.clearCurrentUserPermissionsStatus()
+            // Don't clear onboarding status - we'll restore it if user is returning
             await storage.clearCurrentUserCalendarOAuthStatus()
             
             do {
@@ -440,14 +491,12 @@ struct LoginView: View {
                     storage: storage
                 )
                 
-                // Save user data from backend response (includes first_name and home_address)
-                // This ensures we have the latest data from database
+                // Create user account object (don't save yet - we need to check onboarding first)
                 var userAccount = UserAccount(
                     email: authResponse.user.email,
                     firstName: authResponse.user.first_name ?? "User",
                     hasLoggedIn: true
                 )
-                await storage.saveUserAccount(userAccount)
                 
                 // Save home address from backend if available (encrypted, now decrypted)
                 if let homeAddress = authResponse.user.home_address, !homeAddress.isEmpty {
@@ -456,20 +505,36 @@ struct LoginView: View {
                 
                 // Check if user has completed onboarding survey
                 // If preferences exist and have meaningful data, assume onboarding is complete
+                let hasMeaningfulPrefs: Bool
                 if let prefs = authResponse.user.preferences {
                     // Check if preferences have meaningful data (not just defaults)
                     // This indicates the user has completed the onboarding survey
-                    let hasMeaningfulPrefs = (prefs.preferred_vibes != nil && !(prefs.preferred_vibes?.isEmpty ?? true)) ||
-                                            (prefs.dietary_restrictions != nil && !(prefs.dietary_restrictions?.isEmpty ?? true)) ||
-                                            prefs.max_walk_minutes_default != nil ||
-                                            (prefs.interests != nil && !(prefs.interests?.isEmpty ?? true))
-                    await storage.setHasCompletedOnboardingSurvey(hasMeaningfulPrefs)
+                    hasMeaningfulPrefs = (prefs.preferred_vibes != nil && !(prefs.preferred_vibes?.isEmpty ?? true)) ||
+                                        (prefs.dietary_restrictions != nil && !(prefs.dietary_restrictions?.isEmpty ?? true)) ||
+                                        prefs.max_walk_minutes_default != nil ||
+                                        (prefs.interests != nil && !(prefs.interests?.isEmpty ?? true))
                 } else {
-                    // No preferences means onboarding not completed
-                    await storage.setHasCompletedOnboardingSurvey(false)
+                    hasMeaningfulPrefs = false
                 }
                 
+                // Determine onboarding status based on backend preferences
+                // If user has meaningful preferences, they've completed onboarding
+                let isSameUser = previousEmail?.lowercased() == sanitizedEmail.lowercased()
+                
+                // CRITICAL: Save user account FIRST before setting onboarding status
+                // This is required because setHasCompletedOnboardingSurvey needs userAccount to create user-specific key
+                await storage.saveUserAccount(userAccount)
                 await storage.setHasLoggedIn(true)
+                
+                // For login: Always go to dashboard (user already has account)
+                // If they have meaningful preferences, mark onboarding as complete
+                // If they don't, still go to dashboard (they can set preferences later in settings)
+                // Now that userAccount is saved, we can set user-specific onboarding status
+                await storage.setHasSeenWelcome(true)
+                await storage.setHasCompletedPermissions(true)
+                await storage.setHasCompletedOnboardingSurvey(true) // Login always goes to dashboard
+                
+                print("✅ LoginView: Saved userAccount and set hasCompletedOnboardingSurvey = true for \(userAccount.email)")
                 
                 // Fetch latest profile data from backend to ensure we have current data
                 if let jwt = session.jwt {
@@ -498,11 +563,14 @@ struct LoginView: View {
                 await MainActor.run {
                     isLoggingIn = false
                     onboardingViewModel.markLoggedIn()
-                    // Refresh onboarding status to reflect backend data
-                    Task {
-                        await onboardingViewModel.checkOnboardingStatus()
-                    }
                 }
+                
+                // Update app state - login always goes to dashboard
+                await appStateManager.handleAuthentication(
+                    userSession: session,
+                    onboardingViewModel: onboardingViewModel,
+                    needsOnboarding: false
+                )
             } catch {
                 await MainActor.run {
                     isLoggingIn = false
@@ -591,20 +659,25 @@ struct LoginView: View {
                     await storage.setHomeAddress(homeAddress)
                 }
                 
-                // New users haven't completed onboarding survey yet
-                // (They'll complete it after signup)
-                await storage.setHasCompletedOnboardingSurvey(false)
+                // New users have seen welcome (from first boot flow)
+                // but haven't completed preferences yet (they'll complete it after signup)
+                await storage.setHasSeenWelcome(true)
+                await storage.setHasCompletedPermissions(true) // Permissions not required in new flow
+                await storage.setHasCompletedOnboardingSurvey(false) // Need to complete preferences
                 
                 await storage.setHasLoggedIn(true)
                 
                 await MainActor.run {
                     isSigningUp = false
                     onboardingViewModel.markLoggedIn()
-                    // Refresh onboarding status
-                    Task {
-                        await onboardingViewModel.checkOnboardingStatus()
-                    }
                 }
+                
+                // Update app state - signup goes to preferences (onboarding)
+                await appStateManager.handleAuthentication(
+                    userSession: session,
+                    onboardingViewModel: onboardingViewModel,
+                    needsOnboarding: true
+                )
             } catch {
                 await MainActor.run {
                     isSigningUp = false

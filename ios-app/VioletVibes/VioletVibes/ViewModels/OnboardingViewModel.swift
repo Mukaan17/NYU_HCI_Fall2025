@@ -21,12 +21,21 @@ final class OnboardingViewModel {
         hasCompletedPermissions = await storage.hasCompletedPermissions
         hasLoggedIn = await storage.hasLoggedIn
         
-        // Check onboarding survey status from backend if user is logged in
-        // This ensures proper isolation between users
+        // Check onboarding survey status - ensure userAccount is available for user-specific checks
+        // For logged-in users, check user-specific storage
         if hasLoggedIn {
-            // Onboarding survey completion is now user-specific
-            // Check from storage (which is user-scoped)
-            hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
+            // Ensure userAccount is loaded before checking user-specific onboarding status
+            let userAccount = await storage.userAccount
+            if userAccount != nil {
+                // Onboarding survey completion is user-specific
+                hasCompletedOnboardingSurvey = await storage.hasCompletedOnboardingSurvey
+                print("🔍 OnboardingViewModel: User logged in, hasCompletedOnboardingSurvey: \(hasCompletedOnboardingSurvey)")
+            } else {
+                // UserAccount not loaded yet - default to false (needs onboarding)
+                // This will be corrected once userAccount is loaded
+                hasCompletedOnboardingSurvey = false
+                print("⚠️ OnboardingViewModel: UserAccount not loaded, defaulting hasCompletedOnboardingSurvey to false")
+            }
         } else {
             hasCompletedOnboardingSurvey = false
         }

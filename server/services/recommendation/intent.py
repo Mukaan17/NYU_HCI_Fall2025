@@ -10,19 +10,21 @@ from typing import List, Dict, Any
 
 def classify_intent_llm(message: str, memory) -> str:
     """
-    Lightweight rule-based classifier.
+    Improved intent classifier that better detects follow-up questions.
     Determines:
-      - followup_place
-      - recommendation
-      - new_recommendation
-      - general_chat
+      - followup_place: User asking about a previously recommended place
+      - followup_general: General follow-up question (what, how, why, etc.)
+      - recommendation: New recommendation request
+      - new_recommendation: Request for alternatives/more options
+      - general_chat: Greetings, thanks, etc.
     """
     last_places = memory.last_places or []
+    has_history = memory.history and len(memory.history) > 0
     msg = message.lower().strip()
 
     # 0. No history → fresh recommendation or general chat
-    if not last_places:
-        if any(k in msg for k in ["hi", "hello", "thanks", "thank you"]):
+    if not has_history and not last_places:
+        if any(k in msg for k in ["hi", "hello", "hey", "thanks", "thank you"]):
             return "general_chat"
         return "recommendation"
 
@@ -31,30 +33,54 @@ def classify_intent_llm(message: str, memory) -> str:
         "alternative", "similar", "something else", "other options",
         "other places", "another place", "else instead", "instead of",
         "different place", "different spot", "more options", "more places",
-        "else to go", "give me alternatives",
+        "else to go", "give me alternatives", "show me more", "what else",
     ]
     if any(k in msg for k in alt_keywords):
         return "new_recommendation"
 
     # 2. Follow-up: user mentions a place shown earlier
+    # More flexible - check if any place name appears in message
     detail_keywords = [
         "tell me", "what can you tell me", "info on", "information on",
-        "what is", "what's", "vibe at", "vibe like", "how is",
-        "details about", "can you describe",
+        "what is", "what's", "vibe at", "vibe like", "how is", "how's",
+        "details about", "can you describe", "about", "more about",
+        "is it", "is that", "does it", "does that", "tell me about",
     ]
-
+    
+    # Check if message mentions any previous place
     for p in last_places:
         name = (p.get("name") or "").lower()
-        if name and name in msg and any(k in msg for k in detail_keywords):
-            return "followup_place"
+        if name:
+            # Extract key words from place name (e.g., "Bern Dibner Library" -> ["bern", "dibner", "library"])
+            name_words = [w for w in name.split() if len(w) > 3]  # Filter out short words like "the", "of"
+            # Check if any significant word from place name appears in message
+            if any(word in msg for word in name_words):
+                # If it's a question or detail request, it's a follow-up
+                if any(k in msg for k in detail_keywords) or msg.endswith("?"):
+                    return "followup_place"
+                # Or if message is very short and mentions the place, likely a follow-up
+                if len(msg.split()) <= 5:
+                    return "followup_place"
 
-    # 3. General chat
-    if any(k in msg for k in ["hi", "hello", "thanks", "thank you"]):
+    # 3. General follow-up questions (what, how, why, when, where)
+    # These indicate the user is asking about something from previous context
+    followup_question_words = ["what", "how", "why", "when", "where", "which", "who"]
+    if has_history and any(msg.startswith(word) for word in followup_question_words):
+        # If it's a short question, likely a follow-up
+        if len(msg.split()) <= 8 or msg.endswith("?"):
+            return "followup_general"
+
+    # 4. General chat
+    if any(k in msg for k in ["hi", "hello", "hey", "thanks", "thank you", "bye", "goodbye"]):
         return "general_chat"
 
-    # 4. More / another
-    if any(k in msg for k in ["another", "more options", "more places"]):
+    # 5. More / another (without "alternative" keyword)
+    if any(k in msg for k in ["another", "more options", "more places", "show me more"]):
         return "new_recommendation"
+
+    # 6. If there's history and message is short/question-like, treat as follow-up
+    if has_history and (msg.endswith("?") or len(msg.split()) <= 4):
+        return "followup_general"
 
     return "recommendation"
 

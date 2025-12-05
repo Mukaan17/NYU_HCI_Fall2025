@@ -91,7 +91,7 @@ export default function Dashboard() {
       if (!isAuthenticated || !token) {
         // Fallback to location-based weather if not authenticated
         if (location && isMounted) {
-          const w = await getWeather(location.latitude, location.longitude);
+      const w = await getWeather(location.latitude, location.longitude);
           if (w && isMounted) {
             setTemp(w.temp);
             setWeatherEmoji(w.emoji);
@@ -185,11 +185,11 @@ export default function Dashboard() {
       async function loadWeather() {
         const w = await getWeather(location.latitude, location.longitude);
         if (w && isMounted) {
-          setTemp(w.temp);
-          setWeatherEmoji(w.emoji);
-        }
+        setTemp(w.temp);
+        setWeatherEmoji(w.emoji);
       }
-      loadWeather();
+    }
+    loadWeather();
     }
 
     return () => {
@@ -491,18 +491,18 @@ export default function Dashboard() {
               <Text style={styles.emptyText}>No recommendations available</Text>
             ) : (
               recommendations.map((rec, index) => (
-                <Animated.View
+              <Animated.View
                   key={rec.id || index}
-                  entering={hasAnimated.current ? undefined : FadeInDown.delay(600 + index * 120)}
-                >
-                  <RecommendationCard
+                entering={hasAnimated.current ? undefined : FadeInDown.delay(600 + index * 120)}
+              >
+                <RecommendationCard
                     title={rec.name || "Unknown"}
                     description={rec.address || rec.description}
                     walkTime={rec.walk_time}
                     popularity={rec.rating ? `⭐ ${rec.rating}` : undefined}
                     image={rec.photo_url}
-                  />
-                </Animated.View>
+                />
+              </Animated.View>
               ))
             )}
           </Animated.View>

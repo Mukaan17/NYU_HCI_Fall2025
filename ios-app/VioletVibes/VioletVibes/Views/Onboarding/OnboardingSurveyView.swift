@@ -8,6 +8,7 @@ import SwiftUI
 struct OnboardingSurveyView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(UserSession.self) private var userSession
+    @Environment(AppStateManager.self) private var appStateManager
     @State private var selectedCategories: Set<String> = []
     @State private var budgetSelection: BudgetOption = .noPreference
     @State private var selectedDietaryRestrictions: Set<String> = []
@@ -232,6 +233,9 @@ struct OnboardingSurveyView: View {
                 isSaving = false
                 onboardingViewModel.markOnboardingSurveyCompleted()
             }
+            
+            // Update app state - onboarding completed, go to dashboard
+            await appStateManager.handleOnboardingCompleted(onboardingViewModel: onboardingViewModel)
         }
     }
 }

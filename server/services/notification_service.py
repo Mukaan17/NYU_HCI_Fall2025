@@ -2,13 +2,15 @@
 """
 Service to check for free time in user's calendar and match with events
 to send push notifications.
+
+NOTE: System calendar is handled client-side. This service accepts calendar events
+from the client rather than fetching from Google Calendar.
 """
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import logging
 
-from services.calendar_service import fetch_today_events
 from services.scrapers.engage_events_service import fetch_engage_events
 from services.recommendation.quick_recommendations import EVENT_SOURCES
 
@@ -127,16 +129,23 @@ def find_matching_events(free_slot: Dict[str, Any],
     return matching
 
 
-def check_free_time_and_events(refresh_token: str, 
-                               client_id: str, 
-                               client_secret: str) -> List[Dict[str, Any]]:
+def check_free_time_and_events(calendar_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Check user's calendar for free time and match with available events.
-    Returns list of notifications to send: [{free_time, matching_events}]
+    
+    NOTE: System calendar is handled client-side. This function accepts calendar events
+    from the client rather than fetching from Google Calendar.
+    
+    Args:
+        calendar_events: List of calendar events from client (system calendar)
+                         Format: [{"start": ISO8601, "end": ISO8601}, ...]
+    
+    Returns:
+        List of notifications to send: [{free_time, matching_events}]
     """
     try:
-        # Fetch user's calendar events for today
-        calendar_events = fetch_today_events(refresh_token, client_id, client_secret)
+        # Calendar events are provided by the client (system calendar)
+        # No need to fetch from Google Calendar
         
         # Define time window (now to end of day)
         now = datetime.utcnow()

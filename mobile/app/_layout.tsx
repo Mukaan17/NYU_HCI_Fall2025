@@ -35,12 +35,12 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <PlaceProvider>
-          <ChatProvider>
-            <StatusBar style="light" translucent backgroundColor="transparent" />
-            <Slot />
-          </ChatProvider>
-        </PlaceProvider>
+      <PlaceProvider>
+        <ChatProvider>
+          <StatusBar style="light" translucent backgroundColor="transparent" />
+          <Slot />
+        </ChatProvider>
+      </PlaceProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

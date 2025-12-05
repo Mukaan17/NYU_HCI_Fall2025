@@ -23,22 +23,35 @@ struct Weather: Codable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // Handle server format: temp_f (from weather service)
+        var decodedTemp: Int? = nil
+        
+        // Handle server format: temp_f (from weather service) - supports negative temperatures
         if let tempF = try? container.decodeIfPresent(Double.self, forKey: .temp_f) {
-            temp = Int(round(tempF))
+            decodedTemp = Int(round(tempF))
+            print("🌡️ Weather: Decoded temp_f = \(tempF) -> \(decodedTemp ?? 0)°F")
         }
-        // Handle OpenWeather API response format: main.temp
+        // Handle OpenWeather API response format: main.temp - supports negative temperatures
         else if let mainDict = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .main),
                 let tempDouble = try? mainDict.decode(Double.self, forKey: .temp) {
-            temp = Int(round(tempDouble))
+            decodedTemp = Int(round(tempDouble))
+            print("🌡️ Weather: Decoded main.temp = \(tempDouble) -> \(decodedTemp ?? 0)°F")
         }
-        // Handle direct temp field
+        // Handle direct temp field (Int) - supports negative temperatures
         else if let tempInt = try? container.decodeIfPresent(Int.self, forKey: .temp) {
-            temp = tempInt
-        } else {
-            // Default if no temperature found
-            temp = 0
+            decodedTemp = tempInt
+            print("🌡️ Weather: Decoded temp (Int) = \(tempInt)°F")
         }
+        // Handle temp as Double in root - supports negative temperatures
+        else if let tempDouble = try? container.decodeIfPresent(Double.self, forKey: .temp) {
+            decodedTemp = Int(round(tempDouble))
+            print("🌡️ Weather: Decoded temp (Double) = \(tempDouble) -> \(decodedTemp ?? 0)°F")
+        } else {
+            print("⚠️ Weather: No temperature field found, defaulting to 0°F")
+        }
+        
+        // Use decoded temperature or default to 0 if not found
+        // Note: 0 is a valid temperature, but we use it as a fallback for missing data
+        temp = decodedTemp ?? 0
         
         // Handle server format: desc/icon (from weather service)
         if let desc = try? container.decodeIfPresent(String.self, forKey: .desc) {

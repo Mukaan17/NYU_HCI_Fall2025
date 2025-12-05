@@ -362,18 +362,18 @@ actor APIService {
         request.timeoutInterval = 10.0 // Add timeout to prevent hanging
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let http = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
             
             // Log response for debugging
             if let responseString = String(data: data, encoding: .utf8) {
                 print("📥 Dashboard response (\(http.statusCode)): \(responseString.prefix(500))")
             }
-            
-            guard http.statusCode == 200 else {
+        
+        guard http.statusCode == 200 else {
                 // Handle rate limiting (429)
                 if http.statusCode == 429 {
                     throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
@@ -382,13 +382,13 @@ actor APIService {
                 if http.statusCode == 401 {
                     throw APIError.serverError("Authentication required. Please log in again.")
                 }
-                if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let msg = dict["error"] as? String {
-                    throw APIError.serverError(msg)
-                }
-                throw APIError.invalidResponse
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = dict["error"] as? String {
+                throw APIError.serverError(msg)
             }
-            
+            throw APIError.invalidResponse
+        }
+        
             // Check if data is empty
             guard !data.isEmpty else {
                 print("⚠️ Dashboard response is empty")

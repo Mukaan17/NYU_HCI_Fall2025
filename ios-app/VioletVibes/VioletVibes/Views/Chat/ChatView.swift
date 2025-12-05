@@ -87,7 +87,7 @@ struct ChatView: View {
                         }
                     }
                 }) {
-                    Text("\(weather.emoji) \(weather.temp)°F")
+                    Text("\(weather.emoji) \(formatTemperature(weather.temp))°F")
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textBlue)
                         .padding(.horizontal, Theme.Spacing.xl)
@@ -357,6 +357,12 @@ struct ChatView: View {
                 isPresented: $showCalendarSummary
             )
         }
+    }
+    
+    // Helper function to format temperature (handles negative temperatures correctly)
+    private func formatTemperature(_ temp: Int) -> String {
+        // Int already handles negative values correctly, just convert to string
+        return String(temp)
     }
     
     // Helper function to format free time block

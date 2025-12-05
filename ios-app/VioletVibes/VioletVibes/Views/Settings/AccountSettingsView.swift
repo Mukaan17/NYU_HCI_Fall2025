@@ -11,6 +11,7 @@ import UIKit
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppStateManager.self) private var appStateManager
     @State private var locationPermission: Bool = false
     @State private var calendarPermission: Bool = false
     @State private var notificationPermission: Bool = false
@@ -477,6 +478,7 @@ struct AccountSettingsView: View {
 struct AccountSettingsSectionView: View {
     @Environment(OnboardingViewModel.self) private var onboardingViewModel
     @Environment(UserSession.self) private var session
+    @Environment(AppStateManager.self) private var appStateManager
     @State private var firstName: String = ""
     @State private var showChangePassword = false
     @State private var showLogoutAlert = false
@@ -612,32 +614,12 @@ struct AccountSettingsSectionView: View {
     }
     
     private func logout() {
-        Task {
-            // CRITICAL: Clear ALL current user's data before logging out to prevent state leakage
-            await storage.clearCurrentUserHomeAddress()
-            await storage.clearCurrentUserOnboardingStatus()
-            await storage.clearCurrentUserPreferences()
-            await storage.clearCurrentUserTrustedContacts()
-            await storage.clearCurrentUserWelcomeStatus()
-            await storage.clearCurrentUserPermissionsStatus()
-            await storage.clearCurrentUserCalendarOAuthStatus()
-            
-            // CRITICAL: Clear user session to prevent state leakage
-            await storage.clearUserSession()
-            
-            // Clear user account
-            await storage.saveUserAccount(UserAccount(email: "", firstName: "", hasLoggedIn: false))
-            await storage.setHasLoggedIn(false)
-            
-            await MainActor.run {
-                // Clear session state
-                session.jwt = nil
-                session.preferences = UserPreferences()
-                session.settings = nil
-                
-                onboardingViewModel.hasLoggedIn = false
-                onboardingViewModel.hasCompletedOnboardingSurvey = false
-            }
+        Task { @MainActor in
+            // Use AppStateManager for centralized logout handling
+            await appStateManager.handleLogout(
+                userSession: session,
+                onboardingViewModel: onboardingViewModel
+            )
         }
     }
 }

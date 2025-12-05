@@ -183,7 +183,7 @@ def get_free_time_suggestion(free_block: dict,
                              user_profile: dict) -> Dict[str, Any]:
     """
     free_block = { start: ISO, end: ISO }
-    events = today's Google Calendar events
+    events = today's calendar events (from system calendar or any source)
     user_profile = optional preferences
 
     Returns:

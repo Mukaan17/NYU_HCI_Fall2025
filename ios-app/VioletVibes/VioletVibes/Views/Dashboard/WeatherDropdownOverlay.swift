@@ -80,7 +80,7 @@ struct WeatherDropdownOverlay: View {
                                 Text(weather.emoji)
                                     .font(.system(size: 40))
                                 
-                                Text("\(weather.temp)°F")
+                                Text("\(formatTemperature(weather.temp))°F")
                                     .themeFont(size: .xl, weight: .bold)
                                     .foregroundColor(Theme.Colors.textPrimary)
                             }
@@ -188,7 +188,7 @@ struct HourlyForecastCompactCard: View {
                 .font(.system(size: 24))
             
             // Temperature
-            Text("\(forecast.temp)°")
+            Text("\(formatTemperature(forecast.temp))°")
                 .themeFont(size: .sm, weight: .semiBold)
                 .foregroundColor(Theme.Colors.textPrimary)
         }
@@ -202,5 +202,11 @@ struct HourlyForecastCompactCard: View {
         )
         .cornerRadius(Theme.BorderRadius.sm)
     }
+}
+
+// Helper function to format temperature (handles negative temperatures correctly)
+private func formatTemperature(_ temp: Int) -> String {
+    // Int already handles negative values correctly, just convert to string
+    return String(temp)
 }
 

@@ -32,6 +32,33 @@ def build_chat_response(
     user_profile = user_profile or {}
     t0 = time.time()
 
+    # STEP 0 — Check if this is a follow-up question about previous results
+    from services.recommendation.intent import classify_intent_llm
+    intent = classify_intent_llm(message, memory)
+    
+    # If it's a follow-up (place or general), use context-aware response
+    if intent in ["followup_place", "followup_general"] and memory.last_places:
+        # User is asking about previous recommendations or context
+        # Use contextual reply with previous results
+        from services.recommendation.llm_reply import generate_contextual_reply
+        memory.add_message("user", message)
+        reply = generate_contextual_reply(message, memory.last_places, memory)
+        memory.add_message("assistant", reply)
+        return {
+            "debug_vibe": intent,
+            "latency": round(time.time() - t0, 2),
+            "places": memory.last_places[:3],
+            "reply": reply,
+            "weather": current_weather(),
+        }
+    
+    # If it's a request for new recommendations (alternatives), still do a new search
+    # but use context to avoid repeating previous results
+    if intent == "new_recommendation" and memory.all_results:
+        # User wants alternatives - exclude previously shown places
+        previous_names = {p.get("name", "").lower() for p in memory.last_places}
+        # This will be handled in the scoring/filtering step
+
     # STEP 1 — classify user vibe
     vibe = classify_vibe(message)
     place_types, radius = vibe_to_place_types(vibe)
@@ -92,12 +119,23 @@ def build_chat_response(
     # STEP 7 — Combine places + events
     items = final_places + normalized_events
 
+    # STEP 7.5 — Handle empty results with context-aware reply
     if not items:
+        # Add user message to history
+        memory.add_message("user", message)
+        
+        # Generate context-aware empty response
+        from services.recommendation.llm_reply import generate_contextual_reply
+        reply = generate_contextual_reply(message, [], memory)
+        
+        # Add assistant reply to history
+        memory.add_message("assistant", reply)
+        
         return {
             "debug_vibe": vibe,
             "latency": round(time.time() - t0, 2),
             "places": [],
-            "reply": "Sorry, I couldn't find anything nearby right now.",
+            "reply": reply,
             "weather": current_weather(),
         }
 
@@ -115,8 +153,14 @@ def build_chat_response(
     memory.set_places(items[:3])
     memory.set_results(items)
 
-    # STEP 10 — Build surface reply
-    reply = build_surface_reply(message, items)
+    # STEP 10 — Add current message to history for context
+    memory.add_message("user", message)
+    
+    # STEP 11 — Build surface reply with context
+    reply = build_surface_reply(message, items, memory)
+    
+    # STEP 12 — Add assistant reply to history
+    memory.add_message("assistant", reply)
 
     return {
         "debug_vibe": vibe,
@@ -130,21 +174,25 @@ def build_chat_response(
 # ---------------------------------------------------------------------
 # SURFACE REPLY
 # ---------------------------------------------------------------------
-def build_surface_reply(user_msg: str, items: list):
+def build_surface_reply(user_msg: str, items: list, memory: ConversationContext = None):
+    """
+    Build a natural, context-aware reply using LLM.
+    Removes repetitive greetings and maintains conversation flow.
+    """
+    from services.recommendation.llm_reply import generate_list_reply, generate_contextual_reply
+    
     if not items:
-        return "Sorry, I couldn't find anything nearby right now."
+        # Use LLM for empty results too, with context awareness
+        if memory and memory.history:
+            # Follow-up context - acknowledge previous conversation
+            return generate_contextual_reply(user_msg, [], memory)
+        return "I couldn't find anything nearby right now. Try asking for something different!"
 
-    top = items[:2]
-
-    lines = ["Hey there!"]
-    for p in top:
-        name = p.get("name", "Unknown")
-        dist = p.get("distance") or ""
-        walk = p.get("walk_time") or ""
-
-        if dist and walk:
-            lines.append(f"You might like **{name}** ({dist}, {walk}).")
-        else:
-            lines.append(f"You might like **{name}**.")
-
-    return "\n".join(lines)
+    # Use LLM to generate natural, context-aware replies
+    # Include conversation history for better follow-up handling
+    if memory and memory.history:
+        # Use contextual LLM reply that considers previous messages
+        return generate_contextual_reply(user_msg, items[:3], memory)
+    else:
+        # First message - use standard LLM reply
+        return generate_list_reply(user_msg, items[:3])

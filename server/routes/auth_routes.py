@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Author: Mukhil Sundararaj
+# @Date:   2025-12-03 14:40:44
+# @Last Modified by:   Mukhil Sundararaj
+# @Last Modified time: 2025-12-05 18:07:41
 from flask import Blueprint, request, jsonify, g
 from sqlalchemy.exc import IntegrityError
 import logging
@@ -115,7 +120,7 @@ def login():
 
         access_token, refresh_token = generate_token_pair(user)
         logger.info(f"Request {g.get('request_id', 'unknown')}: User logged in - {email}")
-        
+
         # Save session to Redis and ensure Postgres is up to date
         from services.session_service import save_user_session
         session_data = {

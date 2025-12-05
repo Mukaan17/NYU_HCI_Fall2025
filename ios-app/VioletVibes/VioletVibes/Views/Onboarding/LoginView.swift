@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import AuthenticationServices
 import UIKit
 
 struct LoginView: View {
@@ -251,45 +250,6 @@ struct LoginView: View {
                         (!isSignUpMode && (isLoggingIn || !isEmailValid || !isPasswordValid))
                         ? 0.5 : 1.0
                     )
-                    
-                    // Divider
-                    HStack {
-                        Rectangle()
-                            .fill(Theme.Colors.border)
-                            .frame(height: 1)
-                        
-                        Text("or")
-                            .themeFont(size: .sm)
-                            .foregroundColor(Theme.Colors.textSecondary)
-                            .padding(.horizontal, Theme.Spacing.lg)
-                        
-                        Rectangle()
-                            .fill(Theme.Colors.border)
-                            .frame(height: 1)
-                    }
-                    .padding(.vertical, Theme.Spacing.`2xl`)
-                    
-                    // Sign in with Apple (Native Button)
-                    SignInWithAppleButton(
-                        onRequest: { request in
-                            request.requestedScopes = [.fullName, .email]
-                        },
-                        onCompletion: { result in
-                            handleAppleSignIn(result)
-                        }
-                    )
-                    .signInWithAppleButtonStyle(.whiteOutline)
-                    .frame(height: 50)
-                    .cornerRadius(Theme.BorderRadius.md)
-                    .disabled(isLoggingIn || isSigningUp)
-                    .opacity((isLoggingIn || isSigningUp) ? 0.5 : 1.0)
-                    
-                    // Sign in with Google (Mock Native Button)
-                    // Following Google Sign-In iOS documentation: https://developers.google.com/identity/sign-in/ios/sign-in#using-swiftui
-                    // In production, replace with: GoogleSignInButton(action: handleGoogleSignIn)
-                    GoogleSignInButtonMock(action: handleGoogleSignIn)
-                        .disabled(isLoggingIn || isSigningUp)
-                        .opacity((isLoggingIn || isSigningUp) ? 0.5 : 1.0)
                     
                     Spacer()
                         .frame(height: 40)
@@ -634,33 +594,6 @@ struct LoginView: View {
         }
     }
     
-    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
-        switch result {
-        case .success(let authorization):
-            isLoggingIn = true
-            
-            // Handle successful authorization
-            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                // In production, send credential to backend
-                print("Apple Sign In successful: \(appleIDCredential.user)")
-                
-                Task {
-                    // Simulate network delay
-                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                    
-                    await MainActor.run {
-                        isLoggingIn = false
-                        onboardingViewModel.markLoggedIn()
-                    }
-                }
-            }
-        case .failure(let error):
-            isLoggingIn = false
-            errorMessage = "Apple Sign In failed: \(error.localizedDescription)"
-            showError = true
-        }
-    }
-    
     // Helper function to get app icon programmatically
     private func getAppIcon() -> UIImage? {
         // Try to get app icon from bundle
@@ -684,23 +617,6 @@ struct LoginView: View {
         }
         
         return nil
-    }
-    
-    private func handleGoogleSignIn() {
-        isLoggingIn = true
-        
-        // Mock Google Sign In - simulate authentication
-        Task {
-            // Simulate network delay
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            
-            // Mock: Success
-            // In production, this would integrate with Google Sign In
-            await MainActor.run {
-                isLoggingIn = false
-                onboardingViewModel.markLoggedIn()
-            }
-        }
     }
 }
 
@@ -781,43 +697,4 @@ struct TabSelectorView: View {
     }
 }
 
-// MARK: - Google Sign-In Button Mock
-// Mock implementation matching GoogleSignInButton from GoogleSignInSwift
-// Reference: https://developers.google.com/identity/sign-in/ios/sign-in#using-swiftui
-struct GoogleSignInButtonMock: View {
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                // Google logo - official Google "G" icon
-                ZStack {
-                    // Google logo background (white square)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white)
-                        .frame(width: 20, height: 20)
-                    
-                    // Google "G" - using official Google blue color
-                    Text("G")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96)) // Google blue #4285F4
-                }
-                
-                // Button text
-                Text("Sign in with Google")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(red: 0.13, green: 0.13, blue: 0.13)) // Google text color #212121
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 50) // Standard button height matching Apple's Sign In button
-            .background(Color.white)
-            .cornerRadius(Theme.BorderRadius.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                    .stroke(Color(red: 0.85, green: 0.85, blue: 0.85), lineWidth: 1) // Google border color
-            )
-            .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
-        }
-    }
-}
 

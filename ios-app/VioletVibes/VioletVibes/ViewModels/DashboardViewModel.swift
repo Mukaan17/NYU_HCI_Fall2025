@@ -21,9 +21,15 @@ final class DashboardViewModel {
     var dashboardWeather: Weather? = nil
     
     private let apiService = APIService.shared
+    private var currentLoadTask: Task<Void, Never>? = nil
     
     // Load dashboard data from backend
     func loadDashboard(jwt: String) async {
+        // Cancel any existing load task to prevent concurrent requests
+        await MainActor.run {
+            currentLoadTask?.cancel()
+        }
+        
         // Check for cancellation
         try? Task.checkCancellation()
         
@@ -44,7 +50,8 @@ final class DashboardViewModel {
                 // Extract weather
                 dashboardWeather = dashboard.weather
                 
-                // Extract calendar linked status
+                // Extract calendar linked status from backend (source of truth)
+                // This ensures local state stays in sync with backend Postgres/Redis
                 calendarLinked = dashboard.calendar_linked ?? false
                 
                 // Extract next free block
@@ -129,6 +136,9 @@ final class DashboardViewModel {
                 try Task.checkCancellation()
                 // If dashboard loaded successfully, we're done
                 if !recommendations.isEmpty {
+                    await MainActor.run {
+                        isLoading = false
+                    }
                     return
                 }
             } catch is CancellationError {

@@ -359,33 +359,75 @@ actor APIService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        
-        guard http.statusCode == 200 else {
-            // Handle rate limiting (429)
-            if http.statusCode == 429 {
-                throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
-            }
-            // Handle authentication errors (401)
-            if http.statusCode == 401 {
-                throw APIError.serverError("Authentication required. Please log in again.")
-            }
-            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let msg = dict["error"] as? String {
-                throw APIError.serverError(msg)
-            }
-            throw APIError.invalidResponse
-        }
+        request.timeoutInterval = 10.0 // Add timeout to prevent hanging
         
         do {
-            return try JSONDecoder().decode(DashboardAPIResponse.self, from: data)
-        } catch {
-            throw APIError.decodingError(error.localizedDescription)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let http = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            
+            // Log response for debugging
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📥 Dashboard response (\(http.statusCode)): \(responseString.prefix(500))")
+            }
+            
+            guard http.statusCode == 200 else {
+                // Handle rate limiting (429)
+                if http.statusCode == 429 {
+                    throw APIError.serverError("Rate limit exceeded. Please try again in a moment.")
+                }
+                // Handle authentication errors (401)
+                if http.statusCode == 401 {
+                    throw APIError.serverError("Authentication required. Please log in again.")
+                }
+                if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let msg = dict["error"] as? String {
+                    throw APIError.serverError(msg)
+                }
+                throw APIError.invalidResponse
+            }
+            
+            // Check if data is empty
+            guard !data.isEmpty else {
+                print("⚠️ Dashboard response is empty")
+                throw APIError.decodingError("Empty response from server")
+            }
+            
+            do {
+                let decoder = JSONDecoder()
+                // Use lenient decoding to handle missing optional fields
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                return try decoder.decode(DashboardAPIResponse.self, from: data)
+            } catch let decodingError as DecodingError {
+                // Provide detailed decoding error information
+                print("❌ Dashboard decoding error: \(decodingError)")
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("   Missing key: \(key.stringValue) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .typeMismatch(let type, let context):
+                    print("   Type mismatch: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .valueNotFound(let type, let context):
+                    print("   Value not found: \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .dataCorrupted(let context):
+                    print("   Data corrupted: \(context.debugDescription)")
+                @unknown default:
+                    print("   Unknown decoding error")
+                }
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("   Response body: \(responseString)")
+                }
+                throw APIError.decodingError(decodingError.localizedDescription)
+            }
+        } catch let urlError as URLError {
+            // Handle URL errors (including cancellation)
+            if urlError.code == .cancelled {
+                print("⚠️ Dashboard request was cancelled")
+                throw APIError.serverError("Request was cancelled")
+            }
+            print("❌ Dashboard URL error: \(urlError.localizedDescription)")
+            throw APIError.serverError(urlError.localizedDescription)
         }
     }
     

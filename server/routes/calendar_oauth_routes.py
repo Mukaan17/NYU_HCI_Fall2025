@@ -140,6 +140,10 @@ def callback():
             
             db.session.commit()
             
+            # Update session in Redis and Postgres
+            from services.session_service import update_calendar_linked_status
+            update_calendar_linked_status(user.id, True)
+            
             logger.info(f"Request {g.get('request_id', 'unknown')}: Google Calendar linked for user {user.id}")
             
             # Redirect to iOS app with success
@@ -178,6 +182,10 @@ def unlink():
         user.set_settings(settings)
         
         db.session.commit()
+        
+        # Update session in Redis and Postgres
+        from services.session_service import update_calendar_linked_status
+        update_calendar_linked_status(user.id, False)
         
         logger.info(f"Request {g.get('request_id', 'unknown')}: Google Calendar unlinked for user {user.id}")
         

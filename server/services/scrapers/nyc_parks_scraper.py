@@ -7,16 +7,31 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/118.0.5993.90 Safari/537.36"
+        "Chrome/120.0.0.0 Safari/537.36"
     ),
-    "Referer": "https://www.google.com/"
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Cache-Control": "max-age=0"
 }
 
 URL = "https://www.nycgovparks.org/events"
 
 def fetch_nyc_parks_events(limit=20):
     try:
-        r = requests.get(URL, headers=HEADERS, timeout=10)
+        r = requests.get(URL, headers=HEADERS, timeout=10, allow_redirects=True)
+        
+        # Handle 403 Forbidden errors gracefully
+        if r.status_code == 403:
+            print(f"NYC Parks scraper error: 403 Client Error: Forbidden for url: {URL}")
+            print("   The website may be blocking automated requests. Consider using an API or different data source.")
+            return []
+        
         r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "html.parser")
@@ -36,10 +51,10 @@ def fetch_nyc_parks_events(limit=20):
             start = date_el.get_text(strip=True) if date_el else None
 
             url_el = ev.select_one("a")
-            url = "https://www.nycgovparks.org" + url_el["href"] if url_el else None
+            url = "https://www.nycgovparks.org" + url_el["href"] if url_el and url_el.get("href") else None
 
             img = ev.select_one("img")
-            image = img["src"] if img else None
+            image = img["src"] if img and img.get("src") else None
 
             events.append({
                 "name": name,
@@ -54,7 +69,16 @@ def fetch_nyc_parks_events(limit=20):
 
         return events
 
+    except requests.exceptions.HTTPError as e:
+        if e.response and e.response.status_code == 403:
+            print(f"NYC Parks scraper error: 403 Client Error: Forbidden for url: {URL}")
+        else:
+            print(f"NYC Parks scraper HTTP error: {e}")
+        return []
+    except requests.exceptions.RequestException as e:
+        print(f"NYC Parks scraper request error: {e}")
+        return []
     except Exception as e:
-        print("NYC Parks scraper error:", e)
+        print(f"NYC Parks scraper error: {e}")
         return []
 

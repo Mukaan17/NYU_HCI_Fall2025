@@ -27,12 +27,16 @@ struct VioletVibesApp: App {
                 .environment(userSession)
                 .preferredColorScheme(.dark)
                 .task {
-                    // Load session on app start
+                    // Load session on app start - this restores JWT and calendar status from local storage
                     let storage = StorageService.shared
                     let loadedSession = await storage.loadUserSession()
                     await MainActor.run {
                         userSession.jwt = loadedSession.jwt
                         userSession.googleCalendarLinked = loadedSession.googleCalendarLinked
+                        
+                        // If we have a JWT, verify calendar status with backend on next dashboard load
+                        // The dashboard API will return the current calendar_linked status
+                        // This ensures the local state stays in sync with the backend
                     }
                 }
         }

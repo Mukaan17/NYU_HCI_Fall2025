@@ -113,13 +113,15 @@ def get_walking_directions(
         return None
 
     # Fetch both walking and transit directions in parallel
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
     
     walking_result = None
     transit_result = None
     
     # Use ThreadPoolExecutor to fetch both in parallel
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    executor = None
+    try:
+        executor = ThreadPoolExecutor(max_workers=2)
         walking_future = executor.submit(
             _get_directions_for_mode, origin_lat, origin_lng, dest_lat, dest_lng, "walking"
         )
@@ -130,13 +132,23 @@ def get_walking_directions(
         # Wait for both to complete (with timeout)
         try:
             walking_result = walking_future.result(timeout=4)
+        except FutureTimeoutError:
+            logger.debug("Timeout fetching walking directions")
+            walking_future.cancel()
         except Exception as e:
             logger.debug(f"Error fetching walking directions: {e}")
         
         try:
             transit_result = transit_future.result(timeout=4)
+        except FutureTimeoutError:
+            logger.debug("Timeout fetching transit directions")
+            transit_future.cancel()
         except Exception as e:
             logger.debug(f"Error fetching transit directions: {e}")
+    finally:
+        # Ensure executor is properly shut down
+        if executor:
+            executor.shutdown(wait=False)
 
     # Choose the shorter/quicker route
     best_result = None

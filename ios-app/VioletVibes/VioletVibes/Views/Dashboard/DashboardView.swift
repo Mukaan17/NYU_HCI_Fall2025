@@ -213,7 +213,7 @@ struct DashboardView: View {
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.75)
-                                    } else if let googleFreeTime = viewModel.nextFreeBlock, viewModel.calendarLinked {
+                                    } else if let googleFreeTime = viewModel.nextFreeBlock, (viewModel.calendarLinked || session.googleCalendarLinked) {
                                         // Priority 2: Google Calendar from backend (user's login email)
                                         Text(formatFreeTimeBlock(googleFreeTime))
                                             .themeFont(size: .base, weight: .semiBold)
@@ -226,7 +226,7 @@ struct DashboardView: View {
                                             .themeFont(size: .base, weight: .semiBold)
                                             .foregroundColor(Theme.Colors.textPrimary)
                                             .lineLimit(1)
-                                    } else if !viewModel.calendarLinked {
+                                    } else if !viewModel.calendarLinked && !session.googleCalendarLinked {
                                         // No system calendar events AND Google Calendar not linked
                                         // Show "Calendar not linked" to prompt user to link Google Calendar
                                         HStack(spacing: Theme.Spacing.sm) {
@@ -387,7 +387,16 @@ struct DashboardView: View {
             // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
-                isPresented: $showCalendarSummary
+                isPresented: $showCalendarSummary,
+                calendarLinked: viewModel.calendarLinked || session.googleCalendarLinked,
+                onCalendarLinked: {
+                    // Reload dashboard when calendar is linked
+                    Task {
+                        if let jwt = session.jwt {
+                            await viewModel.loadDashboard(jwt: jwt)
+                        }
+                    }
+                }
             )
         }
         .refreshable {

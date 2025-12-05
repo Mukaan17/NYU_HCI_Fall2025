@@ -154,7 +154,7 @@ struct ChatView: View {
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                } else if let googleFreeTime = dashboardViewModel.nextFreeBlock, dashboardViewModel.calendarLinked {
+                } else if let googleFreeTime = dashboardViewModel.nextFreeBlock, (dashboardViewModel.calendarLinked || session.googleCalendarLinked) {
                     // Priority 2: Google Calendar from backend (user's login email)
                     Text(formatFreeTimeBlock(googleFreeTime))
                         .themeFont(size: .base, weight: .semiBold)
@@ -167,7 +167,7 @@ struct ChatView: View {
                         .themeFont(size: .base, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                         .lineLimit(1)
-                } else if !dashboardViewModel.calendarLinked {
+                } else if !dashboardViewModel.calendarLinked && !session.googleCalendarLinked {
                     // No system calendar events AND Google Calendar not linked
                     // Show "Calendar not linked" to prompt user to link Google Calendar
                     HStack(spacing: Theme.Spacing.sm) {
@@ -371,7 +371,16 @@ struct ChatView: View {
             // Calendar summary modal shows system calendar events (priority source)
             CalendarSummaryModal(
                 events: calendarViewModel.events,
-                isPresented: $showCalendarSummary
+                isPresented: $showCalendarSummary,
+                calendarLinked: dashboardViewModel.calendarLinked || session.googleCalendarLinked,
+                onCalendarLinked: {
+                    // Reload dashboard when calendar is linked
+                    Task {
+                        if let jwt = session.jwt {
+                            await dashboardViewModel.loadDashboard(jwt: jwt)
+                        }
+                    }
+                }
             )
         }
     }

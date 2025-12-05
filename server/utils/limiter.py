@@ -18,15 +18,19 @@ class NoOpLimiter:
         def decorator(f):
             return f
         return decorator
+    
+    def exempt(self, f):
+        """Exempt a function from rate limiting."""
+        return f
 
 
 def init_limiter(app):
-    """Initialize rate limiter with Redis or memory backend."""
+    """Initialize rate limiter with Valkey/Redis or memory backend."""
     global limiter
     
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
-        # Use Redis for distributed rate limiting
+        # Use Valkey/Redis for distributed rate limiting (works with both)
         limiter = Limiter(
             app=app,
             key_func=get_remote_address,
@@ -34,7 +38,7 @@ def init_limiter(app):
             default_limits=["200 per day", "50 per hour"],
             strategy="fixed-window"
         )
-        logger.info("Rate limiter initialized with Redis backend")
+        logger.info("Rate limiter initialized with Valkey/Redis backend")
     else:
         # Fallback to memory (not shared across workers)
         limiter = Limiter(

@@ -352,10 +352,12 @@ def weather_forecast():
 # ─────────────────────────────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
+@limiter_module.limiter.exempt  # Exempt health checks from rate limiting
 def health():
     """
     Health check endpoint for DigitalOcean App Platform.
-    Checks database and Redis connectivity.
+    Checks database and Valkey/Redis connectivity.
+    Must be exempt from rate limiting to allow Kubernetes health probes.
     """
     status = {
         "status": "ok",
@@ -374,7 +376,7 @@ def health():
         logger.warning(f"Health check: Database connection failed - {e}")
         http_status = 503  # Service Unavailable
     
-    # Check Redis connectivity (optional)
+    # Check Valkey/Redis connectivity (optional, works with both Valkey and Redis)
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
         try:
@@ -384,7 +386,7 @@ def health():
             status["redis"] = "connected"
         except Exception as e:
             status["redis"] = "disconnected"
-            logger.warning(f"Health check: Redis connection failed - {e}")
+            logger.warning(f"Health check: Valkey/Redis connection failed - {e}")
     # If REDIS_URL not set, redis status remains "not_configured" (OK)
     
     return jsonify(status), http_status

@@ -1,5 +1,6 @@
 """
-Redis-backed conversation context manager for shared state across workers.
+Valkey/Redis-backed conversation context manager for shared state across workers.
+Valkey is Redis-compatible and works with the same redis Python client.
 """
 import os
 import json
@@ -16,7 +17,8 @@ _redis_client = None
 
 def get_redis_client():
     """
-    Get or create Redis client. Returns None if Redis is not available.
+    Get or create Valkey/Redis client. Returns None if Valkey/Redis is not available.
+    Works with both Valkey (DigitalOcean) and Redis.
     """
     global _redis_client
     
@@ -30,19 +32,20 @@ def get_redis_client():
     
     try:
         _redis_client = redis.from_url(redis_url, decode_responses=True)
-        # Test connection
+        # Test connection (works with both Valkey and Redis)
         _redis_client.ping()
-        logger.info("Redis connection established")
+        logger.info("Valkey/Redis connection established")
         return _redis_client
     except Exception as e:
-        logger.warning(f"Failed to connect to Redis: {e}. Using in-memory context.")
+        logger.warning(f"Failed to connect to Valkey/Redis: {e}. Using in-memory context.")
         return None
 
 
 class ConversationContextManager:
     """
-    Manages conversation context using Redis for shared state across workers.
-    Falls back to in-memory storage if Redis is unavailable.
+    Manages conversation context using Valkey/Redis for shared state across workers.
+    Falls back to in-memory storage if Valkey/Redis is unavailable.
+    Works with both Valkey (DigitalOcean) and Redis.
     """
     
     def __init__(self, user_id: Optional[str] = None, session_id: Optional[str] = None):
@@ -58,7 +61,7 @@ class ConversationContextManager:
         self.redis_client = get_redis_client()
         self._in_memory_context: Optional[ConversationContext] = None
         
-        # Generate key for Redis storage
+        # Generate key for Valkey/Redis storage
         if user_id:
             self.key = f"conversation:user:{user_id}"
         elif session_id:
@@ -70,7 +73,7 @@ class ConversationContextManager:
     
     def get_context(self) -> ConversationContext:
         """
-        Get conversation context from Redis or create new one.
+        Get conversation context from Valkey/Redis or create new one.
         """
         if self.redis_client:
             try:
@@ -86,7 +89,7 @@ class ConversationContextManager:
                     context.last_intent = context_data.get("last_intent")
                     return context
             except Exception as e:
-                logger.error(f"Error loading context from Redis: {e}")
+                logger.error(f"Error loading context from Valkey/Redis: {e}")
         
         # Fallback to in-memory or create new
         if self._in_memory_context is None:
@@ -95,7 +98,7 @@ class ConversationContextManager:
     
     def save_context(self, context: ConversationContext):
         """
-        Save conversation context to Redis.
+        Save conversation context to Valkey/Redis.
         """
         if self.redis_client:
             try:
@@ -114,20 +117,20 @@ class ConversationContextManager:
                     json.dumps(context_data)
                 )
             except Exception as e:
-                logger.error(f"Error saving context to Redis: {e}")
+                logger.error(f"Error saving context to Valkey/Redis: {e}")
         else:
             # In-memory fallback
             self._in_memory_context = context
     
     def clear_context(self):
         """
-        Clear conversation context from Redis.
+        Clear conversation context from Valkey/Redis.
         """
         if self.redis_client:
             try:
                 self.redis_client.delete(self.key)
             except Exception as e:
-                logger.error(f"Error clearing context from Redis: {e}")
+                logger.error(f"Error clearing context from Valkey/Redis: {e}")
         
         self._in_memory_context = None
 

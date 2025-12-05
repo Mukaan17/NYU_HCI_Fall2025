@@ -42,6 +42,7 @@ services:
       - key: REDIS_URL
         scope: RUN_TIME
         type: SECRET
+        # Note: REDIS_URL works with Valkey (Redis-compatible) from DigitalOcean
       - key: OPENWEATHER_KEY
         scope: RUN_TIME
         type: SECRET

@@ -22,7 +22,7 @@ def validate_config():
     }
     
     optional_vars = {
-        "REDIS_URL": "Redis connection string for state management and caching",
+        "REDIS_URL": "Valkey/Redis connection string for state management and caching (works with both Valkey and Redis)",
         "OPENWEATHER_KEY": "OpenWeather API key for weather data",
         "ALLOWED_ORIGINS": "Comma-separated list of allowed CORS origins",
         "FLASK_ENV": "Environment (development/production)",

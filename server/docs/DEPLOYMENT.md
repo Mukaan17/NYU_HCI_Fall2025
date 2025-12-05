@@ -90,17 +90,21 @@ Configure the following environment variables in the App Platform dashboard:
 postgresql://user:password@host:port/database?sslmode=require
 ```
 
-## Step 4: Set Up Redis (Optional but Recommended)
+## Step 4: Set Up Redis/Valkey (Optional but Recommended)
 
-### Option A: Managed Redis
+### Option A: Managed Valkey (Redis-Compatible)
 
-1. Create **Managed Redis** database in DigitalOcean
-2. Copy connection string
-3. Set `REDIS_URL` environment variable
+DigitalOcean now offers **Valkey** (a Redis-compatible fork) instead of Redis. Valkey is fully compatible with Redis clients and protocols.
 
-### Option B: Skip Redis
+1. Create **Managed Valkey** database in DigitalOcean
+2. Copy connection string (format: `redis://user:password@host:port/db`)
+3. Set `REDIS_URL` environment variable with the Valkey connection string
 
-If Redis is not configured:
+**Note**: The `redis` Python client library works perfectly with Valkey since it uses the same protocol.
+
+### Option B: Skip Redis/Valkey
+
+If Redis/Valkey is not configured:
 - Conversation context will use in-memory storage (not shared across workers)
 - Cache will use memory backend
 - Rate limiting will use memory backend
@@ -242,7 +246,7 @@ If deployment fails:
 With $200 credit:
 - Basic App: ~$5-12/month
 - Managed PostgreSQL: ~$15/month
-- Managed Redis: ~$15/month (optional)
+- Managed Valkey (Redis-compatible): ~$15/month (optional)
 - **Total**: ~$20-42/month
 - **Credit Duration**: ~5-10 months
 

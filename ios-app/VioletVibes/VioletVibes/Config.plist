@@ -3,11 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>API_URL</key>
-	<string>http://localhost:5001</string>
+	<string>https://violet-vibes-uf2g7.ondigitalocean.app</string>
 	<!-- 
-		For local development, use: http://localhost:5001
-		For production, replace with your DigitalOcean App Platform URL
-		Example: https://violetvibes-backend.ondigitalocean.app
+		Production backend URL: https://violet-vibes-uf2g7.ondigitalocean.app
+		For local development, temporarily change to: http://localhost:5001
 		
 		Note: OpenWeather API key has been moved to backend for security.
 		Weather endpoints are now available at /api/weather and /api/weather/forecast

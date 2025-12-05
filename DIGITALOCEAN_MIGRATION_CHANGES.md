@@ -546,9 +546,10 @@ These must be set in DigitalOcean App Platform:
 ### Optional but Recommended
 
 5. **REDIS_URL** (SECRET)
-   - Redis connection string for caching and state management
+   - Redis/Valkey connection string for caching and state management
    - Format: `redis://user:password@host:port/db`
-   - Provided by DigitalOcean Managed Redis
+   - Provided by DigitalOcean Managed Valkey (Redis-compatible)
+   - **Note**: DigitalOcean now offers Valkey instead of Redis, but it's fully compatible
 
 6. **OPENWEATHER_KEY** (SECRET)
    - OpenWeather API key for weather data
@@ -628,8 +629,8 @@ After applying changes, verify:
 3. **DigitalOcean will automatically deploy** if `deploy_on_push: true`
 4. **Set environment variables** in DigitalOcean App Platform dashboard
 5. **Create managed database** (PostgreSQL) in DigitalOcean
-6. **Create managed Redis** (optional but recommended) in DigitalOcean
-7. **Link database and Redis** to the app in DigitalOcean dashboard
+6. **Create managed Valkey** (Redis-compatible, optional but recommended) in DigitalOcean
+7. **Link database and Valkey** to the app in DigitalOcean dashboard
 8. **Run database migrations** if needed
 9. **Verify health endpoint** is responding
 10. **Test all API endpoints**
@@ -705,10 +706,11 @@ If issues occur:
    - Check database is accessible from App Platform
    - Ensure SSL mode is set: `?sslmode=require`
 
-3. **Redis connection errors**:
+3. **Redis/Valkey connection errors**:
    - Verify REDIS_URL is set correctly
-   - Check Redis is accessible from App Platform
-   - App will fall back to memory cache if Redis fails
+   - Check Valkey is accessible from App Platform
+   - App will fall back to memory cache if Valkey/Redis fails
+   - **Note**: DigitalOcean offers Valkey (Redis-compatible), which works with the same connection string format
 
 4. **CORS errors**:
    - Verify ALLOWED_ORIGINS includes your frontend URL

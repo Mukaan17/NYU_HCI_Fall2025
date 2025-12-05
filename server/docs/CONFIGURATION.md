@@ -30,12 +30,13 @@
 ### Optional Variables
 
 #### `REDIS_URL`
-- **Type**: String (Redis connection string)
+- **Type**: String (Redis/Valkey connection string)
 - **Required**: No (but recommended for production)
-- **Description**: Redis connection string for state management and caching
+- **Description**: Redis/Valkey connection string for state management and caching
 - **Format**: `redis://user:password@host:port/database`
-- **Example**: `redis://default:password@redis.example.com:6379/0`
+- **Example**: `redis://default:password@valkey.example.com:6379/0`
 - **Impact**: If not set, uses in-memory storage (not shared across workers)
+- **Note**: DigitalOcean offers Valkey (Redis-compatible), which works with the same connection string format
 
 #### `OPENWEATHER_KEY`
 - **Type**: String
@@ -151,7 +152,7 @@ Configured in `app.py`:
 - `pool_pre_ping`: True (verify connections before use)
 - `pool_recycle`: 3600 seconds (recycle connections after 1 hour)
 
-## Redis Configuration
+## Redis/Valkey Configuration
 
 ### Connection String
 
@@ -161,20 +162,22 @@ redis://[user[:password]@][host][:port][/database]
 ```
 
 Components:
-- `user`: Redis username (optional)
-- `password`: Redis password
-- `host`: Redis hostname
-- `port`: Redis port (default: 6379)
+- `user`: Redis/Valkey username (optional)
+- `password`: Redis/Valkey password
+- `host`: Redis/Valkey hostname
+- `port`: Redis/Valkey port (default: 6379)
 - `database`: Database number (0-15)
+
+**Note**: DigitalOcean now offers **Valkey** (a Redis-compatible fork) instead of Redis. Valkey uses the same protocol and connection string format, so the `redis` Python client works seamlessly with Valkey.
 
 ### Usage
 
-Redis is used for:
+Redis/Valkey is used for:
 - Conversation context storage (shared across workers)
 - Request caching
 - Rate limiting storage
 
-If Redis is unavailable, the app falls back to in-memory storage.
+If Redis/Valkey is unavailable, the app falls back to in-memory storage.
 
 ## CORS Configuration
 
@@ -207,7 +210,7 @@ Configured in `app.py`:
 - `/api/quick_recs`: 30 requests per minute
 
 **Storage:**
-- Redis (if `REDIS_URL` is set)
+- Redis/Valkey (if `REDIS_URL` is set)
 - Memory (fallback)
 
 ## Logging Configuration
@@ -324,11 +327,12 @@ Configuration is validated on application startup via `utils.config.validate_con
 - Check database firewall rules
 - Ensure database is accessible from app region
 
-### Redis Connection Issues
+### Redis/Valkey Connection Issues
 
 - Verify `REDIS_URL` format
-- Check Redis firewall rules
-- App will fall back to memory if Redis unavailable
+- Check Valkey/Redis firewall rules
+- App will fall back to memory if Redis/Valkey unavailable
+- **Note**: DigitalOcean offers Valkey (Redis-compatible), which uses the same connection string format
 
 For more troubleshooting, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
 

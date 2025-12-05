@@ -30,8 +30,11 @@ actor APIService {
     
     nonisolated func signup(email: String, password: String) async throws -> AuthResponse {
         guard let url = URL(string: "\(baseURL)/api/auth/signup") else {
+            print("❌ Invalid URL: \(baseURL)/api/auth/signup")
             throw APIError.invalidURL
         }
+        
+        print("📤 Signup request to: \(url.absoluteString)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -44,23 +47,61 @@ actor APIService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         
+        print("📤 Request body: email=\(email)")
+        
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let http = response as? HTTPURLResponse else {
+            print("❌ Invalid response type")
             throw APIError.invalidResponse
         }
         
-        guard http.statusCode == 201 else {
+        print("📥 Response status: \(http.statusCode)")
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📥 Response body: \(responseString.prefix(500))")
+        }
+        
+        // Accept both 200 and 201 for signup (some servers return 200)
+        guard http.statusCode == 201 || http.statusCode == 200 else {
             if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = dict["error"] as? String {
+                print("❌ Server error: \(msg)")
                 throw APIError.serverError(msg)
+            }
+            print("❌ Invalid response status: \(http.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Full response: \(responseString)")
             }
             throw APIError.invalidResponse
         }
         
         do {
-            return try JSONDecoder().decode(AuthResponse.self, from: data)
+            let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
+            print("✅ Signup successful for: \(email)")
+            return authResponse
         } catch {
+            print("❌ Decoding error: \(error)")
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("   Missing key: \(key.stringValue) at path: \(context.codingPath)")
+                case .typeMismatch(let type, let context):
+                    print("   Type mismatch: expected \(type) at path: \(context.codingPath)")
+                case .valueNotFound(let type, let context):
+                    print("   Value not found: \(type) at path: \(context.codingPath)")
+                case .dataCorrupted(let context):
+                    print("   Data corrupted: \(context.debugDescription)")
+                @unknown default:
+                    print("   Unknown decoding error")
+                }
+            }
+            
+            // Try to show what we actually received
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                print("   Received JSON keys: \(Array(jsonObject.keys))")
+            }
+            
             throw APIError.decodingError(error.localizedDescription)
         }
     }

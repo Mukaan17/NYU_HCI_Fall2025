@@ -1,6 +1,7 @@
 """
-Cache initialization with Redis backend support.
-Falls back to memory cache if Redis is unavailable.
+Cache initialization with Valkey/Redis backend support.
+Falls back to memory cache if Valkey/Redis is unavailable.
+Works with both Valkey (DigitalOcean) and Redis.
 """
 import os
 import logging

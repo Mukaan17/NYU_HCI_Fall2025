@@ -2,6 +2,7 @@
 import os
 import logging
 import requests
+from typing import Dict, Any
 from utils.retry import retry_api_call
 
 logger = logging.getLogger(__name__)

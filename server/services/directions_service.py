@@ -11,6 +11,82 @@ logger = logging.getLogger(__name__)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 
+def get_distance_matrix(
+    origin_lat: float,
+    origin_lng: float,
+    dest_lat: float,
+    dest_lng: float,
+    mode: str = "walking"
+) -> Optional[Dict[str, Any]]:
+    """
+    Get accurate distance and duration using Google Distance Matrix API.
+    This provides more accurate results than Directions API for distance calculations.
+    
+    Args:
+        origin_lat: Origin latitude
+        origin_lng: Origin longitude
+        dest_lat: Destination latitude
+        dest_lng: Destination longitude
+        mode: Travel mode (walking, transit, driving)
+    
+    Returns:
+        Dict with distance_text, duration_text, distance_meters, duration_seconds
+        or None on failure
+    """
+    if not GOOGLE_API_KEY:
+        logger.warning("GOOGLE_API_KEY not set, cannot get distance matrix")
+        return None
+    
+    try:
+        url = "https://maps.googleapis.com/maps/api/distancematrix/json"
+        params = {
+            "origins": f"{origin_lat},{origin_lng}",
+            "destinations": f"{dest_lat},{dest_lng}",
+            "mode": mode,
+            "key": GOOGLE_API_KEY,
+            "units": "imperial",  # Get results in miles/feet
+        }
+        
+        r = requests.get(url, params=params, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        
+        rows = data.get("rows", [])
+        if not rows:
+            return None
+        
+        elements = rows[0].get("elements", [])
+        if not elements:
+            return None
+        
+        element = elements[0]
+        status = element.get("status")
+        
+        if status != "OK":
+            logger.debug(f"Distance Matrix API returned status: {status}")
+            return None
+        
+        distance = element.get("distance", {})
+        duration = element.get("duration", {})
+        
+        return {
+            "distance_text": distance.get("text"),
+            "duration_text": duration.get("text"),
+            "distance_meters": distance.get("value"),  # Distance in meters
+            "duration_seconds": duration.get("value"),  # Duration in seconds
+        }
+        
+    except requests.Timeout:
+        logger.debug(f"Timeout getting distance matrix from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")
+        return None
+    except requests.RequestException as e:
+        logger.debug(f"Error getting distance matrix: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"Distance matrix error: {e}")
+        return None
+
+
 def _get_directions_for_mode(
     origin_lat: float,
     origin_lng: float,
@@ -20,18 +96,24 @@ def _get_directions_for_mode(
 ) -> Optional[Dict[str, Any]]:
     """
     Get directions for a specific mode (walking or transit).
+    Uses Distance Matrix API for accurate distance/duration, then Directions API for route details.
     Returns route data or None on failure.
     """
     if not GOOGLE_API_KEY:
         return None
 
     try:
+        # First, get accurate distance and duration from Distance Matrix API
+        distance_matrix = get_distance_matrix(origin_lat, origin_lng, dest_lat, dest_lng, mode)
+        
+        # Then get route details from Directions API
         base_url = "https://maps.googleapis.com/maps/api/directions/json"
         params = {
             "origin": f"{origin_lat},{origin_lng}",
             "destination": f"{dest_lat},{dest_lng}",
             "mode": mode,
             "key": GOOGLE_API_KEY,
+            "alternatives": "false",  # Get only the best route
         }
 
         r = requests.get(base_url, params=params, timeout=5)
@@ -40,13 +122,37 @@ def _get_directions_for_mode(
 
         routes = data.get("routes", [])
         if not routes:
+            # If Directions API fails but Distance Matrix worked, return that
+            if distance_matrix:
+                q = urllib.parse.urlencode({
+                    "api": 1,
+                    "origin": f"{origin_lat},{origin_lng}",
+                    "destination": f"{dest_lat},{dest_lng}",
+                    "travelmode": mode
+                })
+                maps_link = f"https://www.google.com/maps/dir/?{q}"
+                return {
+                    "duration_seconds": distance_matrix.get("duration_seconds", 0),
+                    "duration_text": distance_matrix.get("duration_text"),
+                    "distance_text": distance_matrix.get("distance_text"),
+                    "maps_link": maps_link,
+                    "polyline": None,
+                    "mode": mode,
+                }
             return None
 
         route = routes[0]
         leg = route.get("legs", [{}])[0]
-        duration_seconds = leg.get("duration", {}).get("value", 0)  # Duration in seconds for comparison
-        duration_text = leg.get("duration", {}).get("text")
-        distance_text = leg.get("distance", {}).get("text")
+        
+        # Use Distance Matrix results if available (more accurate), otherwise use Directions API
+        if distance_matrix:
+            duration_seconds = distance_matrix.get("duration_seconds", 0)
+            duration_text = distance_matrix.get("duration_text")
+            distance_text = distance_matrix.get("distance_text")
+        else:
+            duration_seconds = leg.get("duration", {}).get("value", 0)
+            duration_text = leg.get("duration", {}).get("text")
+            distance_text = leg.get("distance", {}).get("text")
 
         # Extract polyline for route visualization
         polyline_points = []
@@ -193,18 +299,45 @@ def get_walking_directions(
                         pass  # Expected for cancelled/timeout futures
 
     # Choose the shorter/quicker route
+    # Use Distance Matrix API for accurate comparison if available
     best_result = None
     
     if walking_result and transit_result:
-        # Compare by duration_seconds
-        if walking_result.get("duration_seconds", float('inf')) <= transit_result.get("duration_seconds", float('inf')):
+        # Get accurate distances from Distance Matrix API for comparison
+        walking_matrix = get_distance_matrix(origin_lat, origin_lng, dest_lat, dest_lng, "walking")
+        transit_matrix = get_distance_matrix(origin_lat, origin_lng, dest_lat, dest_lng, "transit")
+        
+        # Use Distance Matrix duration for accurate comparison if available
+        walking_duration = walking_matrix.get("duration_seconds") if walking_matrix else walking_result.get("duration_seconds", float('inf'))
+        transit_duration = transit_matrix.get("duration_seconds") if transit_matrix else transit_result.get("duration_seconds", float('inf'))
+        
+        # Choose the faster route
+        if walking_duration <= transit_duration:
             best_result = walking_result
+            # Update with Distance Matrix data if available (more accurate)
+            if walking_matrix:
+                best_result["distance_text"] = walking_matrix.get("distance_text")
+                best_result["duration_text"] = walking_matrix.get("duration_text")
         else:
             best_result = transit_result
+            # Update with Distance Matrix data if available (more accurate)
+            if transit_matrix:
+                best_result["distance_text"] = transit_matrix.get("distance_text")
+                best_result["duration_text"] = transit_matrix.get("duration_text")
     elif walking_result:
         best_result = walking_result
+        # Enhance with Distance Matrix if available
+        walking_matrix = get_distance_matrix(origin_lat, origin_lng, dest_lat, dest_lng, "walking")
+        if walking_matrix:
+            best_result["distance_text"] = walking_matrix.get("distance_text")
+            best_result["duration_text"] = walking_matrix.get("duration_text")
     elif transit_result:
         best_result = transit_result
+        # Enhance with Distance Matrix if available
+        transit_matrix = get_distance_matrix(origin_lat, origin_lng, dest_lat, dest_lng, "transit")
+        if transit_matrix:
+            best_result["distance_text"] = transit_matrix.get("distance_text")
+            best_result["duration_text"] = transit_matrix.get("duration_text")
     
     if not best_result:
         logger.debug(f"No routes found from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")

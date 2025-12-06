@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Author: Mukhil Sundararaj
+# @Date:   2025-12-04 14:08:22
+# @Last Modified by:   Mukhil Sundararaj
+# @Last Modified time: 2025-12-06 02:26:28
 # services/recommendation/driver.py
 from __future__ import annotations
 import time
@@ -66,21 +71,24 @@ def extract_places_from_reply(
             if name_lower in seen_names:
                 continue
             
-            # Check if the full name appears in the reply
-            if name_lower in reply_lower:
+            # Check if the full name appears in the reply (with or without "the")
+            name_without_the = name_lower.replace("the ", "").strip()
+            if name_lower in reply_lower or name_without_the in reply_lower:
                 matched_places.append(item)
                 seen_names.add(name_lower)
                 continue
             
             # Try matching significant words from the place name
             # Extract words longer than 3 characters (to avoid "the", "of", etc.)
-            name_words = [w for w in name_lower.split() if len(w) > 3]
+            # Also handle "The X" format
+            name_words = [w for w in name_lower.split() if len(w) > 3 and w != "the"]
             
             if not name_words:
                 continue
             
             # If at least 2 significant words match, consider it a match
             # This handles cases like "go to Bern Dibner Library" matching "Bern Dibner Library"
+            # Or "The Stonewall Inn" matching "Stonewall Inn"
             matched_words = sum(1 for word in name_words if word in reply_lower)
             if matched_words >= 2 or (len(name_words) == 1 and matched_words == 1):
                 matched_places.append(item)
@@ -90,18 +98,20 @@ def extract_places_from_reply(
     # Look for phrases like "go to X", "check out X", "try X", "at X", "from X", etc.
     import re
     place_indicators = [
-        r"go to\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"check out\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"try\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"visit\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"head to\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"stop by\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"recommend\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"suggest\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"at\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+\?)",  # "at Artichoke Basille's Pizza"
-        r"from\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
-        r"grabbing\s+(?:a\s+)?(?:slice|bite|drink|coffee|meal)\s+at\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",  # "grabbing a slice at X"
-        r"how about\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\?|\.|,|!|$|;|:)",  # "How about X?"
+        r"go to\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+is|\s+was|\s+has)",
+        r"check out\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+is|\s+was)",
+        r"try\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+is)",
+        r"visit\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+is)",
+        r"head to\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"stop by\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"recommend\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"suggest\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"at\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+\?|\s+is|\s+was|\s+has)",  # "at Artichoke Basille's Pizza"
+        r"from\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"grabbing\s+(?:a\s+)?(?:slice|bite|drink|coffee|meal)\s+at\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",  # "grabbing a slice at X"
+        r"how about\s+(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)(?:\?|\.|,|!|$|;|:|\s+is|\s+was)",  # "How about X?"
+        r"(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)\s+is\s+(?:a|an|the)\s+",  # "The Stonewall Inn is a historic spot"
+        r"(?:the\s+)?([A-Z][a-zA-Z\s&'\-]+?)\s+is\s+(?:definitely|just|really|perfect|great|good|close|near)",  # "Artichoke Basille's Pizza is definitely a place"
     ]
     
     # Also look for capitalized phrases that might be place names
@@ -112,38 +122,106 @@ def extract_places_from_reply(
         for match in matches:
             place_name = match.group(1).strip()
             # Clean up common trailing words
-            place_name = re.sub(r'\s+(Pizza|Restaurant|Cafe|Bar|Shop|Store|Place)$', '', place_name, flags=re.IGNORECASE)
+            place_name = re.sub(r'\s+(Pizza|Restaurant|Cafe|Bar|Shop|Store|Place|Inn|Square|Garden|Park)$', '', place_name, flags=re.IGNORECASE)
             # Filter out very short names or common words
-            if len(place_name) > 3 and place_name.lower() not in ["the", "a", "an", "this", "that", "it", "there"]:
+            if len(place_name) > 3 and place_name.lower() not in ["the", "a", "an", "this", "that", "it", "there", "here"]:
                 potential_place_names.append(place_name)
     
-    # Also extract standalone capitalized phrases (potential place names)
-    # Look for sequences of capitalized words (2+ words, handles apostrophes)
-    capitalized_phrases = re.findall(r'\b([A-Z][a-zA-Z]+(?:\'[a-z]+)?(?:\s+[A-Z][a-zA-Z]+(?:\'[a-z]+)?)+)\b', reply_text)
-    for phrase in capitalized_phrases:
-        # Skip if it's a common phrase or already seen
-        if phrase.lower() not in seen_names and len(phrase) > 3:
-            # Skip common phrases
-            if phrase.lower() not in ["new york", "new jersey", "how about", "what about"]:
-                potential_place_names.append(phrase)
+    # Extract capitalized phrases that look like place names
+    # Pattern: Sequences of capitalized words (2-5 words, handles apostrophes)
+    # This catches "The Stonewall Inn", "Artichoke Basille's Pizza", etc.
+    capitalized_pattern = r'\b(?:The\s+)?([A-Z][a-zA-Z]+(?:\'[a-z]+)?(?:\s+[A-Z][a-zA-Z]+(?:\'[a-z]+)?){1,4})\b'
+    capitalized_matches = re.finditer(capitalized_pattern, reply_text)
     
-    # Search for places that weren't found in memory
+    for match in capitalized_matches:
+        phrase = match.group(1).strip()
+        phrase_lower = phrase.lower()
+        
+        # Skip if already seen
+        if phrase_lower in seen_names:
+            continue
+        
+        # Skip very short phrases
+        if len(phrase) < 5:
+            continue
+        
+        # Skip common non-place phrases (locations, common words)
+        common_phrases = {
+            "new york", "new jersey", "how about", "what about", "just a", "just the",
+            "just the", "for a", "for the", "from here", "from there", "close by",
+            "near by", "right now", "just now", "a place", "the place", "this place",
+            "that place", "some place", "any place", "every place", "no place"
+        }
+        
+        if phrase_lower in common_phrases:
+            continue
+        
+        # Skip if it's just common words (articles, prepositions, etc.)
+        # Check if it contains at least one substantial word (4+ chars)
+        words = phrase.split()
+        substantial_words = [w for w in words if len(w) > 3 and w.lower() not in ["the", "and", "for", "from", "with", "that", "this"]]
+        
+        if len(substantial_words) < 1:
+            continue
+        
+        # If it appears near place-indicating verbs/adjectives, it's likely a place
+        # Check context around the match
+        start_pos = match.start()
+        end_pos = match.end()
+        context_start = max(0, start_pos - 30)
+        context_end = min(len(reply_text), end_pos + 30)
+        context = reply_text[context_start:context_end].lower()
+        
+        # Place indicators in context (general patterns, not specific places)
+        place_indicators_in_context = [
+            "is a", "is an", "is the", "is definitely", "is just", "is really",
+            "is perfect", "is great", "is good", "is close", "is near", "is historic",
+            "is iconic", "was a", "was an", "at", "from", "to", "near", "close to",
+            "walk", "minute", "minutes", "mile", "miles", "distance", "location",
+            "spot", "place", "venue", "restaurant", "cafe", "bar", "shop", "store"
+        ]
+        
+        # If the phrase appears near place indicators, it's likely a place name
+        is_likely_place = any(indicator in context for indicator in place_indicators_in_context)
+        
+        # Also check if it follows common place name patterns
+        # Place names often end with: Inn, Pizza, Cafe, Bar, Restaurant, Square, Garden, Park, etc.
+        place_suffixes = ["inn", "pizza", "cafe", "bar", "restaurant", "square", "garden", 
+                          "park", "shop", "store", "place", "spot", "location", "venue",
+                          "tavern", "grill", "diner", "bistro", "lounge", "club", "hall",
+                          "center", "centre", "plaza", "market", "bakery", "deli"]
+        has_place_suffix = any(phrase_lower.endswith(suffix) for suffix in place_suffixes)
+        
+        # If it has 2+ substantial words, it's more likely to be a place name
+        # (single words are less likely to be places unless they have context/suffix)
+        if is_likely_place or has_place_suffix or len(substantial_words) >= 2:
+            potential_place_names.append(phrase)
+    
+    # Search for places that weren't found in memory using Google Places API
+    # This is the robust validation: if Google Places API finds it, it's a valid place
     if potential_place_names and (origin_lat is not None and origin_lng is not None):
         from services.places_service import search_place_by_name, build_photo_url
         
+        # Deduplicate potential place names (case-insensitive)
+        unique_place_names = []
+        seen_candidates = set()
         for place_name in potential_place_names:
-            place_name_lower = place_name.lower()
+            place_name_lower = place_name.lower().strip()
+            if place_name_lower not in seen_candidates and place_name_lower not in seen_names:
+                unique_place_names.append(place_name)
+                seen_candidates.add(place_name_lower)
+        
+        # Try to find each potential place via Google Places API
+        # The API validation is what makes this robust - no hardcoded checks needed
+        for place_name in unique_place_names[:5]:  # Limit to 5 to avoid too many API calls
+            place_name_lower = place_name.lower().strip()
             
             # Skip if we already have this place
             if place_name_lower in seen_names:
                 continue
             
-            # Skip if it's too generic or common
-            if place_name_lower in ["new york", "brooklyn", "nyc", "manhattan"]:
-                continue
-            
             try:
-                # Search for the place
+                # Search for the place - if Google Places finds it, it's valid
                 raw_place = search_place_by_name(place_name, lat=origin_lat, lng=origin_lng)
                 
                 if raw_place:
@@ -153,7 +231,7 @@ def extract_places_from_reply(
                     place_lng = geom.get("lng")
                     
                     if place_lat and place_lng:
-                        # Get directions
+                        # Get accurate directions using Distance Matrix API
                         directions = get_walking_directions(origin_lat, origin_lng, place_lat, place_lng)
                         
                         # Build photo URL
@@ -178,7 +256,7 @@ def extract_places_from_reply(
                         
                         matched_places.append(normalized_place)
                         seen_names.add(place_name_lower)
-                        logger.debug(f"Found place '{place_name}' via Google Places API")
+                        logger.debug(f"✅ Found and validated place '{place_name}' via Google Places API")
             except Exception as e:
                 logger.debug(f"Error searching for place '{place_name}': {e}")
                 continue
@@ -503,20 +581,22 @@ def build_chat_response(
     # STEP 12 — Add assistant reply to history
     memory.add_message("assistant", reply)
     
-    # STEP 13 — Only return cards if this is an actual recommendation request
-    # Don't show cards for conversational messages or follow-ups
-    # EXCEPTION: Always show cards for location queries so user can navigate
+    # STEP 13 — Extract places mentioned in the reply (ALWAYS check, even if no initial cards)
+    # This ensures places suggested by the LLM (like "Artichoke Basille's Pizza", "The Stonewall Inn") get cards
+    places_to_return = []
+    
+    # First, include items from search results if this is a recommendation
     location_keywords = ["where is", "where's", "where are", "location of", "location", 
                         "where can i find", "where to find", "show me where", "directions to",
                         "how to get to", "navigate to", "take me to", "go to"]
     is_location_query = any(k in message.lower() for k in location_keywords)
     should_show_cards = (intent in ["recommendation", "new_recommendation"] or is_location_query) and len(items) > 0
     
-    # STEP 14 — Extract places mentioned in the reply that aren't already in items
-    # This ensures places suggested by the LLM (like "Artichoke Basille's Pizza") get cards
-    places_to_return = items[:3] if should_show_cards else []
+    if should_show_cards:
+        places_to_return = items[:3]
     
-    # Check if reply mentions places not in the returned items
+    # ALWAYS check if reply mentions places (even if no initial cards)
+    # This handles cases where LLM suggests a place in conversational responses
     if reply:
         reply_places = extract_places_from_reply(reply, items, origin_lat=origin_lat, origin_lng=origin_lng)
         
@@ -534,7 +614,7 @@ def build_chat_response(
     return {
         "debug_vibe": vibe,
         "latency": round(time.time() - t0, 2),
-        "places": places_to_return,  # Include places from reply if mentioned
+        "places": places_to_return,  # Always include places from reply if mentioned
         "reply": reply,
         "weather": current_weather(),
     }

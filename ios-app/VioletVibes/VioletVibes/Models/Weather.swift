@@ -11,7 +11,8 @@ struct Weather: Codable, Sendable {
     
     enum CodingKeys: String, CodingKey {
         case temp, emoji
-        case temp_f, desc, icon
+        case temp_f, tempF  // Handle both snake_case and camelCase (from convertFromSnakeCase)
+        case desc, icon
         case main, weather
     }
     
@@ -26,9 +27,13 @@ struct Weather: Codable, Sendable {
         var decodedTemp: Int? = nil
         
         // Handle server format: temp_f (from weather service) - supports negative temperatures
-        if let tempF = try? container.decodeIfPresent(Double.self, forKey: .temp_f) {
+        // Try tempF first (converted from snake_case by decoder), then temp_f (original)
+        if let tempF = try? container.decodeIfPresent(Double.self, forKey: .tempF) {
             decodedTemp = Int(round(tempF))
-            print("🌡️ Weather: Decoded temp_f = \(tempF) -> \(decodedTemp ?? 0)°F")
+            print("🌡️ Weather: Decoded tempF (camelCase) = \(tempF) -> \(decodedTemp ?? 0)°F")
+        } else if let tempF = try? container.decodeIfPresent(Double.self, forKey: .temp_f) {
+            decodedTemp = Int(round(tempF))
+            print("🌡️ Weather: Decoded temp_f (snake_case) = \(tempF) -> \(decodedTemp ?? 0)°F")
         }
         // Handle OpenWeather API response format: main.temp - supports negative temperatures
         else if let mainDict = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .main),

@@ -249,7 +249,7 @@ struct DashboardView: View {
                         .onPreferenceChange(VibeButtonFrameKey.self) { frame in
                             vibeButtonFrame = frame
                         }
-                        .padding(.bottom, Theme.Spacing.`4xl`)
+                        .padding(.bottom, Theme.Spacing.xl)
                         
                         // Free-Time Suggestion Card
                         if let suggestion = viewModel.freeTimeSuggestion, suggestion.should_suggest {
@@ -319,7 +319,8 @@ struct DashboardView: View {
                                     .foregroundColor(Theme.Colors.textSecondary)
                                     .padding()
                             } else {
-                            ForEach(viewModel.recommendations) { recommendation in
+                            // Show first 3 in the list, but all 10 are on the map
+                            ForEach(Array(viewModel.recommendations.prefix(3))) { recommendation in
                                     RecommendationCard(recommendation: recommendation) {
                                         // Navigate to map and set selected place
                                         let place = SelectedPlace(
@@ -385,12 +386,17 @@ struct DashboardView: View {
             await weatherManager.loadWeather(locationManager: locationManager)
             let weatherString = weatherManager.weather?.emoji
             let vibeString = selectedVibe?.backendValue
+            let userLocation = locationManager.location
             await viewModel.loadRecommendations(
                 jwt: session.jwt,
                 preferences: session.preferences,
                 weather: weatherString,
-                vibe: vibeString
+                vibe: vibeString,
+                latitude: userLocation?.coordinate.latitude,
+                longitude: userLocation?.coordinate.longitude
             )
+            // Add recommendations to map
+            addRecommendationsToMap(viewModel.recommendations)
         }
         .task {
             // Load weather on task start (app launch/restart)
@@ -402,26 +408,43 @@ struct DashboardView: View {
             // Load recommendations from backend
             let weatherString = weatherManager.weather?.emoji
             let vibeString = selectedVibe?.backendValue
+            let userLocation = locationManager.location
             await viewModel.loadRecommendations(
                 jwt: session.jwt,
                 preferences: session.preferences,
                 weather: weatherString,
-                vibe: vibeString
+                vibe: vibeString,
+                latitude: userLocation?.coordinate.latitude,
+                longitude: userLocation?.coordinate.longitude
             )
+            // Add recommendations to map
+            addRecommendationsToMap(viewModel.recommendations)
         }
         .onChange(of: locationManager.location) { oldValue, newValue in
-            // Throttle weather reloads - only reload if location changed significantly
+            // Throttle weather and recommendations reloads - only reload if location changed significantly
             guard let newLocation = newValue else { return }
             
             if let oldLocation = oldValue {
                 let distance = newLocation.distance(from: oldLocation)
-                // Only reload weather if moved more than 200 meters to reduce API calls
+                // Only reload if moved more than 200 meters to reduce API calls
                 guard distance > 200 else { return }
             }
             
-            // Reload weather when location changes significantly
+            // Reload weather and recommendations when location changes significantly
             Task {
                 await weatherManager.loadWeather(locationManager: locationManager)
+                let weatherString = weatherManager.weather?.emoji
+                let vibeString = selectedVibe?.backendValue
+                await viewModel.loadRecommendations(
+                    jwt: session.jwt,
+                    preferences: session.preferences,
+                    weather: weatherString,
+                    vibe: vibeString,
+                    latitude: newLocation.coordinate.latitude,
+                    longitude: newLocation.coordinate.longitude
+                )
+                // Add recommendations to map
+                addRecommendationsToMap(viewModel.recommendations)
             }
         }
         .onAppear {
@@ -435,12 +458,17 @@ struct DashboardView: View {
             if viewModel.recommendations.isEmpty {
                 Task {
                     let vibeString = selectedVibe?.backendValue
+                    let userLocation = locationManager.location
                     await viewModel.loadRecommendations(
                         jwt: session.jwt,
                         preferences: session.preferences,
                         weather: weatherManager.weather?.emoji,
-                        vibe: vibeString
+                        vibe: vibeString,
+                        latitude: userLocation?.coordinate.latitude,
+                        longitude: userLocation?.coordinate.longitude
                     )
+                    // Add recommendations to map
+                    addRecommendationsToMap(viewModel.recommendations)
                 }
             }
         }
@@ -464,13 +492,62 @@ struct DashboardView: View {
             Task {
                 let weatherString = viewModel.dashboardWeather?.emoji ?? weatherManager.weather?.emoji
                 let vibeString = newValue?.backendValue
+                let userLocation = locationManager.location
                 await viewModel.loadRecommendations(
                     jwt: session.jwt,
                     preferences: session.preferences,
                     weather: weatherString,
-                    vibe: vibeString
+                    vibe: vibeString,
+                    latitude: userLocation?.coordinate.latitude,
+                    longitude: userLocation?.coordinate.longitude
                 )
+                // Add recommendations to map
+                addRecommendationsToMap(viewModel.recommendations)
             }
+        }
+    }
+    
+    // Helper function to add recommendations to map as pins
+    private func addRecommendationsToMap(_ recommendations: [Recommendation]) {
+        // Map selected vibe to category for pin colors
+        let category = mapVibeToCategory(selectedVibe?.backendValue)
+        
+        let places = recommendations.compactMap { recommendation -> SelectedPlace? in
+            guard let lat = recommendation.lat, let lng = recommendation.lng else { return nil }
+            return SelectedPlace(
+                name: recommendation.title,
+                latitude: lat,
+                longitude: lng,
+                walkTime: recommendation.walkTime,
+                distance: recommendation.distance,
+                address: recommendation.description,
+                image: recommendation.image,
+                rating: recommendation.popularity,
+                category: category
+            )
+        }
+        
+        // Add all places to the map
+        for place in places {
+            placeViewModel.addPlace(place)
+        }
+    }
+    
+    // Map vibe to category for pin display
+    private func mapVibeToCategory(_ vibe: String?) -> String? {
+        guard let vibe = vibe else { return "explore" }
+        
+        switch vibe.lowercased() {
+        case "explore":
+            return "explore"
+        case "food_general", "fast_bite":
+            return "quick_bites"
+        case "chill_drinks":
+            return "chill_cafes"
+        case "party":
+            return "events"
+        default:
+            return "explore"
         }
     }
     

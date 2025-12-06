@@ -11,6 +11,7 @@ import Observation
 final class ChatViewModel {
     var messages: [ChatMessage] = []
     var isTyping: Bool = false
+    var lastAITextMessageId: Int? = nil // Track last AI text message for scrolling
     
     private let apiService = APIService.shared
     private var hasInitialized = false
@@ -89,6 +90,9 @@ final class ChatViewModel {
         )
         
         messages.append(userMessage)
+        
+        // Add a natural delay before showing "Violet is thinking..." like a real conversation
+        try? await Task.sleep(nanoseconds: 600_000_000) // 0.6 seconds delay
         isTyping = true
         
         do {
@@ -112,6 +116,7 @@ final class ChatViewModel {
                 )
                 
                 messages.append(aiMessage)
+                lastAITextMessageId = aiMessage.id // Track the AI text message for scrolling
                 
                 // Only add recommendation cards if places are present and not empty
                 // Backend now returns empty array for conversational messages (greetings, follow-ups, etc.)

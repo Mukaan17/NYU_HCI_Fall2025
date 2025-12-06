@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct Recommendation: Identifiable, Codable, Sendable {
+struct Recommendation: Identifiable, Codable, Sendable, Equatable {
     let id: Int
     let title: String
     var description: String?

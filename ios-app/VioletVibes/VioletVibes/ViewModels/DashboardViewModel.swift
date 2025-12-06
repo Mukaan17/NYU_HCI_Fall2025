@@ -110,8 +110,8 @@ final class DashboardViewModel {
                     deduplicated.append(uniqueRec)
                 }
                 
-                // Use top 3 recommendations for main display
-                recommendations = Array(deduplicated.prefix(3))
+                // Use top 10 recommendations for main display and map
+                recommendations = Array(deduplicated.prefix(10))
                 
                 isLoading = false
                 print("✅ Loaded dashboard data: \(deduplicated.count) total recommendations")
@@ -126,7 +126,7 @@ final class DashboardViewModel {
     }
     
     // Load recommendations from backend (with fallback chain)
-    func loadRecommendations(jwt: String? = nil, preferences: UserPreferences? = nil, weather: String? = nil, vibe: String? = nil) async {
+    func loadRecommendations(jwt: String? = nil, preferences: UserPreferences? = nil, weather: String? = nil, vibe: String? = nil, latitude: Double? = nil, longitude: Double? = nil) async {
         // Check for cancellation
         try? Task.checkCancellation()
         
@@ -135,8 +135,13 @@ final class DashboardViewModel {
             errorMessage = nil
         }
         
-        // Try dashboard first if JWT is available
-        if let jwt = jwt {
+        // If vibe is selected, skip dashboard and go straight to vibe-specific recommendations
+        // Dashboard returns generic quick_recommendations that don't respect vibe
+        if vibe != nil {
+            print("🎨 Vibe selected (\(vibe ?? "unknown")), using vibe-specific recommendations")
+            // Skip dashboard, go straight to top recommendations with vibe
+        } else if let jwt = jwt {
+            // Try dashboard first if JWT is available and no vibe is selected
             do {
                 await loadDashboard(jwt: jwt)
                 // Check for cancellation
@@ -165,12 +170,15 @@ final class DashboardViewModel {
             try Task.checkCancellation()
             
             // Try to get top recommendations from backend
+            // Note: Location will be passed from DashboardView when available
             let topRecs = try await apiService.getTopRecommendations(
-                limit: 3,
+                limit: 10,
                 jwt: jwt,
                 preferences: preferences,
                 weather: weather,
-                vibe: vibe
+                vibe: vibe,
+                latitude: nil,  // Will be set by caller
+                longitude: nil  // Will be set by caller
             )
             
             // Check for cancellation before processing

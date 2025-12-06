@@ -5,17 +5,17 @@
 
 import Foundation
 
-enum ChatMessageType: Codable, Sendable {
+enum ChatMessageType: Codable, Sendable, Equatable {
     case text
     case recommendations
 }
 
-enum ChatMessageRole: Codable, Sendable {
+enum ChatMessageRole: Codable, Sendable, Equatable {
     case user
     case ai
 }
 
-struct ChatMessage: Identifiable, Codable, Sendable {
+struct ChatMessage: Identifiable, Codable, Sendable, Equatable {
     let id: Int
     let type: ChatMessageType
     let role: ChatMessageRole

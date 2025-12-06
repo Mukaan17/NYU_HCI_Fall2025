@@ -121,7 +121,7 @@ def _score_event(ev: Dict[str, Any]) -> float:
 # HELPERS
 # -----------------------------------------------------------
 
-def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
+def _search_places_for_category(category: str, origin_lat: float = TANDON_LAT, origin_lng: float = TANDON_LNG) -> List[Dict[str, Any]]:
     cfg = CATEGORY_CONFIG.get(category)
     if not cfg:
         return []
@@ -130,7 +130,7 @@ def _search_places_for_category(category: str) -> List[Dict[str, Any]]:
 
     for t in cfg["types"]:
         try:
-            raw.extend(nearby_places(TANDON_LAT, TANDON_LNG, t, cfg["radius"]))
+            raw.extend(nearby_places(origin_lat, origin_lng, t, cfg["radius"]))
         except Exception as e:
             print(f"QuickRecs {category} error:", e)
 
@@ -479,14 +479,21 @@ def _context_match_score(place: Dict[str, Any],
 def get_top_recommendations_for_user(
     prefs: Dict[str, Any] | None = None,
     context: Dict[str, Any] | None = None,
-    limit: int = 3,
+    limit: int = 10,
+    user_lat: float | None = None,
+    user_lng: float | None = None,
 ) -> Dict[str, Any]:
     """
     Combine multiple buckets (quick bites, chill cafes, explore),
     score them using prefs + context, and return top N.
+    Uses user location if provided, otherwise defaults to Tandon.
     """
     prefs = prefs or {}
     context = context or {}
+    
+    # Use user location if provided, otherwise default to Tandon
+    origin_lat = user_lat if user_lat is not None else TANDON_LAT
+    origin_lng = user_lng if user_lng is not None else TANDON_LNG
 
     buckets = [
         ("quick_bites", "quick_bite"),
@@ -497,7 +504,7 @@ def get_top_recommendations_for_user(
     all_candidates: List[Dict[str, Any]] = []
 
     for category_key, label in buckets:
-        places = _search_places_for_category(category_key)
+        places = _search_places_for_category(category_key, origin_lat=origin_lat, origin_lng=origin_lng)
         for p in places:
             # Base category score
             if label == "quick_bite":
@@ -513,15 +520,17 @@ def get_top_recommendations_for_user(
             rating_score = _normalize_rating(p.get("rating"))
             pref_score = _preference_match_score(p, prefs, context)
             ctx_score = _context_match_score(p, context)
-
-            # Weighted ranking
-            final_score = (
+            
+            # Apply vibe-based scoring if vibe is provided in context
+            vibe = context.get("vibe") if context else None
+            base_final_score = (
                 0.45 * pref_score +
                 0.20 * base_score +
                 0.15 * rating_score +
                 0.10 * distance_score +
                 0.10 * ctx_score
             )
+            final_score = _apply_vibe_scoring(p, vibe, base_final_score) if vibe else base_final_score
 
             candidate = dict(p)
             candidate["score"] = final_score

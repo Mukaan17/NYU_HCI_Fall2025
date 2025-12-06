@@ -71,5 +71,9 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>VioletVibes needs access to speech recognition to convert your voice messages to text.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VioletVibes needs access to your microphone to record voice messages for dictation.</string>
 </dict>
 </plist>

@@ -32,9 +32,11 @@ final class MapViewModel {
     private let locationUpdateThrottle: TimeInterval = 2.0 // Update at most every 2 seconds
     
     init() {
+        // Initialize with a default region, but it will be updated to device location when available
+        // Using a wider initial span so it's less jarring when location updates
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: defaultLat, longitude: defaultLng),
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
         cameraPosition = .region(region)
     }

@@ -38,6 +38,17 @@ def classify_intent_llm(message: str, memory) -> str:
     if any(k in msg for k in alt_keywords):
         return "new_recommendation"
 
+    # 1.5. Location/where questions → return recommendation cards for navigation
+    location_keywords = [
+        "where is", "where's", "where are", "location of", "location",
+        "where can i find", "where to find", "show me where", "where is it",
+        "where is that", "where are they", "directions to", "how to get to",
+        "navigate to", "take me to", "go to"
+    ]
+    if any(k in msg for k in location_keywords):
+        # If asking about location, return recommendations so user can navigate
+        return "recommendation"
+    
     # 2. Follow-up: user mentions a place shown earlier
     # More flexible - check if any place name appears in message
     detail_keywords = [
@@ -55,6 +66,9 @@ def classify_intent_llm(message: str, memory) -> str:
             name_words = [w for w in name.split() if len(w) > 3]  # Filter out short words like "the", "of"
             # Check if any significant word from place name appears in message
             if any(word in msg for word in name_words):
+                # If asking about location specifically, return recommendations
+                if any(k in msg for k in location_keywords):
+                    return "recommendation"
                 # If it's a question or detail request, it's a follow-up
                 if any(k in msg for k in detail_keywords) or msg.endswith("?"):
                     return "followup_place"

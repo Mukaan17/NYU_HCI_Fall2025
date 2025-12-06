@@ -6,6 +6,8 @@
 import SwiftUI
 import CoreLocation
 import Foundation
+import Speech
+import AVFoundation
 
 struct ChatView: View {
     @Environment(ChatViewModel.self) private var chatViewModel
@@ -24,6 +26,11 @@ struct ChatView: View {
     @State private var isVibePickerExpanded = false
     @State private var vibeButtonFrame: CGRect = .zero
     @State private var weatherButtonFrame: CGRect = .zero
+    @State private var isNearBottom: Bool = true
+    @State private var scrollProxy: ScrollViewProxy?
+    @State private var speechManager = SpeechRecognitionManager()
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDraggingToCancel: Bool = false
     
     private var backgroundGradient: some View {
         LinearGradient(
@@ -41,8 +48,10 @@ struct ChatView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             headerSection
+            
+            // Messages section - takes remaining space
             messagesSection
-            inputSection
+                .layoutPriority(1)
         }
     }
     
@@ -204,33 +213,118 @@ struct ChatView: View {
     
     private var messagesSection: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: Theme.Spacing.xl) {
-                    ForEach(chatViewModel.messages) { message in
-                        messageView(for: message)
-                    }
-                    
-                    if chatViewModel.isTyping {
-                        typingIndicator
+            messagesScrollView(proxy: proxy)
+                .onAppear {
+                    scrollProxy = proxy
+                }
+        }
+    }
+    
+    private func messagesScrollView(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            messagesContent
+        }
+        .coordinateSpace(name: "scroll")
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(.basedOnSize)
+        .animation(.default, value: chatViewModel.messages.count)
+        .animation(.default, value: chatViewModel.isTyping)
+        .gesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { _ in
+                    isInputFocused = false
+                }
+        )
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+            isNearBottom = offset > -100
+        }
+        .onChange(of: chatViewModel.lastAITextMessageId) { oldValue, newValue in
+            handleAITextMessageChange(messageId: newValue, proxy: proxy)
+        }
+        .onChange(of: chatViewModel.messages) { oldValue, newValue in
+            handleMessagesChange(oldValue: oldValue, newValue: newValue)
+            
+            // Check if a new message was added and scroll to it
+            if newValue.count > oldValue.count, let lastMessage = newValue.last {
+                let isUserMessage = lastMessage.role == .user
+                // Always scroll for user messages, or if near bottom for AI messages
+                if isUserMessage || isNearBottom {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.default) {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
                     }
                 }
-                .padding(.top, Theme.Spacing.`3xl`)
-                .padding(.bottom, 120)
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .gesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { _ in
-                        isInputFocused = false
-                    }
-            )
-            .onChange(of: chatViewModel.messages.count) { oldValue, newValue in
-                if newValue > oldValue, let lastMessage = chatViewModel.messages.last {
-                    withAnimation(.spring(response: 0.3)) {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+        }
+        .onChange(of: chatViewModel.messages.count) { oldValue, newValue in
+            handleMessageCountChange(oldValue: oldValue, newValue: newValue, proxy: proxy)
+        }
+        .onChange(of: isInputFocused) { oldValue, newValue in
+            // Scroll to bottom when keyboard appears
+            if newValue {
+                scrollToBottom(proxy: proxy, delay: 0.3)
+            }
+        }
+        .onChange(of: chatViewModel.isTyping) { oldValue, newValue in
+            // Scroll to bottom when typing indicator appears
+            if newValue && !oldValue {
+                // Only scroll when typing indicator first appears
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.default) {
+                        proxy.scrollTo("typing_indicator", anchor: .bottom)
                     }
                 }
+            }
+        }
+    }
+    
+    private func scrollToBottom(proxy: ScrollViewProxy, delay: TimeInterval = 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            withAnimation(.default) {
+                if chatViewModel.isTyping {
+                    // Scroll to typing indicator if it's showing
+                    proxy.scrollTo("typing_indicator", anchor: .bottom)
+                } else if let lastMessage = chatViewModel.messages.last {
+                    // Otherwise scroll to last message
+                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                }
+            }
+        }
+    }
+    
+    private var messagesContent: some View {
+        LazyVStack(spacing: Theme.Spacing.xl) {
+            ForEach(chatViewModel.messages) { message in
+                messageView(for: message)
+                    .id(message.id)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            
+            if chatViewModel.isTyping {
+                typingIndicator
+                    .id("typing_indicator")
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .padding(.top, Theme.Spacing.`3xl`)
+        .padding(.bottom, Theme.Spacing.`2xl`)
+        .background(scrollOffsetBackground)
+    }
+    
+    private var scrollOffsetBackground: some View {
+        GeometryReader { geometry in
+            Color.clear
+                .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
+        }
+    }
+    
+    private func handleAITextMessageChange(messageId: Int?, proxy: ScrollViewProxy) {
+        guard let messageId = messageId, isNearBottom else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.default) {
+                proxy.scrollTo(messageId, anchor: .center)
             }
         }
     }
@@ -246,26 +340,124 @@ struct ChatView: View {
             VStack(spacing: Theme.Spacing.`2xl`) {
                 ForEach(recommendations) { recommendation in
                     RecommendationCard(recommendation: recommendation) {
-                        let place = SelectedPlace(
-                            name: recommendation.title,
-                            latitude: recommendation.lat ?? 40.693393,
-                            longitude: recommendation.lng ?? -73.98555,
-                            walkTime: recommendation.walkTime,
-                            distance: recommendation.distance,
-                            address: recommendation.description,
-                            image: recommendation.image
-                        )
-                        placeViewModel.setSelectedPlace(place)
+                        // Find the existing place in allPlaces or create a new one
+                        let existingPlace = placeViewModel.allPlaces.first { place in
+                            place.name == recommendation.title &&
+                            abs(place.latitude - (recommendation.lat ?? 0)) < 0.0001 &&
+                            abs(place.longitude - (recommendation.lng ?? 0)) < 0.0001
+                        }
+                        
+                        if let place = existingPlace {
+                            // Use existing place from map
+                            placeViewModel.setSelectedPlace(place)
+                        } else {
+                            // Create new place if not found (shouldn't happen, but fallback)
+                            let place = SelectedPlace(
+                                name: recommendation.title,
+                                latitude: recommendation.lat ?? 40.693393,
+                                longitude: recommendation.lng ?? -73.98555,
+                                walkTime: recommendation.walkTime,
+                                distance: recommendation.distance,
+                                address: recommendation.description,
+                                image: recommendation.image,
+                                rating: recommendation.popularity,
+                                category: mapVibeToCategory(selectedVibe?.backendValue)
+                            )
+                            placeViewModel.addPlace(place)
+                            placeViewModel.setSelectedPlace(place)
+                        }
                         tabCoordinator.selectedTab = .map
                     }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
             .padding(.horizontal, Theme.Spacing.`2xl`)
             .padding(.top, Theme.Spacing.`2xl`)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .onAppear {
+                // Add all recommendations to map as pins when they appear
+                addRecommendationsToMap(recommendations)
+            }
         } else if let content = message.content {
             // Display text message (for both user messages and AI conversational/recommendation text replies)
             MessageBubble(message: message, content: content)
                 .padding(.horizontal, Theme.Spacing.`2xl`)
+        }
+    }
+    
+    // Handle messages change - extract recommendations and add to map
+    private func handleMessagesChange(oldValue: [ChatMessage], newValue: [ChatMessage]) {
+        // When new messages are added, check for recommendations and add them to map
+        let newRecommendationMessages = newValue.filter { message in
+            message.type == .recommendations && 
+            message.recommendations != nil && 
+            !(message.recommendations?.isEmpty ?? true)
+        }
+        
+        for message in newRecommendationMessages {
+            if let recommendations = message.recommendations {
+                addRecommendationsToMap(recommendations)
+            }
+        }
+    }
+    
+    // Handle message count change - scroll to last message if needed
+    private func handleMessageCountChange(oldValue: Int, newValue: Int, proxy: ScrollViewProxy) {
+        // Scroll when new messages are added (user or AI)
+        if newValue > oldValue, let lastMessage = chatViewModel.messages.last {
+            // Always scroll for user messages, or if near bottom for AI messages
+            let isUserMessage = lastMessage.role == .user
+            if isUserMessage || isNearBottom {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.default) {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+    
+    // Add all recommendations to the map as interactable pins
+    private func addRecommendationsToMap(_ recommendations: [Recommendation]) {
+        // Map selected vibe to category for pin colors
+        let category = mapVibeToCategory(selectedVibe?.backendValue)
+        
+        let places = recommendations.compactMap { recommendation -> SelectedPlace? in
+            guard let lat = recommendation.lat, let lng = recommendation.lng else { return nil }
+            return SelectedPlace(
+                name: recommendation.title,
+                latitude: lat,
+                longitude: lng,
+                walkTime: recommendation.walkTime,
+                distance: recommendation.distance,
+                address: recommendation.description,
+                image: recommendation.image,
+                rating: recommendation.popularity,
+                category: category
+            )
+        }
+        
+        // Add all places to the map
+        for place in places {
+            placeViewModel.addPlace(place)
+        }
+    }
+    
+    // Map vibe to category for pin display
+    private func mapVibeToCategory(_ vibe: String?) -> String? {
+        guard let vibe = vibe else { return "explore" }
+        
+        switch vibe.lowercased() {
+        case "explore":
+            return "explore"
+        case "food_general", "fast_bite":
+            return "quick_bites"
+        case "chill_drinks":
+            return "chill_cafes"
+        case "party":
+            return "events"
+        default:
+            return "explore"
         }
     }
     
@@ -281,23 +473,188 @@ struct ChatView: View {
             content: "Violet is thinking…"
         )
         .padding(.horizontal, Theme.Spacing.`2xl`)
+        .id(999)
     }
     
+    @State private var messageText: String = ""
+    
     private var inputSection: some View {
-        InputField(placeholder: "Ask VioletVibes...", isFocused: $isInputFocused) { text in
-            Task {
-                await chatViewModel.sendMessage(
-                    text,
-                    latitude: locationManager.location?.coordinate.latitude,
-                    longitude: locationManager.location?.coordinate.longitude,
-                    jwt: session.jwt,
-                    preferences: session.preferences,
-                    selectedVibe: selectedVibe?.backendValue
-                )
+        HStack(alignment: .bottom, spacing: 12) {
+            // Text input field - liquid glass effect with mic icon inside (like iMessage)
+            textInputField
+                .overlay(alignment: .trailing) {
+                    micButtonOverlay
+                }
+                .focused($isInputFocused)
+                .submitLabel(.send)
+                .onSubmit {
+                    sendMessage()
+                }
+                .lineLimit(1...5)
+                .onChange(of: speechManager.transcribedText) { oldValue, newValue in
+                    handleTranscriptionUpdate(newValue: newValue)
+                }
+                .onChange(of: speechManager.isRecording) { oldValue, newValue in
+                    handleRecordingStateChange(oldValue: oldValue, newValue: newValue)
+                }
+            
+            // Send button
+            Button(action: sendMessage) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(uiColor: .systemGray3) : Theme.Colors.gradientStart)
+            }
+            .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .onChange(of: messageText) { oldValue, newValue in
+            // Stop recording if user starts typing
+            if speechManager.isRecording && !newValue.isEmpty && newValue != speechManager.transcribedText {
+                speechManager.stopRecording()
             }
         }
-        .padding(.horizontal, Theme.Spacing.`2xl`)
-        .padding(.bottom, Theme.Spacing.`2xl`)
+    }
+    
+    private var textInputField: some View {
+        TextField("Ask VioletVibes...", text: $messageText, axis: .vertical)
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.leading)
+            .padding(.leading, 16) // Left padding for placeholder and text
+            .padding(.trailing, messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 40 : 16) // Extra padding on right when mic is visible
+            .padding(.vertical, 10)
+            .background(textFieldBackground)
+            .overlay(textFieldBorder)
+    }
+    
+    private var textFieldBackground: some View {
+        ZStack {
+            // Liquid glass background
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+            
+            // Additional glass effect with transparency
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Theme.Colors.glassBackground.opacity(0.3))
+        }
+    }
+    
+    private var textFieldBorder: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .stroke(Theme.Colors.border.opacity(0.3), lineWidth: 1)
+    }
+    
+    @ViewBuilder
+    private var micButtonOverlay: some View {
+        // Dictation button inside text field (shown when text is empty, like iMessage)
+        if messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            micButton
+                .padding(.trailing, 12)
+        }
+    }
+    
+    private var micButton: some View {
+        Button(action: {
+            // Tap to start/stop (fallback for accessibility)
+            if speechManager.isRecording {
+                handleRecordingEnd()
+            } else {
+                speechManager.startRecording()
+            }
+        }) {
+            Image(systemName: speechManager.isRecording ? "mic.fill" : "mic")
+                .font(.system(size: 20))
+                .foregroundColor(speechManager.isRecording ? .red : Theme.Colors.textSecondary)
+                .frame(width: 28, height: 28)
+                .scaleEffect(speechManager.isRecording ? 1.1 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: speechManager.isRecording)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(longPressGesture)
+        .simultaneousGesture(dragGesture)
+    }
+    
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.1)
+            .onEnded { _ in
+                if !speechManager.isRecording {
+                    speechManager.startRecording()
+                }
+            }
+    }
+    
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if speechManager.isRecording {
+                    dragOffset = value.translation.height
+                    // Swipe up to cancel (like iMessage)
+                    isDraggingToCancel = value.translation.height < -50
+                }
+            }
+            .onEnded { value in
+                if speechManager.isRecording {
+                    if isDraggingToCancel || value.translation.height < -50 {
+                        // Cancel recording
+                        speechManager.cancelRecording()
+                    } else {
+                        // Release to send/insert
+                        handleRecordingEnd()
+                    }
+                    dragOffset = 0
+                    isDraggingToCancel = false
+                }
+            }
+    }
+    
+    private func handleTranscriptionUpdate(newValue: String) {
+        // Update text field as speech is transcribed (only while recording, don't auto-send)
+        if speechManager.isRecording && !newValue.isEmpty {
+            messageText = newValue
+        }
+    }
+    
+    private func handleRecordingStateChange(oldValue: Bool, newValue: Bool) {
+        // Haptic feedback when recording starts
+        if newValue && !oldValue {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+        }
+    }
+    
+    private func handleRecordingEnd() {
+        speechManager.stopRecording()
+        let transcribed = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !transcribed.isEmpty {
+            // Insert transcribed text into input field (like iMessage - doesn't auto-send)
+            messageText = transcribed
+        }
+        speechManager.transcribedText = ""
+    }
+    
+    private func sendMessage() {
+        let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        // Clear input
+        messageText = ""
+        isInputFocused = false
+        
+        // Send message
+        Task {
+            await chatViewModel.sendMessage(
+                trimmed,
+                latitude: locationManager.location?.coordinate.latitude,
+                longitude: locationManager.location?.coordinate.longitude,
+                jwt: session.jwt,
+                preferences: session.preferences,
+                selectedVibe: selectedVibe?.backendValue
+            )
+        }
     }
     
     var body: some View {
@@ -329,6 +686,10 @@ struct ChatView: View {
             .zIndex(10000) // Very high z-index to appear above everything
             
             mainContent
+        }
+        .safeAreaInset(edge: .bottom) {
+            // Native iOS input bar - automatically handles keyboard
+            inputSection
         }
         .onAppear {
             // Close any open overlays when view appears
@@ -455,6 +816,7 @@ struct MessageBubble: View {
                 Spacer()
             }
         }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
     
     private func formatTime(_ date: Date) -> String {

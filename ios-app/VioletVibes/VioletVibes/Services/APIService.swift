@@ -442,7 +442,11 @@ actor APIService {
             do {
                 let decoder = JSONDecoder()
                 // Use lenient decoding to handle missing optional fields
+                // Note: Don't use convertFromSnakeCase for Weather model as it has custom decoding
+                // Weather model expects temp_f, desc, icon in snake_case
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
+                // Create a custom decoder for Weather that doesn't use snake_case conversion
+                let weatherDecoder = JSONDecoder()
                 return try decoder.decode(DashboardAPIResponse.self, from: data)
             } catch let decodingError as DecodingError {
                 // Provide detailed decoding error information
@@ -477,11 +481,13 @@ actor APIService {
     
     // MARK: - Top Recommendations
     nonisolated func getTopRecommendations(
-        limit: Int = 3,
+        limit: Int = 10,
         jwt: String? = nil,
         preferences: UserPreferences? = nil,
         weather: String? = nil,
-        vibe: String? = nil
+        vibe: String? = nil,
+        latitude: Double? = nil,
+        longitude: Double? = nil
     ) async throws -> [Recommendation] {
         // Use the new top_recommendations endpoint
         var comps = URLComponents(string: "\(baseURL)/api/top_recommendations")!
@@ -492,6 +498,19 @@ actor APIService {
         // Add weather parameter if provided
         if let weather = weather {
             items.append(URLQueryItem(name: "weather", value: weather))
+        }
+        
+        // Add vibe parameter if provided
+        if let vibe = vibe {
+            items.append(URLQueryItem(name: "vibe", value: vibe))
+        }
+        
+        // Add location parameters if provided
+        if let lat = latitude {
+            items.append(URLQueryItem(name: "latitude", value: String(lat)))
+        }
+        if let lng = longitude {
+            items.append(URLQueryItem(name: "longitude", value: String(lng)))
         }
         
         comps.queryItems = items

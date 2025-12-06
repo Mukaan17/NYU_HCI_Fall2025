@@ -314,10 +314,31 @@ def top_recommendations():
         context = {
             "hour": now.hour,
             "weather": (request.args.get("weather") or "").strip(),
+            "vibe": (request.args.get("vibe") or "").strip(),  # Add vibe parameter from request
         }
+        
+        # Get location from request if provided
+        user_lat = None
+        user_lng = None
+        lat_raw = request.args.get("latitude")
+        lng_raw = request.args.get("longitude")
+        if lat_raw and lng_raw:
+            try:
+                user_lat = float(lat_raw)
+                user_lng = float(lng_raw)
+                # Validate coordinates
+                is_valid, error_msg = validate_coordinates(user_lat, user_lng)
+                if not is_valid:
+                    logger.warning(f"Invalid coordinates: {error_msg}, using default location")
+                    user_lat = None
+                    user_lng = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid latitude/longitude format: {lat_raw}, {lng_raw}")
+                user_lat = None
+                user_lng = None
 
         # Validate limit parameter
-        limit_raw = request.args.get("limit", 3)
+        limit_raw = request.args.get("limit", 10)
         is_valid, limit, error_msg = validate_limit(limit_raw, max_value=10, min_value=1)
         if not is_valid:
             logger.warning(f"Invalid limit parameter: {limit_raw}, using clamped value: {limit}")
@@ -326,6 +347,8 @@ def top_recommendations():
             prefs=prefs,
             context=context,
             limit=limit,
+            user_lat=user_lat,
+            user_lng=user_lng,
         )
 
         return jsonify(result)

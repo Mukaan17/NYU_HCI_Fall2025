@@ -32,6 +32,13 @@ struct MapView: View {
     
     private let defaultLat = 40.693393
     private let defaultLng = -73.98555
+    
+    // NYU Campus coordinates
+    private let tandonLat = 40.693393
+    private let tandonLng = -73.98555
+    private let washingtonSquareLat = 40.7295
+    private let washingtonSquareLng = -73.9965
+    
     private let geocoder = CLGeocoder()
     private let storage = StorageService.shared
     
@@ -126,6 +133,22 @@ struct MapView: View {
                             CategoryPinView(
                                 place: place,
                                 isSelected: place.id == placeViewModel.selectedPlace?.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                // Show pin for selected place if it's not in allPlaces (fallback)
+                if let selectedPlace = placeViewModel.selectedPlace,
+                   !placeViewModel.allPlaces.contains(where: { $0.id == selectedPlace.id }) {
+                    Annotation(selectedPlace.name, coordinate: selectedPlace.coordinate) {
+                        Button(action: {
+                            handlePinTap(place: selectedPlace)
+                        }) {
+                            CategoryPinView(
+                                place: selectedPlace,
+                                isSelected: true
                             )
                         }
                         .buttonStyle(.plain)
@@ -438,13 +461,82 @@ struct MapView: View {
     
     @ViewBuilder
     private var defaultCardContent: some View {
-        Text(currentLocationAddress ?? "2 MetroTech Center")
+        Text(campusNameForCurrentLocation)
             .themeFont(size: .`2xl`, weight: .semiBold)
             .foregroundColor(Theme.Colors.textPrimary)
+        
+        if let address = currentLocationAddress {
+            Text(address)
+                .themeFont(size: .sm)
+                .foregroundColor(Theme.Colors.textSecondary)
+                .lineLimit(2)
+        }
         
         Text("Home base • NYU")
             .themeFont(size: .base)
             .foregroundColor(Theme.Colors.textSecondary)
+    }
+    
+    // Determine which campus name to show based on current location
+    private var campusNameForCurrentLocation: String {
+        // First check address string for keywords
+        if let address = currentLocationAddress, !address.isEmpty {
+            let addressLower = address.lowercased()
+            
+            // Washington Square area keywords
+            if addressLower.contains("washington") || 
+               addressLower.contains("greenwich") || 
+               addressLower.contains("bleecker") || 
+               addressLower.contains("university") ||
+               addressLower.contains("macdougal") ||
+               addressLower.contains("west 4th") ||
+               addressLower.contains("west 3rd") ||
+               addressLower.contains("west 8th") ||
+               addressLower.contains("west 9th") ||
+               addressLower.contains("west 10th") ||
+               addressLower.contains("west 11th") ||
+               addressLower.contains("west 12th") ||
+               addressLower.contains("east 8th") ||
+               addressLower.contains("east 9th") ||
+               addressLower.contains("east 10th") ||
+               addressLower.contains("east 11th") ||
+               addressLower.contains("east 12th") ||
+               addressLower.contains("washington place") ||
+               addressLower.contains("washington square") {
+                return "Washington Square"
+            }
+            
+            // Tandon/Brooklyn area keywords
+            if addressLower.contains("metrotech") || 
+               addressLower.contains("jay") ||
+               addressLower.contains("tillary") || 
+               addressLower.contains("brooklyn") ||
+               addressLower.contains("flatbush") ||
+               addressLower.contains("dekalb") ||
+               addressLower.contains("fulton") {
+                return "Tandon"
+            }
+        }
+        
+        // If current location is available, use distance calculation
+        if let location = currentDeviceLocation ?? locationManager.location {
+            let currentLocation = CLLocation(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+            let tandonLocation = CLLocation(latitude: tandonLat, longitude: tandonLng)
+            let washingtonSquareLocation = CLLocation(latitude: washingtonSquareLat, longitude: washingtonSquareLng)
+            
+            let distanceToTandon = currentLocation.distance(from: tandonLocation)
+            let distanceToWashingtonSquare = currentLocation.distance(from: washingtonSquareLocation)
+            
+            // If within 2km of a campus, show that campus name
+            if distanceToTandon < 2000 {
+                return "Tandon"
+            } else if distanceToWashingtonSquare < 2000 {
+                return "Washington Square"
+            }
+        }
+        
+        // Default fallback
+        return currentLocationAddress ?? "2 MetroTech Center"
     }
     
     @ViewBuilder
@@ -454,7 +546,7 @@ struct MapView: View {
                 Image(systemName: "house.fill")
                     .font(.system(size: 20))
                     .foregroundColor(Theme.Colors.gradientStart)
-                Text("Home")
+                Text(campusNameForHome)
                     .themeFont(size: .`2xl`, weight: .semiBold)
                     .foregroundColor(Theme.Colors.textPrimary)
             }
@@ -472,6 +564,68 @@ struct MapView: View {
             
             getHomeDirectionsButton
         }
+    }
+    
+    // Determine which campus name to show based on home location
+    private var campusNameForHome: String {
+        // First, check address string for keywords (works even if coordinates aren't set yet)
+        if let address = homeAddress, !address.isEmpty {
+            let addressLower = address.lowercased()
+            
+            // Washington Square area keywords
+            if addressLower.contains("washington") || 
+               addressLower.contains("greenwich") || 
+               addressLower.contains("bleecker") || 
+               addressLower.contains("university") ||
+               addressLower.contains("macdougal") ||
+               addressLower.contains("west 4th") ||
+               addressLower.contains("west 3rd") ||
+               addressLower.contains("west 8th") ||
+               addressLower.contains("west 9th") ||
+               addressLower.contains("west 10th") ||
+               addressLower.contains("west 11th") ||
+               addressLower.contains("west 12th") ||
+               addressLower.contains("east 8th") ||
+               addressLower.contains("east 9th") ||
+               addressLower.contains("east 10th") ||
+               addressLower.contains("east 11th") ||
+               addressLower.contains("east 12th") ||
+               addressLower.contains("washington place") ||
+               addressLower.contains("washington square") {
+                return "Washington Square"
+            }
+            
+            // Tandon/Brooklyn area keywords
+            if addressLower.contains("metrotech") || 
+               addressLower.contains("jay") ||
+               addressLower.contains("tillary") || 
+               addressLower.contains("brooklyn") ||
+               addressLower.contains("flatbush") ||
+               addressLower.contains("dekalb") ||
+               addressLower.contains("fulton") {
+                return "Tandon"
+            }
+        }
+        
+        // If coordinates are available, use distance calculation
+        if let homeCoord = homeCoordinate {
+            let homeLocation = CLLocation(latitude: homeCoord.latitude, longitude: homeCoord.longitude)
+            let tandonLocation = CLLocation(latitude: tandonLat, longitude: tandonLng)
+            let washingtonSquareLocation = CLLocation(latitude: washingtonSquareLat, longitude: washingtonSquareLng)
+            
+            let distanceToTandon = homeLocation.distance(from: tandonLocation)
+            let distanceToWashingtonSquare = homeLocation.distance(from: washingtonSquareLocation)
+            
+            // If within 2km of a campus, show that campus name
+            if distanceToTandon < 2000 {
+                return "Tandon"
+            } else if distanceToWashingtonSquare < 2000 {
+                return "Washington Square"
+            }
+        }
+        
+        // Default fallback
+        return "Home"
     }
     
     @ViewBuilder
@@ -613,13 +767,17 @@ struct MapView: View {
         
         if let place = newValue {
             currentLocationAddress = nil
-            // Use zoomToLocation to ensure pin appears above the card
+            // Clear home selection when a place is selected
+            isHomeSelected = false
+            // Use zoomToLocation to center the map on the pin with proper offset
             viewModel.zoomToLocation(
                 latitude: place.latitude,
                 longitude: place.longitude,
                 animated: true
             )
         } else {
+            // When place is cleared, show home base card
+            isHomeSelected = false
             if let location = locationManager.location {
                 geocodingTask?.cancel()
                 geocodingTask = Task {
@@ -643,25 +801,49 @@ struct MapView: View {
     }
     
     private func handleAppear() {
-        viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng, animated: false)
+        // Try to get device location first, fallback to default only if unavailable
+        let initialLocation = LocationService.shared.location ?? locationManager.location
+        
+        if let location = initialLocation {
+            // Use device location immediately
+            currentDeviceLocation = location
+            viewModel.updateRegion(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude,
+                animated: false
+            )
+            lastProcessedLocation = location
+            
+            geocodingTask?.cancel()
+            geocodingTask = Task {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                await geocodeLocation(location)
+            }
+        } else {
+            // Only use default if device location is not available
+            viewModel.updateRegion(latitude: defaultLat, longitude: defaultLng, animated: false)
+        }
         
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            
-            let initialLocation = LocationService.shared.location ?? locationManager.location
-            if let location = initialLocation {
-                currentDeviceLocation = location
-                viewModel.updateRegion(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude,
-                    animated: true
-                )
-                lastProcessedLocation = location
+            // Wait a bit and check again for location if we didn't have it initially
+            if initialLocation == nil {
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 
-                geocodingTask?.cancel()
-                geocodingTask = Task {
-                    try? await Task.sleep(nanoseconds: 800_000_000)
-                    await geocodeLocation(location)
+                let updatedLocation = LocationService.shared.location ?? locationManager.location
+                if let location = updatedLocation {
+                    currentDeviceLocation = location
+                    viewModel.updateRegion(
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude,
+                        animated: true
+                    )
+                    lastProcessedLocation = location
+                    
+                    geocodingTask?.cancel()
+                    geocodingTask = Task {
+                        try? await Task.sleep(nanoseconds: 800_000_000)
+                        await geocodeLocation(location)
+                    }
                 }
             }
             
@@ -756,11 +938,29 @@ struct MapView: View {
                     }
                 }
                 
-                // Limit to 20 total
+                // Limit to 20 total for new places
                 let limitedPlaces = Array(allPlaces.prefix(20))
                 
                 await MainActor.run {
-                    placeViewModel.setAllPlaces(limitedPlaces)
+                    // Merge with existing places instead of replacing them
+                    // This preserves recommendation pins from chat
+                    let existingPlaces = placeViewModel.allPlaces
+                    var mergedPlaces = existingPlaces
+                    
+                    // Add new places that don't already exist (check by name and coordinates)
+                    for place in limitedPlaces {
+                        let isDuplicate = mergedPlaces.contains { existingPlace in
+                            existingPlace.name == place.name &&
+                            abs(existingPlace.latitude - place.latitude) < 0.0001 &&
+                            abs(existingPlace.longitude - place.longitude) < 0.0001
+                        }
+                        if !isDuplicate {
+                            mergedPlaces.append(place)
+                        }
+                    }
+                    
+                    // Update with merged list (keep all existing + new ones)
+                    placeViewModel.setAllPlaces(mergedPlaces)
                 }
             } catch {
                 print("Failed to load recommendations for map: \(error)")

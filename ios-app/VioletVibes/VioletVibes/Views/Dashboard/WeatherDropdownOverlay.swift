@@ -125,18 +125,61 @@ struct WeatherDropdownOverlay: View {
                     .frame(width: dropdownWidth, height: 180) // Fixed frame - no expansion, padding included
                     .fixedSize(horizontal: false, vertical: true) // Prevent vertical expansion
                     .clipped() // Prevent content from overflowing
-                    .background(Theme.Colors.glassBackgroundLight) // More opaque
-                    .overlay(
+                    .background {
+                        ZStack {
+                            // Native liquid glass material - using ultraThinMaterial for more transparency
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                .fill(.ultraThinMaterial)
+                            
+                            // More transparent color tint gradient (blue theme for weather)
+                            LinearGradient(
+                                colors: [
+                                    Theme.Colors.accentBlue.opacity(0.15),
+                                    Theme.Colors.accentBlue.opacity(0.08),
+                                    Theme.Colors.accentBlue.opacity(0.03)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .cornerRadius(Theme.BorderRadius.md)
+                            
+                            // More transparent inner glow effect
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Theme.Colors.accentBlue.opacity(0.05),
+                                            Color.clear
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .center
+                                    )
+                                )
+                        }
+                    }
+                    .overlay {
+                        // More transparent glass border with subtle highlight
                         RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .stroke(Theme.Colors.border, lineWidth: 1)
-                    )
-                    .cornerRadius(Theme.BorderRadius.md)
-                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.15),
+                                        Color.white.opacity(0.08),
+                                        Color.white.opacity(0.03)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+                    .shadow(color: Theme.Colors.accentBlue.opacity(0.15), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
+                    .modifier(LiquidGlassMorphingModifier(isVisible: $isExpanded, cornerRadius: Theme.BorderRadius.md))
                     .position(
                         x: centerX, // Center X position - left edge will be at buttonLeftX
                         y: buttonY + 12 + 90 // Position below button: gap (12pt) + half dropdown height (90pt)
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     .allowsHitTesting(true) // Allow interactions with the dropdown content
                     .contentShape(Rectangle()) // Define hit testing area - only within dropdown bounds
                 }

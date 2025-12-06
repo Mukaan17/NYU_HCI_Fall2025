@@ -110,9 +110,16 @@ def build_chat_response(
     
     # If it's a follow-up (place or general), use context-aware response WITHOUT new cards
     # Only treat as follow-up if there's actual conversation history (not a new session)
-    if intent in ["followup_place", "followup_general"] and memory.last_places and memory.history and len(memory.history) > 2:
+    # EXCEPTION: If asking about location/where, always return recommendation cards
+    location_keywords = ["where is", "where's", "where are", "location of", "location", 
+                        "where can i find", "where to find", "show me where", "directions to",
+                        "how to get to", "navigate to", "take me to", "go to"]
+    is_location_query = any(k in message.lower() for k in location_keywords)
+    
+    if intent in ["followup_place", "followup_general"] and memory.last_places and memory.history and len(memory.history) > 2 and not is_location_query:
         # User is asking about previous recommendations or context within the same session
         # Return text-only response - don't show cards again for follow-up questions
+        # UNLESS it's a location query - then show cards for navigation
         from services.recommendation.llm_reply import generate_contextual_reply
         memory.add_message("user", message)
         reply = generate_contextual_reply(
@@ -126,7 +133,7 @@ def build_chat_response(
         return {
             "debug_vibe": intent,
             "latency": round(time.time() - t0, 2),
-            "places": [],  # No cards for follow-up questions
+            "places": [],  # No cards for follow-up questions (unless location query)
             "reply": reply,
             "weather": current_weather(),
         }
@@ -300,12 +307,17 @@ def build_chat_response(
     
     # STEP 13 — Only return cards if this is an actual recommendation request
     # Don't show cards for conversational messages or follow-ups
-    should_show_cards = intent in ["recommendation", "new_recommendation"] and len(items) > 0
+    # EXCEPTION: Always show cards for location queries so user can navigate
+    location_keywords = ["where is", "where's", "where are", "location of", "location", 
+                        "where can i find", "where to find", "show me where", "directions to",
+                        "how to get to", "navigate to", "take me to", "go to"]
+    is_location_query = any(k in message.lower() for k in location_keywords)
+    should_show_cards = (intent in ["recommendation", "new_recommendation"] or is_location_query) and len(items) > 0
 
     return {
         "debug_vibe": vibe,
         "latency": round(time.time() - t0, 2),
-        "places": items[:3] if should_show_cards else [],  # Only show cards for actual recommendations
+        "places": items[:3] if should_show_cards else [],  # Show cards for recommendations or location queries
         "reply": reply,
         "weather": current_weather(),
     }

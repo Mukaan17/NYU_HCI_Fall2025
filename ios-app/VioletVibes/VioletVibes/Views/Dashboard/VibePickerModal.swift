@@ -149,19 +149,62 @@ struct VibePickerOverlay: View {
                         .frame(height: 150)
                     }
                     .padding(Theme.Spacing.sm)
-                    .background(Theme.Colors.glassBackgroundLight) // More opaque to match weather dropdown
-                    .overlay(
+                    .background {
+                        ZStack {
+                            // Native liquid glass material - using ultraThinMaterial for more transparency
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                .fill(.ultraThinMaterial)
+                            
+                            // More transparent color tint gradient (purple theme for vibe picker)
+                            LinearGradient(
+                                colors: [
+                                    Theme.Colors.accentPurpleMedium.opacity(0.15),
+                                    Theme.Colors.accentPurpleMedium.opacity(0.08),
+                                    Theme.Colors.accentPurpleMedium.opacity(0.03)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .cornerRadius(Theme.BorderRadius.md)
+                            
+                            // More transparent inner glow effect
+                            RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Theme.Colors.accentPurpleMedium.opacity(0.05),
+                                            Color.clear
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .center
+                                    )
+                                )
+                        }
+                    }
+                    .overlay {
+                        // More transparent glass border with subtle highlight
                         RoundedRectangle(cornerRadius: Theme.BorderRadius.md)
-                            .stroke(Theme.Colors.border, lineWidth: 1)
-                    )
-                    .cornerRadius(Theme.BorderRadius.md)
-                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.15),
+                                        Color.white.opacity(0.08),
+                                        Color.white.opacity(0.03)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+                    .shadow(color: Theme.Colors.accentPurpleMedium.opacity(0.15), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
                     .frame(width: dropdownWidth, height: 180)
                     .position(
                         x: dropdownX,
                         y: dropdownY // Position below button (half dropdown height + spacing)
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .modifier(LiquidGlassMorphingModifier(isVisible: $isExpanded, cornerRadius: Theme.BorderRadius.md))
                     .allowsHitTesting(true) // Allow interactions with the dropdown content
                     .contentShape(Rectangle()) // Define hit testing area - only within dropdown bounds
                 }

@@ -26,7 +26,13 @@ final class PlaceViewModel {
     }
     
     func addPlace(_ place: SelectedPlace) {
-        if !allPlaces.contains(where: { $0.id == place.id }) {
+        // Check for duplicates by name and coordinates (since ID is UUID and always unique)
+        let isDuplicate = allPlaces.contains { existingPlace in
+            existingPlace.name == place.name &&
+            abs(existingPlace.latitude - place.latitude) < 0.0001 &&
+            abs(existingPlace.longitude - place.longitude) < 0.0001
+        }
+        if !isDuplicate {
             allPlaces.append(place)
         }
     }

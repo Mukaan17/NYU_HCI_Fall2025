@@ -278,14 +278,14 @@ struct QuickResultRow: View {
                     }
                     
                     HStack(spacing: Theme.Spacing.lg) {
-                        if let walkTime = place.walkTime {
-                            Label("\(walkTime) min", systemImage: "figure.walk")
+                        if let walkTime = place.walkTime, !walkTime.isEmpty {
+                            Label(walkTime, systemImage: "figure.walk")
                                 .themeFont(size: .xs)
                                 .foregroundColor(Theme.Colors.textSecondary)
                         }
                         
-                        if let distance = place.distance {
-                            Label(String(format: "%.1f mi", distance), systemImage: "location")
+                        if let distance = place.distance, !distance.isEmpty {
+                            Label(distance, systemImage: "location")
                                 .themeFont(size: .xs)
                                 .foregroundColor(Theme.Colors.textSecondary)
                         }

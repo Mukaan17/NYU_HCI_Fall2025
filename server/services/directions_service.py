@@ -114,6 +114,25 @@ def _get_directions_for_mode(
 
 
 @retry_api_call(max_attempts=2, min_wait=0.5, max_wait=2)
+def get_walking_only_directions(
+    origin_lat: float,
+    origin_lng: float,
+    dest_lat: float,
+    dest_lng: float
+) -> Optional[Dict[str, Any]]:
+    """
+    Get walking-only directions from Google Directions API.
+    Use this for quick recommendations where walking distance is more important than transit speed.
+    FAST MODE: short timeout, returns None on failure (UI can still show place).
+    """
+    if not GOOGLE_API_KEY:
+        logger.warning("GOOGLE_API_KEY not set, cannot get directions")
+        return None
+    
+    return _get_directions_for_mode(origin_lat, origin_lng, dest_lat, dest_lng, "walking")
+
+
+@retry_api_call(max_attempts=2, min_wait=0.5, max_wait=2)
 def get_walking_directions(
     origin_lat: float,
     origin_lng: float,

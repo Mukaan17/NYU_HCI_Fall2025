@@ -87,17 +87,21 @@ def extract_places_from_reply(
                 seen_names.add(name_lower)
     
     # Extract potential place names from the reply that weren't found in memory
-    # Look for phrases like "go to X", "check out X", "try X", etc.
+    # Look for phrases like "go to X", "check out X", "try X", "at X", "from X", etc.
     import re
     place_indicators = [
-        r"go to\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"check out\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"try\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"visit\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"head to\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"stop by\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"recommend\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
-        r"suggest\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"go to\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"check out\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"try\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"visit\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"head to\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"stop by\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"recommend\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"suggest\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"at\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or|\s+\?)",  # "at Artichoke Basille's Pizza"
+        r"from\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",
+        r"grabbing\s+(?:a\s+)?(?:slice|bite|drink|coffee|meal)\s+at\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\.|,|!|\?|$|;|:|\s+and|\s+or)",  # "grabbing a slice at X"
+        r"how about\s+([A-Z][a-zA-Z\s&'\-]+?)(?:\?|\.|,|!|$|;|:)",  # "How about X?"
     ]
     
     # Also look for capitalized phrases that might be place names
@@ -107,16 +111,21 @@ def extract_places_from_reply(
         matches = re.finditer(pattern, reply_text, re.IGNORECASE)
         for match in matches:
             place_name = match.group(1).strip()
+            # Clean up common trailing words
+            place_name = re.sub(r'\s+(Pizza|Restaurant|Cafe|Bar|Shop|Store|Place)$', '', place_name, flags=re.IGNORECASE)
             # Filter out very short names or common words
-            if len(place_name) > 3 and place_name.lower() not in ["the", "a", "an", "this", "that"]:
+            if len(place_name) > 3 and place_name.lower() not in ["the", "a", "an", "this", "that", "it", "there"]:
                 potential_place_names.append(place_name)
     
     # Also extract standalone capitalized phrases (potential place names)
-    # Look for sequences of capitalized words
-    capitalized_phrases = re.findall(r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b', reply_text)
+    # Look for sequences of capitalized words (2+ words, handles apostrophes)
+    capitalized_phrases = re.findall(r'\b([A-Z][a-zA-Z]+(?:\'[a-z]+)?(?:\s+[A-Z][a-zA-Z]+(?:\'[a-z]+)?)+)\b', reply_text)
     for phrase in capitalized_phrases:
+        # Skip if it's a common phrase or already seen
         if phrase.lower() not in seen_names and len(phrase) > 3:
-            potential_place_names.append(phrase)
+            # Skip common phrases
+            if phrase.lower() not in ["new york", "new jersey", "how about", "what about"]:
+                potential_place_names.append(phrase)
     
     # Search for places that weren't found in memory
     if potential_place_names and (origin_lat is not None and origin_lng is not None):
@@ -502,11 +511,30 @@ def build_chat_response(
                         "how to get to", "navigate to", "take me to", "go to"]
     is_location_query = any(k in message.lower() for k in location_keywords)
     should_show_cards = (intent in ["recommendation", "new_recommendation"] or is_location_query) and len(items) > 0
+    
+    # STEP 14 — Extract places mentioned in the reply that aren't already in items
+    # This ensures places suggested by the LLM (like "Artichoke Basille's Pizza") get cards
+    places_to_return = items[:3] if should_show_cards else []
+    
+    # Check if reply mentions places not in the returned items
+    if reply:
+        reply_places = extract_places_from_reply(reply, items, origin_lat=origin_lat, origin_lng=origin_lng)
+        
+        # Add places from reply that aren't already in the return list
+        existing_names = {p.get("name", "").lower() for p in places_to_return}
+        for place in reply_places:
+            place_name = place.get("name", "").lower()
+            if place_name and place_name not in existing_names:
+                places_to_return.append(place)
+                existing_names.add(place_name)
+                # Limit to 3 total places
+                if len(places_to_return) >= 3:
+                    break
 
     return {
         "debug_vibe": vibe,
         "latency": round(time.time() - t0, 2),
-        "places": items[:3] if should_show_cards else [],  # Show cards for recommendations or location queries
+        "places": places_to_return,  # Include places from reply if mentioned
         "reply": reply,
         "weather": current_weather(),
     }

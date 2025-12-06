@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 
 from services.places_service import nearby_places, build_photo_url
-from services.directions_service import get_walking_directions, walking_minutes
+from services.directions_service import get_walking_directions, get_walking_only_directions, walking_minutes
 
 # Event scrapers
 from services.scrapers.brooklyn_bridge_park_scraper import fetch_brooklyn_bridge_park_events
@@ -149,6 +149,8 @@ def _search_places_for_category(category: str, origin_lat: float = TANDON_LAT, o
         if not lat or not lng:
             continue
 
+        # Use fastest route (walking or transit) for quick recommendations
+        # The maps link will use the same mode that was selected
         d = get_walking_directions(origin_lat, origin_lng, lat, lng)
         photos = p.get("photos", [])
         ref = photos[0].get("photo_reference") if photos else None

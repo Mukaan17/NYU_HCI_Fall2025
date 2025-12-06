@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct QuickResultsSheetView: View {
     let category: String

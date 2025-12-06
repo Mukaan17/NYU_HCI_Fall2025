@@ -192,10 +192,15 @@ def generate_contextual_reply(
         history_context = "\n".join(history_lines)
     
     # Build previous recommendations context
+    # Only include if this is a follow-up within the same session (not a new session)
     previous_recs_context = ""
-    if memory.last_places:
+    # Check if memory has meaningful history (more than just the current exchange)
+    # If history is empty or very short, don't reference previous recommendations
+    if memory.last_places and memory.history and len(memory.history) > 2:
+        # Only reference previous recommendations if there's actual conversation history
+        # This prevents referencing recommendations from previous app sessions
         prev_names = [p.get("name", "Unknown") for p in memory.last_places[:3]]
-        previous_recs_context = f"Previously recommended: {', '.join(prev_names)}"
+        previous_recs_context = f"Previously recommended in this conversation: {', '.join(prev_names)}"
     
     items_text = format_items_for_prompt(items) if items else "No new options found."
     
@@ -294,14 +299,16 @@ You are Violet, a helpful and friendly AI concierge for NYU students in Downtown
 You're conversational, natural, and avoid repetitive greetings. You remember previous conversations and can answer follow-up questions intelligently."""
     
     context_section = ""
-    if is_followup:
+    # Only treat as follow-up if there's meaningful conversation history (more than 2 messages)
+    # This prevents referencing recommendations from previous app sessions
+    if is_followup and memory.history and len(memory.history) > 2:
         context_section = "This is a follow-up question in an ongoing conversation. Use the previous context to answer naturally.\n\n"
         if history_context:
             context_section += f"Previous conversation:\n{history_context}\n\n"
         if previous_recs_context:
-            context_section += f"Previous recommendations: {previous_recs_context}\n\n"
+            context_section += f"Previous recommendations in this conversation: {previous_recs_context}\n\n"
     else:
-        context_section = "This is a new conversation.\n\n"
+        context_section = "This is a new conversation. Do NOT reference any previous recommendations or conversations from past sessions.\n\n"
     
     items_section = ""
     if items:

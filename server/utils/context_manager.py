@@ -79,16 +79,16 @@ class ConversationContextManager:
             try:
                 data = self.redis_client.get(self.key)
                 if data:
-                context_data = json.loads(data)
-                context = ConversationContext()
-                context.history = context_data.get("history", [])
-                context.last_places = context_data.get("last_places", [])
-                context.all_results = context_data.get("all_results", [])
-                context.result_index = context_data.get("result_index", 0)
-                context.context = context_data.get("context")
-                context.last_intent = context_data.get("last_intent")
-                context.user_location = context_data.get("user_location")
-                return context
+                    context_data = json.loads(data)
+                    context = ConversationContext()
+                    context.history = context_data.get("history", [])
+                    context.last_places = context_data.get("last_places", [])
+                    context.all_results = context_data.get("all_results", [])
+                    context.result_index = context_data.get("result_index", 0)
+                    context.context = context_data.get("context")
+                    context.last_intent = context_data.get("last_intent")
+                    context.user_location = context_data.get("user_location")
+                    return context
             except Exception as e:
                 logger.error(f"Error loading context from Valkey/Redis: {e}")
         

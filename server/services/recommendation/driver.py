@@ -109,12 +109,19 @@ def build_chat_response(
         }
     
     # If it's a follow-up (place or general), use context-aware response WITHOUT new cards
-    if intent in ["followup_place", "followup_general"] and memory.last_places:
-        # User is asking about previous recommendations or context
+    # Only treat as follow-up if there's actual conversation history (not a new session)
+    if intent in ["followup_place", "followup_general"] and memory.last_places and memory.history and len(memory.history) > 2:
+        # User is asking about previous recommendations or context within the same session
         # Return text-only response - don't show cards again for follow-up questions
         from services.recommendation.llm_reply import generate_contextual_reply
         memory.add_message("user", message)
-        reply = generate_contextual_reply(message, [], memory)  # Pass empty items to avoid showing cards
+        reply = generate_contextual_reply(
+            message, [], memory,
+            user_location=memory.user_location,
+            user_profile=user_profile,
+            selected_vibe=selected_vibe,
+            commute_preference=commute_preference
+        )
         memory.add_message("assistant", reply)
         return {
             "debug_vibe": intent,

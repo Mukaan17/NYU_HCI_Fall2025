@@ -152,6 +152,29 @@ def chat():
     try:
         data = request.get_json(force=True) or {}
         user_message = (data.get("message") or "").strip()
+        
+        # Check if this is a session clear request (empty message with clear_session flag)
+        clear_session = data.get("clear_session", False) or request.headers.get("X-Clear-Session", "").lower() == "true"
+        if clear_session and not user_message:
+            # This is just a session clear request, return success
+            token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            user_id = None
+            session_id = None
+            
+            if token:
+                try:
+                    payload = decode_token(token)
+                    user_id = str(payload.get("sub"))
+                except Exception:
+                    pass
+            
+            if not user_id:
+                session_id = request.headers.get("X-Session-ID") or str(uuid.uuid4())
+            
+            context_manager = ConversationContextManager(user_id=user_id, session_id=session_id)
+            context_manager.clear_context()
+            logger.debug(f"Session cleared - user: {user_id or 'anonymous'}")
+            return jsonify({"status": "session_cleared"}), 200
 
         if not user_message:
             return jsonify({"error": "Missing 'message'"}), 400
@@ -178,9 +201,24 @@ def chat():
         
         # Get or create user-scoped conversation context
         context_manager = ConversationContextManager(user_id=user_id, session_id=session_id)
+        
+        # Check if this is a new session (frontend signals new session start)
+        clear_session = data.get("clear_session", False) or request.headers.get("X-Clear-Session", "").lower() == "true"
+        
+        if clear_session:
+            # Clear previous conversation context for a fresh start
+            context_manager.clear_context()
+            logger.debug(f"Cleared conversation context for new session - user: {user_id or 'anonymous'}")
+        
         memory = context_manager.get_context()
+        
+        # If session was cleared, ensure memory is fresh (no previous recommendations)
+        if clear_session:
+            memory.last_places = []
+            memory.all_results = []
+            memory.history = []
 
-        logger.debug(f"Chat request - user: {user_id or 'anonymous'}, session: {session_id}, message length: {len(user_message)}")
+        logger.debug(f"Chat request - user: {user_id or 'anonymous'}, session: {session_id}, message length: {len(user_message)}, clear_session: {clear_session}")
 
         prefs = user.get_preferences() if user else {}
         

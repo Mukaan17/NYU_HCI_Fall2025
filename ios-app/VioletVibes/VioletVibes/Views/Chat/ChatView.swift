@@ -336,8 +336,16 @@ struct ChatView: View {
                 isWeatherExpanded = false
                 isVibePickerExpanded = false
             }
+            
+            // Initialize new chat session when view appears (clears backend context)
+            Task {
+                await chatViewModel.initializeNewSession(jwt: session.jwt)
+            }
         }
         .task {
+            // Initialize new chat session on app launch
+            await chatViewModel.initializeNewSession(jwt: session.jwt)
+            
             // Load weather on task start (app launch/restart)
             await weatherManager.loadWeather(locationManager: locationManager)
             

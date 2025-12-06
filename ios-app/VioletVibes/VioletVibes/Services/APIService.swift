@@ -155,13 +155,46 @@ actor APIService {
     }
     
     // MARK: - Chat
+    
+    /// Clear the chat session on the backend (starts fresh conversation)
+    nonisolated func clearChatSession(jwt: String? = nil) async throws {
+        guard let url = URL(string: "\(baseURL)/api/chat") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("true", forHTTPHeaderField: "X-Clear-Session")
+        
+        if let token = jwt {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // Send a minimal payload to trigger session clear
+        let payload: [String: Any] = ["message": "", "clear_session": true]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        // Accept 200 (session cleared successfully) - backend now handles empty message with clear_session
+        if httpResponse.statusCode != 200 {
+            throw APIError.invalidResponse
+        }
+    }
+    
     nonisolated func sendChatMessage(
         _ message: String,
         latitude: Double? = nil,
         longitude: Double? = nil,
         jwt: String? = nil,
         preferences: UserPreferences? = nil,
-        vibe: String? = nil
+        vibe: String? = nil,  // Selected vibe from vibe picker
+        clearSession: Bool = false  // Signal to clear previous session context
     ) async throws -> ChatAPIResponse {
         guard let url = URL(string: "\(baseURL)/api/chat") else {
             throw APIError.invalidURL
@@ -171,6 +204,10 @@ actor APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        if clearSession {
+            request.setValue("true", forHTTPHeaderField: "X-Clear-Session")
+        }
+        
         if let token = jwt {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -178,6 +215,9 @@ actor APIService {
         // Build request body with optional preferences
         let backendPrefs = preferences?.toBackendPreferencesPayload()
         var payload: [String: Any] = ["message": message]
+        if clearSession {
+            payload["clear_session"] = true
+        }
         if let lat = latitude, let lng = longitude {
             payload["latitude"] = lat
             payload["longitude"] = lng

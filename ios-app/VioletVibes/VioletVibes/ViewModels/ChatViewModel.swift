@@ -13,6 +13,7 @@ final class ChatViewModel {
     var isTyping: Bool = false
     
     private let apiService = APIService.shared
+    private var hasInitialized = false
     
     init() {
         // Initialize with welcome message - will be updated with user's first name
@@ -29,6 +30,22 @@ final class ChatViewModel {
         // Load user's first name and update welcome message
         Task {
             await loadWelcomeMessage()
+        }
+    }
+    
+    /// Initialize a new chat session - clears backend context
+    func initializeNewSession(jwt: String? = nil) async {
+        guard !hasInitialized else { return }
+        hasInitialized = true
+        
+        // Signal to backend to clear previous conversation context
+        // This ensures the backend starts fresh for this app session
+        do {
+            // Make a lightweight request to clear the session
+            try await apiService.clearChatSession(jwt: jwt)
+        } catch {
+            // If clearing fails, continue anyway - it's not critical
+            print("Note: Could not clear previous chat session: \(error.localizedDescription)")
         }
     }
     

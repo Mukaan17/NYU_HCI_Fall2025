@@ -251,7 +251,7 @@ struct QuickResultRow: View {
                         .multilineTextAlignment(.leading)
                     
                     if let description = place.description, !description.isEmpty {
-                        Text(description)
+                        Text(description.strippingHTML)
                             .themeFont(size: .sm)
                             .foregroundColor(Theme.Colors.textSecondary)
                             .lineLimit(2)

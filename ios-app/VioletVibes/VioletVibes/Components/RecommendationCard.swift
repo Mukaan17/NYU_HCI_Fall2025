@@ -48,8 +48,8 @@ struct RecommendationCard: View {
                         .themeFont(size: .`2xl`, weight: .semiBold)
                         .foregroundColor(Theme.Colors.textPrimary)
                     
-                    if let description = recommendation.description {
-                        Text(description)
+                    if let description = recommendation.description, !description.isEmpty {
+                        Text(description.strippingHTML)
                             .themeFont(size: .lg)
                             .foregroundColor(Theme.Colors.textSecondary)
                     }

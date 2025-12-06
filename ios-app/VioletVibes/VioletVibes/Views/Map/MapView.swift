@@ -192,7 +192,7 @@ struct MapView: View {
         HStack(spacing: Theme.Spacing.md) {
             Text("📍")
                 .font(.system(size: 15))
-            Text(place.address ?? place.name)
+            Text((place.address ?? place.name).strippingHTML)
                 .themeFont(size: .base, weight: .semiBold)
                 .foregroundColor(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -327,7 +327,7 @@ struct MapView: View {
             
             // Address
             if let address = place.address {
-                Text(address)
+                Text(address.strippingHTML)
                     .themeFont(size: .sm)
                     .foregroundColor(Theme.Colors.textSecondary)
                     .lineLimit(2)

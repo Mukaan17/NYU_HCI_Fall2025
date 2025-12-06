@@ -224,7 +224,7 @@ struct CalendarEventRow: View {
                 }
                 
                 if let description = event.description, !description.isEmpty {
-                    Text(description)
+                    Text(description.strippingHTML)
                         .themeFont(size: .sm)
                         .foregroundColor(Theme.Colors.textSecondary)
                         .lineLimit(3)

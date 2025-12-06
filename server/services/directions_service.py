@@ -80,10 +80,28 @@ def get_distance_matrix(
         logger.debug(f"Timeout getting distance matrix from {origin_lat},{origin_lng} to {dest_lat},{dest_lng}")
         return None
     except requests.RequestException as e:
-        logger.debug(f"Error getting distance matrix: {e}")
+        # Check if it's an I/O error on closed file (common with concurrent requests)
+        error_str = str(e).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"Distance matrix: connection closed during request (likely timeout/cancellation)")
+        else:
+            logger.debug(f"Error getting distance matrix: {e}")
+        return None
+    except (OSError, IOError) as io_err:
+        # Handle I/O errors specifically (file descriptor issues)
+        error_str = str(io_err).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"Distance matrix: I/O error (connection closed)")
+        else:
+            logger.debug(f"Distance matrix I/O error: {io_err}")
         return None
     except Exception as e:
-        logger.warning(f"Distance matrix error: {e}")
+        # Check if it's an I/O error
+        error_str = str(e).lower()
+        if "i/o operation on closed file" in error_str or "bad file descriptor" in error_str:
+            logger.debug(f"Distance matrix: connection closed during request")
+        else:
+            logger.debug(f"Distance matrix error: {e}")
         return None
 
 

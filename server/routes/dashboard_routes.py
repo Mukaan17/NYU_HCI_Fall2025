@@ -1,5 +1,5 @@
 # routes/dashboard_routes.py
-from flask import Blueprint, jsonify, g
+from flask import Blueprint, jsonify, g, request
 import logging
 
 from utils.auth import require_auth

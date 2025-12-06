@@ -279,6 +279,29 @@ def extract_places_from_reply(
     return matched_places
 
 
+def _filter_places_by_rating(places: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filter out places with 0 rating or None rating.
+    Events (which have rating 0.0 by design) are kept.
+    """
+    filtered = []
+    for place in places:
+        rating = place.get("rating")
+        # Events have type="event" and rating 0.0, but should be shown
+        is_event = place.get("type") == "event"
+        
+        # Keep places with valid ratings (> 0) or events
+        if rating is None or rating == 0:
+            if is_event:
+                # Events are valid even with 0 rating
+                filtered.append(place)
+            # Otherwise, skip places with 0 or None rating
+        else:
+            # Place has a valid rating > 0
+            filtered.append(place)
+    return filtered
+
+
 # ---------------------------------------------------------------------
 # MAIN RESPONSE ENTRY
 # ---------------------------------------------------------------------
@@ -365,6 +388,8 @@ def build_chat_response(
         origin_lat = (memory.user_location.get("lat") if memory.user_location else None) or user_lat
         origin_lng = (memory.user_location.get("lng") if memory.user_location else None) or user_lng
         matched_places = extract_places_from_reply(reply, items_to_check, origin_lat=origin_lat, origin_lng=origin_lng)
+        # Filter out places with 0 rating
+        matched_places = _filter_places_by_rating(matched_places)
         
         return {
             "debug_vibe": intent,
@@ -405,6 +430,8 @@ def build_chat_response(
         origin_lat = (memory.user_location.get("lat") if memory.user_location else None) or user_lat
         origin_lng = (memory.user_location.get("lng") if memory.user_location else None) or user_lng
         matched_places = extract_places_from_reply(reply, items_to_check, origin_lat=origin_lat, origin_lng=origin_lng)
+        # Filter out places with 0 rating
+        matched_places = _filter_places_by_rating(matched_places)
         
         return {
             "debug_vibe": intent,
@@ -610,6 +637,9 @@ def build_chat_response(
                 # Limit to 3 total places
                 if len(places_to_return) >= 3:
                     break
+    
+    # Filter out places with 0 rating before returning
+    places_to_return = _filter_places_by_rating(places_to_return)
 
     return {
         "debug_vibe": vibe,

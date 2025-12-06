@@ -266,15 +266,38 @@ def chat():
 def quick_recs():
     try:
         category = (request.args.get("category") or "explore").lower()
-        
+
         # Validate limit parameter
         limit_raw = request.args.get("limit", 10)
         is_valid, limit, error_msg = validate_limit(limit_raw)
         if not is_valid:
             logger.warning(f"Invalid limit parameter: {limit_raw}, using clamped value: {limit}")
-        
+
         vibe = request.args.get("vibe")  # Optional vibe parameter
-        result = get_quick_recommendations(category, limit=limit, vibe=vibe)
+        
+        # Get location from request if provided
+        user_lat = None
+        user_lng = None
+        lat_raw = request.args.get("latitude")
+        lng_raw = request.args.get("longitude")
+        if lat_raw and lng_raw:
+            try:
+                user_lat = float(lat_raw)
+                user_lng = float(lng_raw)
+                # Validate coordinates
+                is_valid, error_msg = validate_coordinates(user_lat, user_lng)
+                if not is_valid:
+                    logger.warning(f"Invalid coordinates: {error_msg}")
+                    user_lat = None
+                    user_lng = None
+                else:
+                    logger.info(f"📍 Quick recs request with location: lat={user_lat}, lng={user_lng}")
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid latitude/longitude format: {lat_raw}, {lng_raw}")
+                user_lat = None
+                user_lng = None
+        
+        result = get_quick_recommendations(category, limit=limit, vibe=vibe, user_lat=user_lat, user_lng=user_lng)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Quick recommendations endpoint error: {e}", exc_info=True)

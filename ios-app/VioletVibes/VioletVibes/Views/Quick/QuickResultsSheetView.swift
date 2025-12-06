@@ -9,6 +9,7 @@ struct QuickResultsSheetView: View {
     let category: String
     @Environment(PlaceViewModel.self) private var placeViewModel
     @Environment(TabCoordinator.self) private var tabCoordinator
+    @Environment(LocationManager.self) private var locationManager
     @Environment(\.dismiss) private var dismiss
     
     @State private var places: [Recommendation] = []
@@ -143,7 +144,24 @@ struct QuickResultsSheetView: View {
         do {
             // Map "chill_cafes" to "cozy_cafes" for backend compatibility
             let apiCategory = category == "chill_cafes" ? "cozy_cafes" : category
-            let response = try await apiService.getQuickRecommendations(category: apiCategory, limit: 10)
+            
+            // Get user location if available
+            let userLocation = locationManager.location
+            let latitude = userLocation?.coordinate.latitude
+            let longitude = userLocation?.coordinate.longitude
+            
+            if let lat = latitude, let lng = longitude {
+                print("📍 QuickResultsSheetView: Loading with location lat=\(lat), lng=\(lng)")
+            } else {
+                print("⚠️ QuickResultsSheetView: No location available")
+            }
+            
+            let response = try await apiService.getQuickRecommendations(
+                category: apiCategory,
+                limit: 10,
+                latitude: latitude,
+                longitude: longitude
+            )
             await MainActor.run {
                 // Improved deduplication using multiple strategies
                 var deduplicatedPlaces: [Recommendation] = []

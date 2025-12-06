@@ -319,12 +319,23 @@ actor APIService {
     }
     
     // MARK: - Quick Recommendations
-    nonisolated func getQuickRecommendations(category: String, limit: Int = 10) async throws -> QuickRecsAPIResponse {
+    nonisolated func getQuickRecommendations(category: String, limit: Int = 10, latitude: Double? = nil, longitude: Double? = nil) async throws -> QuickRecsAPIResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/quick_recs")!
-        urlComponents.queryItems = [
+        var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "category", value: category),
             URLQueryItem(name: "limit", value: String(limit))
         ]
+        
+        // Add location parameters if provided
+        if let lat = latitude, let lng = longitude {
+            queryItems.append(URLQueryItem(name: "latitude", value: String(lat)))
+            queryItems.append(URLQueryItem(name: "longitude", value: String(lng)))
+            print("📍 getQuickRecommendations: Sending location lat=\(lat), lng=\(lng)")
+        } else {
+            print("⚠️ getQuickRecommendations: No location provided")
+        }
+        
+        urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
             throw APIError.invalidURL

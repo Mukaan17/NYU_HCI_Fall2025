@@ -61,7 +61,9 @@ def _is_between_events(block: dict, events: List[dict]) -> bool:
 
 def _suggest_event(block_start: datetime,
                    block_end: datetime,
-                   user_prefs: dict) -> Dict[str, Any] | None:
+                   user_prefs: dict,
+                   user_lat: float | None = None,
+                   user_lng: float | None = None) -> Dict[str, Any] | None:
     """
     Try suggesting an event happening SOON.
     Looks at all external events (brooklyn bridge, downtown bk, parks, etc).
@@ -75,7 +77,7 @@ def _suggest_event(block_start: datetime,
         normalized = []
         for ev in events:
             try:
-                n = normalize_event(ev)
+                n = normalize_event(ev, origin_lat=user_lat, origin_lng=user_lng)
                 if n:
                     normalized.append({**ev, **n})
             except Exception as e:
@@ -124,11 +126,17 @@ def _suggest_event(block_start: datetime,
 
 def _suggest_place(block_start: datetime,
                    block_end: datetime,
-                   user_prefs: dict) -> Dict[str, Any] | None:
+                   user_prefs: dict,
+                   user_lat: float | None = None,
+                   user_lng: float | None = None) -> Dict[str, Any] | None:
     """
     If no event works, suggest a quick thing to do within walking distance.
     Uses Google Places → normalize → returns best candidate.
     """
+
+    # Use user location if provided, otherwise default to Tandon
+    origin_lat = user_lat if user_lat is not None else TANDON_LAT
+    origin_lng = user_lng if user_lng is not None else TANDON_LNG
 
     # Basic vibe inference — very simple for now
     vibe = None
@@ -142,7 +150,7 @@ def _suggest_place(block_start: datetime,
     try:
         for t in place_types:
             try:
-                raw = nearby_places(TANDON_LAT, TANDON_LNG, t, radius=1500)
+                raw = nearby_places(origin_lat, origin_lng, t, radius=1500)
                 for p in raw:
                     loc = p.get("geometry", {}).get("location", {})
                     lat = loc.get("lat")
@@ -150,7 +158,7 @@ def _suggest_place(block_start: datetime,
                     if not lat or not lng:
                         continue
                     try:
-                        d = get_walking_directions(TANDON_LAT, TANDON_LNG, lat, lng)
+                        d = get_walking_directions(origin_lat, origin_lng, lat, lng)
                     except Exception as e:
                         logger.debug(f"Failed to get directions for place: {e}")
                         d = None
@@ -180,11 +188,15 @@ def _suggest_place(block_start: datetime,
 
 def get_free_time_suggestion(free_block: dict,
                              events: List[dict],
-                             user_profile: dict) -> Dict[str, Any]:
+                             user_profile: dict,
+                             user_lat: float | None = None,
+                             user_lng: float | None = None) -> Dict[str, Any]:
     """
     free_block = { start: ISO, end: ISO }
     events = today's calendar events (from system calendar or any source)
     user_profile = optional preferences
+    user_lat = user's latitude for distance calculations
+    user_lng = user's longitude for distance calculations
 
     Returns:
       {
@@ -226,7 +238,7 @@ def get_free_time_suggestion(free_block: dict,
         return {"should_suggest": False}
 
     # 4️⃣ Try suggesting event first
-    event_suggestion = _suggest_event(start, end, user_profile)
+    event_suggestion = _suggest_event(start, end, user_profile, user_lat=user_lat, user_lng=user_lng)
     if event_suggestion:
         return {
             "should_suggest": True,
@@ -236,7 +248,7 @@ def get_free_time_suggestion(free_block: dict,
         }
 
     # 5️⃣ Fallback: suggest a place
-    place_suggestion = _suggest_place(start, end, user_profile)
+    place_suggestion = _suggest_place(start, end, user_profile, user_lat=user_lat, user_lng=user_lng)
     if place_suggestion:
         return {
             "should_suggest": True,
@@ -254,10 +266,15 @@ def get_free_time_suggestion(free_block: dict,
 # Wrapper for /recommendation endpoint
 # ------------------------------------------------------------
 
-def generate_free_time_recommendation(next_block: dict) -> Dict[str, Any]:
+def generate_free_time_recommendation(next_block: dict, user_lat: float | None = None, user_lng: float | None = None) -> Dict[str, Any]:
     """
     Wrapper function for the /recommendation endpoint.
     Takes a next_block and returns a formatted recommendation package.
+    
+    Args:
+        next_block: Free time block dictionary
+        user_lat: User's latitude for distance calculations
+        user_lng: User's longitude for distance calculations
     """
     if not next_block:
         return {
@@ -269,7 +286,7 @@ def generate_free_time_recommendation(next_block: dict) -> Dict[str, Any]:
     
     # For this wrapper, we'll use empty events list and empty user profile
     # The actual endpoint should pass real events and user profile
-    result = get_free_time_suggestion(next_block, [], {})
+    result = get_free_time_suggestion(next_block, [], {}, user_lat=user_lat, user_lng=user_lng)
     
     if result.get("should_suggest"):
         return {

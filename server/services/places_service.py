@@ -89,3 +89,60 @@ def nearby_places(
     except requests.RequestException as e:
         logger.error(f"Error fetching places: {e}")
         raise
+
+
+@retry_api_call(max_attempts=2, min_wait=0.5, max_wait=2)
+def search_place_by_name(place_name: str, lat: float = None, lng: float = None, radius: int = 5000) -> Dict[str, Any] | None:
+    """
+    Search for a place by name using Google Places API Text Search.
+    Returns the first matching place or None if not found.
+    
+    Args:
+        place_name: Name of the place to search for
+        lat: Optional latitude for location bias
+        lng: Optional longitude for location bias
+        radius: Search radius in meters (default 5000m)
+    """
+    if not GOOGLE_API_KEY:
+        logger.warning("GOOGLE_API_KEY not set, cannot search places")
+        return None
+    
+    if not place_name or not place_name.strip():
+        return None
+    
+    # Use Text Search API for searching by name
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    
+    params = {
+        "query": place_name.strip(),
+        "key": GOOGLE_API_KEY,
+    }
+    
+    # Add location bias if coordinates provided
+    if lat is not None and lng is not None:
+        params["location"] = f"{lat},{lng}"
+        params["radius"] = radius
+    
+    try:
+        resp = requests.get(url, params=params, timeout=5)
+        resp.raise_for_status()
+        
+        data = resp.json()
+        results = data.get("results", [])
+        
+        if not results:
+            logger.debug(f"No places found for query: {place_name}")
+            return None
+        
+        # Return the first result (most relevant match)
+        return results[0]
+        
+    except requests.Timeout:
+        logger.debug(f"Timeout searching for place: {place_name}")
+        return None
+    except requests.RequestException as e:
+        logger.debug(f"Error searching for place {place_name}: {e}")
+        return None
+    except Exception as e:
+        logger.debug(f"Unexpected error searching for place {place_name}: {e}")
+        return None

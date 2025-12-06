@@ -8,10 +8,15 @@ TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
 
 
-def normalize_event(ev: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_event(ev: Dict[str, Any], origin_lat: float | None = None, origin_lng: float | None = None) -> Dict[str, Any]:
     """
     Convert your raw event record into a unified place/event card.
     Works for all events (NYU Engage, external events, scraped events).
+    
+    Args:
+        ev: Event dictionary
+        origin_lat: Origin latitude for distance calculation (defaults to Tandon if not provided)
+        origin_lng: Origin longitude for distance calculation (defaults to Tandon if not provided)
     """
 
     # Extract fields safely
@@ -25,13 +30,16 @@ def normalize_event(ev: Dict[str, Any]) -> Dict[str, Any]:
     lat = ev.get("lat")
     lng = ev.get("lng")
 
+    # Use provided origin or default to Tandon
+    origin_lat = origin_lat if origin_lat is not None else TANDON_LAT
+    origin_lng = origin_lng if origin_lng is not None else TANDON_LNG
+
     # Compute walking info (only if event has coordinates)
     directions = None
     if lat and lng:
         try:
             directions = get_walking_directions(
-                origin=(TANDON_LAT, TANDON_LNG),
-                destination=(lat, lng)
+                origin_lat, origin_lng, lat, lng
             )
         except Exception:
             directions = None

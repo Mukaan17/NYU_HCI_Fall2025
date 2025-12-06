@@ -149,7 +149,7 @@ def _search_places_for_category(category: str, origin_lat: float = TANDON_LAT, o
         if not lat or not lng:
             continue
 
-        d = get_walking_directions(TANDON_LAT, TANDON_LNG, lat, lng)
+        d = get_walking_directions(origin_lat, origin_lng, lat, lng)
         photos = p.get("photos", [])
         ref = photos[0].get("photo_reference") if photos else None
         photo_url = build_photo_url(ref)

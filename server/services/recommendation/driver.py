@@ -2,6 +2,8 @@
 from __future__ import annotations
 import time
 import logging
+import re
+from typing import List, Dict, Any
 
 from services.vibes import classify_vibe, vibe_to_place_types
 from services.recommendation.scoring import score_items_with_embeddings
@@ -22,6 +24,172 @@ TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
 WASHINGTON_SQUARE_LAT = 40.7298
 WASHINGTON_SQUARE_LNG = -73.9973
+
+
+# ---------------------------------------------------------------------
+# HELPER: Extract place names from text and match to items
+# ---------------------------------------------------------------------
+def extract_places_from_reply(
+    reply_text: str, 
+    items: List[Dict[str, Any]], 
+    origin_lat: float | None = None,
+    origin_lng: float | None = None
+) -> List[Dict[str, Any]]:
+    """
+    Extract place names mentioned in the LLM reply text and match them to items.
+    If a place isn't found in items, search for it using Google Places API.
+    Returns a list of matched place items, ordered by how prominently they appear in the reply.
+    
+    Args:
+        reply_text: The LLM-generated reply text
+        items: List of items from memory to check first
+        origin_lat: User's latitude for distance calculations and location bias
+        origin_lng: User's longitude for distance calculations and location bias
+    """
+    if not reply_text:
+        return []
+    
+    reply_lower = reply_text.lower()
+    matched_places = []
+    seen_names = set()
+    
+    # First, try to match places from memory (items)
+    if items:
+        for item in items:
+            name = item.get("name", "")
+            if not name:
+                continue
+            
+            name_lower = name.lower()
+            
+            # Skip if we've already matched this place
+            if name_lower in seen_names:
+                continue
+            
+            # Check if the full name appears in the reply
+            if name_lower in reply_lower:
+                matched_places.append(item)
+                seen_names.add(name_lower)
+                continue
+            
+            # Try matching significant words from the place name
+            # Extract words longer than 3 characters (to avoid "the", "of", etc.)
+            name_words = [w for w in name_lower.split() if len(w) > 3]
+            
+            if not name_words:
+                continue
+            
+            # If at least 2 significant words match, consider it a match
+            # This handles cases like "go to Bern Dibner Library" matching "Bern Dibner Library"
+            matched_words = sum(1 for word in name_words if word in reply_lower)
+            if matched_words >= 2 or (len(name_words) == 1 and matched_words == 1):
+                matched_places.append(item)
+                seen_names.add(name_lower)
+    
+    # Extract potential place names from the reply that weren't found in memory
+    # Look for phrases like "go to X", "check out X", "try X", etc.
+    import re
+    place_indicators = [
+        r"go to\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"check out\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"try\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"visit\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"head to\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"stop by\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"recommend\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+        r"suggest\s+([A-Z][a-zA-Z\s&]+?)(?:\.|,|!|\?|$)",
+    ]
+    
+    # Also look for capitalized phrases that might be place names
+    # (Place names typically start with capital letters)
+    potential_place_names = []
+    for pattern in place_indicators:
+        matches = re.finditer(pattern, reply_text, re.IGNORECASE)
+        for match in matches:
+            place_name = match.group(1).strip()
+            # Filter out very short names or common words
+            if len(place_name) > 3 and place_name.lower() not in ["the", "a", "an", "this", "that"]:
+                potential_place_names.append(place_name)
+    
+    # Also extract standalone capitalized phrases (potential place names)
+    # Look for sequences of capitalized words
+    capitalized_phrases = re.findall(r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b', reply_text)
+    for phrase in capitalized_phrases:
+        if phrase.lower() not in seen_names and len(phrase) > 3:
+            potential_place_names.append(phrase)
+    
+    # Search for places that weren't found in memory
+    if potential_place_names and (origin_lat is not None and origin_lng is not None):
+        from services.places_service import search_place_by_name, build_photo_url
+        
+        for place_name in potential_place_names:
+            place_name_lower = place_name.lower()
+            
+            # Skip if we already have this place
+            if place_name_lower in seen_names:
+                continue
+            
+            # Skip if it's too generic or common
+            if place_name_lower in ["new york", "brooklyn", "nyc", "manhattan"]:
+                continue
+            
+            try:
+                # Search for the place
+                raw_place = search_place_by_name(place_name, lat=origin_lat, lng=origin_lng)
+                
+                if raw_place:
+                    # Normalize the place
+                    geom = raw_place.get("geometry", {}).get("location", {})
+                    place_lat = geom.get("lat")
+                    place_lng = geom.get("lng")
+                    
+                    if place_lat and place_lng:
+                        # Get directions
+                        directions = get_walking_directions(origin_lat, origin_lng, place_lat, place_lng)
+                        
+                        # Build photo URL
+                        photos = raw_place.get("photos", [])
+                        photo_ref = photos[0].get("photo_reference") if photos else None
+                        photo_url = build_photo_url(photo_ref)
+                        
+                        # Create normalized place item
+                        normalized_place = {
+                            "name": raw_place.get("name"),
+                            "address": raw_place.get("formatted_address") or raw_place.get("vicinity"),
+                            "location": {"lat": place_lat, "lng": place_lng},
+                            "walk_time": directions["duration_text"] if directions else None,
+                            "distance": directions["distance_text"] if directions else None,
+                            "maps_link": directions["maps_link"] if directions else None,
+                            "photo_url": photo_url,
+                            "rating": raw_place.get("rating", 0),
+                            "type": "place",
+                            "source": "google_places",
+                            "place_id": raw_place.get("place_id"),
+                        }
+                        
+                        matched_places.append(normalized_place)
+                        seen_names.add(place_name_lower)
+                        logger.debug(f"Found place '{place_name}' via Google Places API")
+            except Exception as e:
+                logger.debug(f"Error searching for place '{place_name}': {e}")
+                continue
+    
+    # Sort by position in reply (earlier mentions are more relevant)
+    def get_first_position(item):
+        name = item.get("name", "").lower()
+        if name in reply_lower:
+            return reply_lower.index(name)
+        # If full name not found, find first significant word
+        name_words = [w for w in name.split() if len(w) > 3]
+        if name_words:
+            for word in name_words:
+                if word in reply_lower:
+                    return reply_lower.index(word)
+        return len(reply_lower)  # Put unmatched items at the end
+    
+    matched_places.sort(key=get_first_position)
+    
+    return matched_places
 
 
 # ---------------------------------------------------------------------
@@ -95,15 +263,26 @@ def build_chat_response(
     intent = classify_intent_llm(message, memory)
     
     # If it's general chat (greetings, thanks), return text-only response without cards
+    # UNLESS the reply mentions a place - then include that place's card
     if intent == "general_chat":
         from services.recommendation.llm_reply import generate_contextual_reply
         memory.add_message("user", message)
         reply = generate_contextual_reply(message, [], memory)
         memory.add_message("assistant", reply)
+        
+        # Check if reply mentions any places from memory and include their cards
+        # Also search for places not in memory
+        matched_places = []
+        items_to_check = memory.last_places or memory.all_results or []
+        # Use user location from memory or function parameters
+        origin_lat = (memory.user_location.get("lat") if memory.user_location else None) or user_lat
+        origin_lng = (memory.user_location.get("lng") if memory.user_location else None) or user_lng
+        matched_places = extract_places_from_reply(reply, items_to_check, origin_lat=origin_lat, origin_lng=origin_lng)
+        
         return {
             "debug_vibe": intent,
             "latency": round(time.time() - t0, 2),
-            "places": [],  # No cards for conversational messages
+            "places": matched_places[:3],  # Include cards if reply mentions places
             "reply": reply,
             "weather": current_weather(),
         }
@@ -119,7 +298,7 @@ def build_chat_response(
     if intent in ["followup_place", "followup_general"] and memory.last_places and memory.history and len(memory.history) > 2 and not is_location_query:
         # User is asking about previous recommendations or context within the same session
         # Return text-only response - don't show cards again for follow-up questions
-        # UNLESS it's a location query - then show cards for navigation
+        # UNLESS the reply mentions a place - then include that place's card
         from services.recommendation.llm_reply import generate_contextual_reply
         memory.add_message("user", message)
         reply = generate_contextual_reply(
@@ -130,10 +309,20 @@ def build_chat_response(
             commute_preference=commute_preference
         )
         memory.add_message("assistant", reply)
+        
+        # Check if reply mentions any places and include their cards
+        # Also search for places not in memory
+        matched_places = []
+        items_to_check = memory.last_places or memory.all_results or []
+        # Use user location from memory or function parameters
+        origin_lat = (memory.user_location.get("lat") if memory.user_location else None) or user_lat
+        origin_lng = (memory.user_location.get("lng") if memory.user_location else None) or user_lng
+        matched_places = extract_places_from_reply(reply, items_to_check, origin_lat=origin_lat, origin_lng=origin_lng)
+        
         return {
             "debug_vibe": intent,
             "latency": round(time.time() - t0, 2),
-            "places": [],  # No cards for follow-up questions (unless location query)
+            "places": matched_places[:3],  # Include cards if reply mentions places
             "reply": reply,
             "weather": current_weather(),
         }
@@ -216,7 +405,7 @@ def build_chat_response(
     normalized_events = []
     for e in filtered_events:
         try:
-            normalized_events.append(normalize_event(e))
+            normalized_events.append(normalize_event(e, origin_lat=origin_lat, origin_lng=origin_lng))
         except Exception as ex:
             logger.warning(f"EVENT NORMALIZATION ERROR: {ex}")
 

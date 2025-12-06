@@ -314,7 +314,9 @@ struct DashboardView: View {
                                     Spacer()
                                 }
                             } else if viewModel.recommendations.isEmpty {
-                                Text("No recommendations available")
+                                // Check if it's a location issue
+                                let locationAvailable = locationManager.location != nil
+                                Text(locationAvailable ? "No recommendations available" : "No location available")
                                     .themeFont(size: .base)
                                     .foregroundColor(Theme.Colors.textSecondary)
                                     .padding()
@@ -409,6 +411,11 @@ struct DashboardView: View {
             let weatherString = weatherManager.weather?.emoji
             let vibeString = selectedVibe?.backendValue
             let userLocation = locationManager.location
+            if let location = userLocation {
+                print("📍 DashboardView: User location available - lat=\(location.coordinate.latitude), lng=\(location.coordinate.longitude)")
+            } else {
+                print("⚠️ DashboardView: User location is nil")
+            }
             await viewModel.loadRecommendations(
                 jwt: session.jwt,
                 preferences: session.preferences,

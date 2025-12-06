@@ -332,10 +332,14 @@ def top_recommendations():
                     logger.warning(f"Invalid coordinates: {error_msg}, using default location")
                     user_lat = None
                     user_lng = None
+                else:
+                    logger.info(f"📍 Top recommendations request with location: lat={user_lat}, lng={user_lng}")
             except (ValueError, TypeError):
                 logger.warning(f"Invalid latitude/longitude format: {lat_raw}, {lng_raw}")
                 user_lat = None
                 user_lng = None
+        else:
+            logger.warning("⚠️ No location provided in top recommendations request")
 
         # Validate limit parameter
         limit_raw = request.args.get("limit", 10)

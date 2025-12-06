@@ -24,7 +24,7 @@ final class DashboardViewModel {
     private var currentLoadTask: Task<Void, Never>? = nil
     
     // Load dashboard data from backend
-    func loadDashboard(jwt: String) async {
+    func loadDashboard(jwt: String, latitude: Double? = nil, longitude: Double? = nil) async {
         // Cancel any existing load task to prevent concurrent requests
         await MainActor.run {
             currentLoadTask?.cancel()
@@ -39,7 +39,7 @@ final class DashboardViewModel {
         }
         
         do {
-            let dashboard = try await apiService.getDashboard(jwt: jwt)
+            let dashboard = try await apiService.getDashboard(jwt: jwt, latitude: latitude, longitude: longitude)
             
             // Check for cancellation before processing
             try Task.checkCancellation()
@@ -142,25 +142,31 @@ final class DashboardViewModel {
             // Skip dashboard, go straight to top recommendations with vibe
         } else if let jwt = jwt {
             // Try dashboard first if JWT is available and no vibe is selected
-            do {
-                await loadDashboard(jwt: jwt)
-                // Check for cancellation
-                try Task.checkCancellation()
-                // If dashboard loaded successfully, we're done
-                if !recommendations.isEmpty {
+            // Only use dashboard if location is available (dashboard requires location)
+            if latitude != nil && longitude != nil {
+                do {
+                    await loadDashboard(jwt: jwt, latitude: latitude, longitude: longitude)
+                    // Check for cancellation
+                    try Task.checkCancellation()
+                    // If dashboard loaded successfully, we're done
+                    if !recommendations.isEmpty {
+                        await MainActor.run {
+                            isLoading = false
+                        }
+                        return
+                    }
+                } catch is CancellationError {
+                    // Task was cancelled, exit gracefully
                     await MainActor.run {
                         isLoading = false
                     }
                     return
+                } catch {
+                    print("⚠️ Dashboard load failed, falling back to top recommendations: \(error)")
                 }
-            } catch is CancellationError {
-                // Task was cancelled, exit gracefully
-                await MainActor.run {
-                    isLoading = false
-                }
-                return
-            } catch {
-                print("⚠️ Dashboard load failed, falling back to top recommendations: \(error)")
+            } else {
+                // No location available - skip dashboard, go straight to top recommendations
+                print("⚠️ No location available, skipping dashboard")
             }
         }
         
@@ -170,15 +176,16 @@ final class DashboardViewModel {
             try Task.checkCancellation()
             
             // Try to get top recommendations from backend
-            // Note: Location will be passed from DashboardView when available
+            // Pass location from function parameters
+            print("📍 DashboardViewModel.loadRecommendations: Calling getTopRecommendations with lat=\(latitude?.description ?? "nil"), lng=\(longitude?.description ?? "nil")")
             let topRecs = try await apiService.getTopRecommendations(
                 limit: 10,
                 jwt: jwt,
                 preferences: preferences,
                 weather: weather,
                 vibe: vibe,
-                latitude: nil,  // Will be set by caller
-                longitude: nil  // Will be set by caller
+                latitude: latitude,
+                longitude: longitude
             )
             
             // Check for cancellation before processing

@@ -126,11 +126,14 @@ def _search_places_for_category(category: str, origin_lat: float = TANDON_LAT, o
     if not cfg:
         return []
 
+    print(f"🔍 _search_places_for_category({category}): Searching near lat={origin_lat}, lng={origin_lng}, radius={cfg['radius']}m")
     raw: List[Dict[str, Any]] = []
 
     for t in cfg["types"]:
         try:
-            raw.extend(nearby_places(origin_lat, origin_lng, t, cfg["radius"]))
+            places = nearby_places(origin_lat, origin_lng, t, cfg["radius"])
+            raw.extend(places)
+            print(f"  Found {len(places)} places for type {t}")
         except Exception as e:
             print(f"QuickRecs {category} error:", e)
 
@@ -204,7 +207,7 @@ def _load_events() -> List[Dict[str, Any]]:
 # MAIN API
 # -----------------------------------------------------------
 
-def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None = None) -> Dict[str, Any]:
+def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None = None, user_lat: float | None = None, user_lng: float | None = None) -> Dict[str, Any]:
     """
     Returns:
       {
@@ -214,10 +217,25 @@ def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None =
     """
 
     category = category.lower()
+    
+    # Events don't require location (they're scraped, not location-based)
+    if category == "events":
+        events = _load_events()
+        for ev in events:
+            ev["score"] = _score_event(ev)
+        events.sort(key=lambda x: x["score"], reverse=True)
+        return {"category": category, "places": events[:limit]}
+    
+    # Location-based categories require user location - don't default to Tandon
+    if user_lat is None or user_lng is None:
+        return {"category": category, "places": [], "error": "No location available"}
+    
+    origin_lat = user_lat
+    origin_lng = user_lng
 
     # ----------- Quick Bites -----------
     if category == "quick_bites":
-        places = _search_places_for_category("quick_bites")
+        places = _search_places_for_category("quick_bites", origin_lat=origin_lat, origin_lng=origin_lng)
         for p in places:
             p["score"] = _score_quick_bite(p)
         places.sort(key=lambda x: x["score"], reverse=True)
@@ -225,7 +243,7 @@ def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None =
 
     # ----------- Cozy Cafes -----------
     if category == "cozy_cafes":
-        places = _search_places_for_category("cozy_cafes")
+        places = _search_places_for_category("cozy_cafes", origin_lat=origin_lat, origin_lng=origin_lng)
         for p in places:
             p["score"] = _score_cozy_cafe(p)
         places.sort(key=lambda x: x["score"], reverse=True)
@@ -233,7 +251,7 @@ def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None =
 
     # ----------- Explore -----------
     if category == "explore":
-        places = _search_places_for_category("explore")
+        places = _search_places_for_category("explore", origin_lat=origin_lat, origin_lng=origin_lng)
         for p in places:
             p["score"] = _score_explore(p)
             # Apply vibe-based scoring if vibe is provided
@@ -241,14 +259,6 @@ def get_quick_recommendations(category: str, limit: int = 10, vibe: str | None =
                 p["score"] = _apply_vibe_scoring(p, vibe, p["score"])
         places.sort(key=lambda x: x["score"], reverse=True)
         return {"category": category, "places": places[:limit]}
-
-    # ----------- Events -----------
-    if category == "events":
-        events = _load_events()
-        for ev in events:
-            ev["score"] = _score_event(ev)
-        events.sort(key=lambda x: x["score"], reverse=True)
-        return {"category": category, "places": events[:limit]}
 
     # ----------- Unknown category -----------
     return {"category": category, "places": []}
@@ -491,9 +501,18 @@ def get_top_recommendations_for_user(
     prefs = prefs or {}
     context = context or {}
     
-    # Use user location if provided, otherwise default to Tandon
-    origin_lat = user_lat if user_lat is not None else TANDON_LAT
-    origin_lng = user_lng if user_lng is not None else TANDON_LNG
+    # Require user location - don't default to Tandon
+    if user_lat is None or user_lng is None:
+        print("⚠️ get_top_recommendations_for_user: No location provided")
+        return {
+            "category": "top",
+            "places": [],
+            "error": "No location available"
+        }
+    
+    origin_lat = user_lat
+    origin_lng = user_lng
+    print(f"📍 get_top_recommendations_for_user: Using location lat={origin_lat}, lng={origin_lng}")
 
     buckets = [
         ("quick_bites", "quick_bite"),

@@ -395,8 +395,18 @@ actor APIService {
     }
     
     // MARK: - Dashboard
-    nonisolated func getDashboard(jwt: String) async throws -> DashboardAPIResponse {
-        guard let url = URL(string: "\(baseURL)/api/dashboard") else {
+    nonisolated func getDashboard(jwt: String, latitude: Double? = nil, longitude: Double? = nil) async throws -> DashboardAPIResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/dashboard")
+        
+        // Add location parameters if provided
+        if let lat = latitude, let lng = longitude {
+            urlComponents?.queryItems = [
+                URLQueryItem(name: "latitude", value: String(lat)),
+                URLQueryItem(name: "longitude", value: String(lng))
+            ]
+        }
+        
+        guard let url = urlComponents?.url else {
             throw APIError.invalidURL
         }
         
@@ -506,11 +516,12 @@ actor APIService {
         }
         
         // Add location parameters if provided
-        if let lat = latitude {
+        if let lat = latitude, let lng = longitude {
             items.append(URLQueryItem(name: "latitude", value: String(lat)))
-        }
-        if let lng = longitude {
             items.append(URLQueryItem(name: "longitude", value: String(lng)))
+            print("📍 getTopRecommendations: Sending location lat=\(lat), lng=\(lng)")
+        } else {
+            print("⚠️ getTopRecommendations: No location provided")
         }
         
         comps.queryItems = items

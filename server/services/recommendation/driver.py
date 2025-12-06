@@ -17,8 +17,11 @@ from services.weather_service import current_weather
 
 logger = logging.getLogger(__name__)
 
+# NYU Campus Locations
 TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
+WASHINGTON_SQUARE_LAT = 40.7298
+WASHINGTON_SQUARE_LNG = -73.9973
 
 
 # ---------------------------------------------------------------------
@@ -28,9 +31,64 @@ def build_chat_response(
     message: str,
     memory: ConversationContext,
     user_profile=None,
+    user_lat: float = None,
+    user_lng: float = None,
+    selected_vibe: str = None,
+    commute_preference: str = None,
 ):
+    """
+    Build chat response with recommendations.
+    
+    Args:
+        message: User's message
+        memory: Conversation context
+        user_profile: User preferences dict
+        user_lat: User's current latitude (optional)
+        user_lng: User's current longitude (optional)
+        selected_vibe: Selected vibe from vibe picker (optional)
+        commute_preference: Commute preference ("walking", "transit", "both") (optional)
+    """
     user_profile = user_profile or {}
     t0 = time.time()
+    
+    # Determine origin location based on user location or preference
+    # If user is near Washington Square, use that; otherwise default to Tandon
+    origin_lat = TANDON_LAT
+    origin_lng = TANDON_LNG
+    campus_name = "Tandon"
+    
+    if user_lat and user_lng:
+        # Calculate distance to both campuses
+        import math
+        
+        def haversine_distance(lat1, lon1, lat2, lon2):
+            """Calculate distance between two points in km"""
+            R = 6371  # Earth radius in km
+            dlat = math.radians(lat2 - lat1)
+            dlon = math.radians(lon2 - lon1)
+            a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+            c = 2 * math.asin(math.sqrt(a))
+            return R * c
+        
+        dist_to_tandon = haversine_distance(user_lat, user_lng, TANDON_LAT, TANDON_LNG)
+        dist_to_washington = haversine_distance(user_lat, user_lng, WASHINGTON_SQUARE_LAT, WASHINGTON_SQUARE_LNG)
+        
+        # Use the closer campus, or Washington Square if within reasonable distance
+        if dist_to_washington < dist_to_tandon or dist_to_washington < 2.0:  # Within 2km of Washington Square
+            origin_lat = WASHINGTON_SQUARE_LAT
+            origin_lng = WASHINGTON_SQUARE_LNG
+            campus_name = "Washington Square"
+        else:
+            origin_lat = TANDON_LAT
+            origin_lng = TANDON_LNG
+            campus_name = "Tandon"
+    
+    # Store origin in memory for context
+    memory.user_location = {
+        "lat": origin_lat,
+        "lng": origin_lng,
+        "campus": campus_name
+    }
 
     # STEP 0 — Check if this is a follow-up question about previous results
     from services.recommendation.intent import classify_intent_llm
@@ -73,9 +131,21 @@ def build_chat_response(
         previous_names = {p.get("name", "").lower() for p in memory.last_places}
         # This will be handled in the scoring/filtering step
 
-    # STEP 1 — classify user vibe
-    vibe = classify_vibe(message)
+    # STEP 1 — classify user vibe (use selected vibe if provided, otherwise classify from message)
+    if selected_vibe:
+        vibe = selected_vibe
+    else:
+        vibe = classify_vibe(message)
     place_types, radius = vibe_to_place_types(vibe)
+    
+    # Adjust radius based on commute preference
+    if commute_preference == "transit":
+        # Allow larger radius for transit users
+        radius = min(radius * 2, 5000)  # Max 5km for transit
+    elif commute_preference == "walking":
+        # Keep walking radius (already set by vibe)
+        pass
+    # "both" or None: use default radius
 
     # STEP 2 — Load static events (safe if file missing)
     events = fetch_all_external_events()
@@ -83,14 +153,14 @@ def build_chat_response(
     # STEP 3 — Filter appropriate events based on vibe + message
     filtered_events = filter_events(vibe, message, events)
 
-    # STEP 4 — Query nearby places (OPEN NOW)
+    # STEP 4 — Query nearby places (OPEN NOW) from user's origin location
     raw_places = []
     for t in place_types:
         try:
             raw_places.extend(
                 nearby_places(
-                    lat=TANDON_LAT,
-                    lng=TANDON_LNG,
+                    lat=origin_lat,
+                    lng=origin_lng,
                     place_type=t,
                     radius=radius,
                     open_now=True,
@@ -116,7 +186,13 @@ def build_chat_response(
             continue
 
         try:
-            directions = get_walking_directions(TANDON_LAT, TANDON_LNG, lat, lng)
+            # Get directions from user's origin location
+            if commute_preference == "transit":
+                # For transit preference, get transit directions
+                directions = get_walking_directions(origin_lat, origin_lng, lat, lng)  # This already tries transit
+            else:
+                # For walking or both, get walking directions
+                directions = get_walking_directions(origin_lat, origin_lng, lat, lng)
         except Exception:
             directions = None
 
@@ -140,7 +216,13 @@ def build_chat_response(
         
         # Generate context-aware empty response
         from services.recommendation.llm_reply import generate_contextual_reply
-        reply = generate_contextual_reply(message, [], memory)
+        reply = generate_contextual_reply(
+            message, [], memory,
+            user_location=memory.user_location,
+            user_profile=user_profile,
+            selected_vibe=selected_vibe,
+            commute_preference=commute_preference
+        )
         
         # Add assistant reply to history
         memory.add_message("assistant", reply)
@@ -172,7 +254,13 @@ def build_chat_response(
         if not items:
             memory.add_message("user", message)
             from services.recommendation.llm_reply import generate_contextual_reply
-            reply = generate_contextual_reply(message, [], memory)
+            reply = generate_contextual_reply(
+                message, [], memory,
+                user_location=memory.user_location,
+                user_profile=user_profile,
+                selected_vibe=selected_vibe,
+                commute_preference=commute_preference
+            )
             memory.add_message("assistant", reply)
             return {
                 "debug_vibe": vibe,
@@ -189,8 +277,16 @@ def build_chat_response(
     # STEP 10 — Add current message to history for context
     memory.add_message("user", message)
     
-    # STEP 11 — Build surface reply with context
-    reply = build_surface_reply(message, items, memory)
+    # STEP 11 — Build surface reply with context (include location, preferences, vibe)
+    reply = build_surface_reply(
+        message, 
+        items, 
+        memory,
+        user_location=memory.user_location,
+        user_profile=user_profile,
+        selected_vibe=selected_vibe,
+        commute_preference=commute_preference
+    )
     
     # STEP 12 — Add assistant reply to history
     memory.add_message("assistant", reply)
@@ -211,10 +307,27 @@ def build_chat_response(
 # ---------------------------------------------------------------------
 # SURFACE REPLY
 # ---------------------------------------------------------------------
-def build_surface_reply(user_msg: str, items: list, memory: ConversationContext = None):
+def build_surface_reply(
+    user_msg: str, 
+    items: list, 
+    memory: ConversationContext = None,
+    user_location: dict = None,
+    user_profile: dict = None,
+    selected_vibe: str = None,
+    commute_preference: str = None
+):
     """
     Build a natural, context-aware reply using LLM.
     Removes repetitive greetings and maintains conversation flow.
+    
+    Args:
+        user_msg: User's message
+        items: List of recommendation items
+        memory: Conversation context
+        user_location: User's location dict with lat, lng, campus
+        user_profile: User preferences dict
+        selected_vibe: Selected vibe from vibe picker
+        commute_preference: Commute preference ("walking", "transit", "both")
     """
     from services.recommendation.llm_reply import generate_list_reply, generate_contextual_reply
     
@@ -222,14 +335,32 @@ def build_surface_reply(user_msg: str, items: list, memory: ConversationContext 
         # Use LLM for empty results too, with context awareness
         if memory and memory.history:
             # Follow-up context - acknowledge previous conversation
-            return generate_contextual_reply(user_msg, [], memory)
+            return generate_contextual_reply(
+                user_msg, [], memory,
+                user_location=user_location,
+                user_profile=user_profile,
+                selected_vibe=selected_vibe,
+                commute_preference=commute_preference
+            )
         return "I couldn't find anything nearby right now. Try asking for something different!"
 
     # Use LLM to generate natural, context-aware replies
     # Include conversation history for better follow-up handling
     if memory and memory.history:
         # Use contextual LLM reply that considers previous messages
-        return generate_contextual_reply(user_msg, items[:3], memory)
+        return generate_contextual_reply(
+            user_msg, items[:3], memory,
+            user_location=user_location,
+            user_profile=user_profile,
+            selected_vibe=selected_vibe,
+            commute_preference=commute_preference
+        )
     else:
         # First message - use standard LLM reply
-        return generate_list_reply(user_msg, items[:3])
+        return generate_list_reply(
+            user_msg, items[:3],
+            user_location=user_location,
+            user_profile=user_profile,
+            selected_vibe=selected_vibe,
+            commute_preference=commute_preference
+        )

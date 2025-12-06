@@ -291,7 +291,8 @@ struct ChatView: View {
                     latitude: locationManager.location?.coordinate.latitude,
                     longitude: locationManager.location?.coordinate.longitude,
                     jwt: session.jwt,
-                    preferences: session.preferences
+                    preferences: session.preferences,
+                    selectedVibe: selectedVibe?.backendValue
                 )
             }
         }

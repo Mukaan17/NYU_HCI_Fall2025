@@ -160,7 +160,8 @@ actor APIService {
         latitude: Double? = nil,
         longitude: Double? = nil,
         jwt: String? = nil,
-        preferences: UserPreferences? = nil
+        preferences: UserPreferences? = nil,
+        vibe: String? = nil
     ) async throws -> ChatAPIResponse {
         guard let url = URL(string: "\(baseURL)/api/chat") else {
             throw APIError.invalidURL
@@ -180,6 +181,9 @@ actor APIService {
         if let lat = latitude, let lng = longitude {
             payload["latitude"] = lat
             payload["longitude"] = lng
+        }
+        if let vibe = vibe {
+            payload["vibe"] = vibe
         }
         if let prefs = backendPrefs {
             // Encode preferences to JSON

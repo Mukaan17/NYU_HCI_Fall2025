@@ -56,7 +56,8 @@ final class ChatViewModel {
         latitude: Double? = nil,
         longitude: Double? = nil,
         jwt: String? = nil,
-        preferences: UserPreferences? = nil
+        preferences: UserPreferences? = nil,
+        selectedVibe: String? = nil
     ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -79,7 +80,8 @@ final class ChatViewModel {
                 latitude: latitude,
                 longitude: longitude,
                 jwt: jwt,
-                preferences: preferences
+                preferences: preferences,
+                vibe: selectedVibe
             )
             
             await MainActor.run {

@@ -31,7 +31,14 @@ def format_items_for_prompt(items: List[Dict[str, Any]]) -> str:
     retry=retry_if_exception_type((Exception,)),
     reraise=False
 )
-def generate_list_reply(user_message: str, items: List[Dict[str, Any]]) -> str:
+def generate_list_reply(
+    user_message: str, 
+    items: List[Dict[str, Any]],
+    user_location: Dict[str, Any] = None,
+    user_profile: Dict[str, Any] = None,
+    selected_vibe: str = None,
+    commute_preference: str = None
+) -> str:
     """
     Use Gemini to generate a friendly reply describing only the provided items.
     This never invents extra places, events, or details.
@@ -39,8 +46,86 @@ def generate_list_reply(user_message: str, items: List[Dict[str, Any]]) -> str:
 
     items_text = format_items_for_prompt(items)
 
-    prompt = f"""
-You are Violet, a helpful and friendly AI concierge for NYU students in Downtown Brooklyn.
+    # Build location context
+    location_context = ""
+    if user_location:
+        campus = user_location.get("campus", "NYU")
+        location_context = f"\nUSER LOCATION: Currently near {campus} campus"
+    
+    # Build preferences context
+    prefs_context = ""
+    if user_profile:
+        prefs_parts = []
+        if user_profile.get("dietary_restrictions"):
+            diets = user_profile.get("dietary_restrictions", [])
+            if isinstance(diets, list) and diets:
+                prefs_parts.append(f"Diet: {', '.join(diets)}")
+        if user_profile.get("budget"):
+            budget = user_profile.get("budget", {})
+            if isinstance(budget, dict):
+                min_b = budget.get("min")
+                max_b = budget.get("max")
+                if min_b or max_b:
+                    prefs_parts.append(f"Budget: ${min_b or 0}-${max_b or 'unlimited'}")
+        if user_profile.get("preferred_vibes"):
+            vibes = user_profile.get("preferred_vibes", [])
+            if isinstance(vibes, list) and vibes:
+                prefs_parts.append(f"Preferred vibes: {', '.join(vibes)}")
+        if user_profile.get("max_walk_minutes_default"):
+            walk_mins = user_profile.get("max_walk_minutes_default")
+            prefs_parts.append(f"Max walk time: {walk_mins} minutes")
+        if prefs_parts:
+            prefs_context = "\nUSER PREFERENCES: " + "; ".join(prefs_parts)
+    
+    # Build vibe context
+    vibe_context = ""
+    if selected_vibe:
+        vibe_context = f"\nSELECTED VIBE: {selected_vibe}"
+    
+    # Build commute context
+    commute_context = ""
+    if commute_preference:
+        commute_context = f"\nCOMMUTE PREFERENCE: {commute_preference} (affects search radius)"
+    
+    app_context = f"""APP CONTEXT - VioletVibes is a location-based recommendation app for NYU students:
+
+CORE FEATURES:
+- Location-based recommendations: Supports both NYU Tandon (Downtown Brooklyn) and NYU Washington Square campuses
+- Categories: Quick bites, cozy cafes, explore (activities/places), events
+- User preferences: Diet (vegetarian, vegan, etc.), budget (budget-friendly, moderate, splurge), vibes (chill, energetic, etc.)
+- Weather-aware: Recommendations consider current weather (e.g., avoid outdoor activities in rain)
+- Time-aware: Suggestions adapt to time of day (morning coffee, lunch spots, evening activities)
+- Calendar integration: App can suggest activities for free time blocks (system calendar)
+- Dashboard: Shows quick recommendations by category, weather, calendar status
+- Map integration: Users can view recommendations on a map and get directions
+- Commute preferences: Users can prefer walking (shorter radius) or transit (larger radius){location_context}{prefs_context}{vibe_context}{commute_context}
+
+WHAT YOU CAN DO:
+- Recommend nearby places (restaurants, cafes, activities) based on user's current location
+- Suggest events happening in the area
+- Consider user preferences (diet, budget, vibes, commute preference) when recommending
+- Adapt to weather and time of day
+- Help users find quick bites, coffee, or things to explore
+- Answer questions about recommended places
+- Consider commute preferences (walking = closer places, transit = wider area)
+
+WHAT YOU CANNOT DO:
+- Recommend places outside NYC area
+- Suggest activities that require long commutes (unless user prefers transit)
+- Make reservations or bookings
+- Access user's calendar directly (calendar is handled by the app)
+- Change app settings or preferences
+- Provide real-time availability or wait times
+
+RESPONSE STYLE:
+- Be conversational and friendly, but not overly formal
+- Focus on what makes each place unique or appealing
+- Mention distance/walk time when relevant
+- Consider commute preference when discussing distance
+- Keep responses concise (2-3 sentences max)
+- Stay relevant to NYU student lifestyle"""
+
+    prompt = f"""{app_context}
 
 Recommend ONLY the items provided below.
 
@@ -56,6 +141,8 @@ CRITICAL RULES:
 4. Be helpful and friendly, but start directly with the recommendation
 5. You may rearrange or summarize, but never add information not shown
 6. Remove any greeting patterns from your response - start directly with the answer
+7. Stay relevant to the app's context - all recommendations are for NYU students in Downtown Brooklyn
+8. If user asks about something outside your scope (like making reservations), politely redirect to what you can help with
 """
 
     try:
@@ -78,7 +165,11 @@ CRITICAL RULES:
 def generate_contextual_reply(
     user_message: str, 
     items: List[Dict[str, Any]], 
-    memory: ConversationContext
+    memory: ConversationContext,
+    user_location: Dict[str, Any] = None,
+    user_profile: Dict[str, Any] = None,
+    selected_vibe: str = None,
+    commute_preference: str = None
 ) -> str:
     """
     Generate a context-aware reply that considers conversation history.
@@ -111,8 +202,95 @@ def generate_contextual_reply(
     # Determine if this is a follow-up question
     is_followup = len(memory.history) > 2  # More than just current exchange
     
+    # Build location context
+    location_context = ""
+    if user_location:
+        campus = user_location.get("campus", "NYU")
+        location_context = f"\nUSER LOCATION: Currently near {campus} campus"
+    elif memory and memory.user_location:
+        campus = memory.user_location.get("campus", "NYU")
+        location_context = f"\nUSER LOCATION: Currently near {campus} campus"
+    
+    # Build preferences context
+    prefs_context = ""
+    if user_profile:
+        prefs_parts = []
+        if user_profile.get("dietary_restrictions"):
+            diets = user_profile.get("dietary_restrictions", [])
+            if isinstance(diets, list) and diets:
+                prefs_parts.append(f"Diet: {', '.join(diets)}")
+        if user_profile.get("budget"):
+            budget = user_profile.get("budget", {})
+            if isinstance(budget, dict):
+                min_b = budget.get("min")
+                max_b = budget.get("max")
+                if min_b or max_b:
+                    prefs_parts.append(f"Budget: ${min_b or 0}-${max_b or 'unlimited'}")
+        if user_profile.get("preferred_vibes"):
+            vibes = user_profile.get("preferred_vibes", [])
+            if isinstance(vibes, list) and vibes:
+                prefs_parts.append(f"Preferred vibes: {', '.join(vibes)}")
+        if user_profile.get("max_walk_minutes_default"):
+            walk_mins = user_profile.get("max_walk_minutes_default")
+            prefs_parts.append(f"Max walk time: {walk_mins} minutes")
+        if prefs_parts:
+            prefs_context = "\nUSER PREFERENCES: " + "; ".join(prefs_parts)
+    
+    # Build vibe context
+    vibe_context = ""
+    if selected_vibe:
+        vibe_context = f"\nSELECTED VIBE: {selected_vibe}"
+    
+    # Build commute context
+    commute_context = ""
+    if commute_preference:
+        commute_context = f"\nCOMMUTE PREFERENCE: {commute_preference} (affects search radius)"
+    
     # Build system prompt based on context
-    system_prompt = """You are Violet, a helpful and friendly AI concierge for NYU students in Downtown Brooklyn. 
+    app_context = f"""APP CONTEXT - VioletVibes is a location-based recommendation app for NYU students:
+
+CORE FEATURES:
+- Location-based recommendations: Supports both NYU Tandon (Downtown Brooklyn) and NYU Washington Square campuses
+- Categories: Quick bites, cozy cafes, explore (activities/places), events
+- User preferences: Diet (vegetarian, vegan, etc.), budget (budget-friendly, moderate, splurge), vibes (chill, energetic, etc.)
+- Weather-aware: Recommendations consider current weather (e.g., avoid outdoor activities in rain)
+- Time-aware: Suggestions adapt to time of day (morning coffee, lunch spots, evening activities)
+- Calendar integration: App can suggest activities for free time blocks (system calendar)
+- Dashboard: Shows quick recommendations by category, weather, calendar status
+- Map integration: Users can view recommendations on a map and get directions
+- Commute preferences: Users can prefer walking (shorter radius) or transit (larger radius){location_context}{prefs_context}{vibe_context}{commute_context}
+
+WHAT YOU CAN DO:
+- Recommend nearby places (restaurants, cafes, activities) based on user's current location
+- Suggest events happening in the area
+- Consider user preferences (diet, budget, vibes, commute preference) when recommending
+- Adapt to weather and time of day
+- Help users find quick bites, coffee, or things to explore
+- Answer questions about recommended places
+- Handle follow-up questions about previous recommendations
+- Consider commute preferences (walking = closer places, transit = wider area)
+
+WHAT YOU CANNOT DO:
+- Recommend places outside NYC area
+- Suggest activities that require long commutes (unless user prefers transit)
+- Make reservations or bookings
+- Access user's calendar directly (calendar is handled by the app)
+- Change app settings or preferences
+- Provide real-time availability or wait times
+
+RESPONSE STYLE:
+- Be conversational and natural, avoid repetitive greetings
+- Remember previous conversations and answer follow-up questions intelligently
+- Focus on what makes each place unique or appealing
+- Mention distance/walk time when relevant
+- Consider commute preference when discussing distance
+- Keep responses concise (2-3 sentences max)
+- Stay relevant to NYU student lifestyle
+- If user asks about something outside your scope, politely redirect to what you can help with"""
+    
+    system_prompt = f"""{app_context}
+
+You are Violet, a helpful and friendly AI concierge for NYU students in Downtown Brooklyn. 
 You're conversational, natural, and avoid repetitive greetings. You remember previous conversations and can answer follow-up questions intelligently."""
     
     context_section = ""

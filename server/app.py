@@ -183,11 +183,25 @@ def chat():
         logger.debug(f"Chat request - user: {user_id or 'anonymous'}, session: {session_id}, message length: {len(user_message)}")
 
         prefs = user.get_preferences() if user else {}
+        
+        # Extract location, vibe, and commute preference from request
+        user_lat = data.get("latitude")
+        user_lng = data.get("longitude")
+        selected_vibe = data.get("vibe")  # Selected vibe from vibe picker
+        commute_preference = data.get("commute_preference")  # "walking", "transit", "both", or None
+        
+        # Get commute preference from user preferences if not in request
+        if not commute_preference and prefs:
+            commute_preference = prefs.get("commute_preference")
 
         result = build_chat_response(
             user_message,
             memory,
             user_profile=prefs,
+            user_lat=user_lat,
+            user_lng=user_lng,
+            selected_vibe=selected_vibe,
+            commute_preference=commute_preference,
         )
         
         # Save context after conversation

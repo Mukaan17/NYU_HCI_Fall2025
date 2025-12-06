@@ -18,8 +18,11 @@ from services.scrapers.engage_events_service import fetch_engage_events
 # CONFIG
 # -----------------------------------------------------------
 
+# NYU Campus Locations
 TANDON_LAT = 40.6942
 TANDON_LNG = -73.9866
+WASHINGTON_SQUARE_LAT = 40.7298
+WASHINGTON_SQUARE_LNG = -73.9973
 
 QUICK_CATEGORIES = ["quick_bites", "cozy_cafes", "events", "explore"]
 

@@ -15,6 +15,7 @@ class ConversationContext:
         self.context: str | None = None
         self.last_intent: str | None = None
         self.user_profile_dict = {}
+        self.user_location: Dict[str, Any] | None = None  # {"lat": float, "lng": float, "campus": str}
 
     # HISTORIES
     def add_message(self, role: str, content: str):
